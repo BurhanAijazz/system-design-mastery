@@ -41,7 +41,7 @@ const Store = {
 
   // Specific getters/setters
   getTheme() {
-    return this.get('theme', 'light');
+    return this.get('theme', 'dark');
   },
 
   setTheme(theme) {

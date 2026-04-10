@@ -23,33 +23,96 @@
   transition: transform var(--transition-base);
   display: flex;
   flex-direction: column;
+  border-right: 1px solid var(--border);
+}
+
+[data-theme="dark"] .sidebar {
+  border-right: none;
 }
 
 .sidebar-header {
   padding: var(--space-lg);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
 .sidebar-logo {
-  font-size: var(--text-lg);
-  font-weight: var(--font-weight-bold);
-  color: #fff;
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
+  gap: 10px;
+  text-decoration: none;
+  cursor: pointer;
 }
 
 .sidebar-logo .logo-icon {
-  width: 28px;
-  height: 28px;
-  background: var(--accent);
-  border-radius: var(--radius-sm);
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--text-sm);
-  color: #fff;
+  flex-shrink: 0;
+  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar-logo .logo-icon::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 50%);
+  border-radius: inherit;
+}
+
+.sidebar-logo .logo-icon svg {
+  width: 20px;
+  height: 20px;
+  position: relative;
+  z-index: 1;
+}
+
+.sidebar-logo .logo-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.sidebar-logo .logo-text .brand-name {
+  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  font-size: 14px;
+  font-weight: 700;
+  font-style: italic;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .sidebar-logo .logo-text .brand-name {
+  background: linear-gradient(135deg, #e0e7ff 0%, #ffffff 40%, #c7d2fe 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.sidebar-logo .logo-text .brand-sub {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-top: 1px;
+}
+
+.sidebar-logo .logo-icon svg path,
+.sidebar-logo .logo-icon svg circle {
+  stroke: white;
+  fill: none;
+}
+
+.sidebar-logo .logo-icon svg circle {
+  fill: white;
 }
 
 .sidebar-nav {
@@ -88,7 +151,7 @@
 
 .sidebar-link:hover {
   background: var(--bg-sidebar-hover);
-  color: #fff;
+  color: var(--text-sidebar-active);
 }
 
 .sidebar-link.active {
@@ -128,7 +191,7 @@
 
 .sidebar-group-toggle:hover {
   background: var(--bg-sidebar-hover);
-  color: #fff;
+  color: var(--text-sidebar-active);
 }
 
 .sidebar-group-toggle .chevron {
