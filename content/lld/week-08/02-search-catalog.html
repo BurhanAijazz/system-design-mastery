@@ -1,0 +1,103 @@
+<h2>Search and Catalog Design</h2>
+
+<p>Platform systems need search and catalog functionality: browsing movies, filtering hotels, searching expenses. This lesson covers catalog modeling, search criteria, sorting strategies using the Strategy pattern, pagination, and filter chains using Chain of Responsibility.</p>
+
+<h3>Catalog Modeling</h3>
+
+<p>A catalog holds items organized by categories and tags. The same structure applies across domains:</p>
+<ul>
+  <li><strong>BookMyShow</strong> -- Movie catalog (genre, language, rating)</li>
+  <li><strong>Hotel Booking</strong> -- Room catalog (type, amenities, price range)</li>
+  <li><strong>Splitwise</strong> -- Expense catalog (group, category, date range)</li>
+</ul>
+
+<pre><code class="language-python">@dataclass
+class Category:
+    category_id: str
+    name: str
+    parent: Optional[Category] = None  # hierarchical categories
+
+
+@dataclass
+class Tag:
+    name: str
+
+
+@dataclass
+class CatalogItem:
+    """A generic item in a catalog."""
+    item_id: str
+    name: str
+    category: Category
+    tags: List[Tag] = field(default_factory=list)
+    price: float = 0.0
+    rating: float = 0.0
+    created_at: datetime = field(default_factory=datetime.now)
+
+    def has_tag(self, tag_name: str) -> bool:
+        return any(t.name == tag_name for t in self.tags)</code></pre>
+
+<h3>Search Criteria</h3>
+
+<p>A SearchCriteria object encapsulates all the filtering parameters a user can specify. This keeps the search interface clean -- pass one criteria object instead of many loose parameters:</p>
+
+<pre><code class="language-python">@dataclass
+class SearchCriteria:
+    keyword: Optional[str] = None
+    category_id: Optional[str] = None
+    tags: List[str] = field(default_factory=list)
+    min_price: Optional[float] = None
+    max_price: Optional[float] = None
+    min_rating: Optional[float] = None
+    sort_by: str = "relevance"
+    page: int = 1
+    page_size: int = 20</code></pre>
+
+<h3>Sorting Strategies</h3>
+
+<p>Use the Strategy pattern to swap sorting algorithms without changing the catalog code. Each strategy implements a common interface:</p>
+
+<pre><code class="language-python">class SortStrategy(ABC):
+    @abstractmethod
+    def sort(self, items: List[CatalogItem]) -> List[CatalogItem]:
+        pass
+
+class SortByPrice(SortStrategy):
+    def sort(self, items):
+        return sorted(items, key=lambda x: x.price)
+
+class SortByRating(SortStrategy):
+    def sort(self, items):
+        return sorted(items, key=lambda x: x.rating, reverse=True)
+
+class SortByRecent(SortStrategy):
+    def sort(self, items):
+        return sorted(items, key=lambda x: x.created_at, reverse=True)</code></pre>
+
+<h3>Pagination</h3>
+
+<p>Pagination prevents loading entire catalogs into memory. Calculate total pages and slice the result set:</p>
+
+<pre><code class="language-python">@dataclass
+class Page(Generic[T]):
+    items: List[T]
+    page: int
+    page_size: int
+    total_items: int
+
+    @property
+    def total_pages(self) -> int:
+        return math.ceil(self.total_items / self.page_size)
+
+    @property
+    def has_next(self) -> bool:
+        return self.page < self.total_pages</code></pre>
+
+<h3>Key Design Takeaways</h3>
+<ul>
+  <li>Model catalogs with Category (hierarchical) and Tag (flat, many-to-many) for flexibility</li>
+  <li>Use a SearchCriteria data class to bundle filter parameters cleanly</li>
+  <li>Apply Strategy pattern for sorting so new sort orders require zero changes to existing code</li>
+  <li>Implement pagination as a generic wrapper -- it works for any entity type</li>
+  <li>Filter chains (Chain of Responsibility) let you compose filters dynamically</li>
+</ul>

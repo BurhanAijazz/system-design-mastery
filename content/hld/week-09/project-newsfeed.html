@@ -1,0 +1,90 @@
+<h2>Project: Newsfeed Fan-Out Simulator</h2>
+
+<p>This project simulates push, pull, and hybrid fan-out strategies for a Twitter-like newsfeed. It generates a social graph with power-law follower distribution, measures latency and resource usage, and compares performance across celebrity thresholds.</p>
+
+<h3>Core Data Structures</h3>
+
+<pre><code class="language-python">from dataclasses import dataclass, field
+from typing import Dict, List, Set, Tuple
+
+@dataclass
+class User:
+    user_id: int
+    username: str
+    followers: Set[int] = field(default_factory=set)
+    following: Set[int] = field(default_factory=set)
+    is_celebrity: bool = False
+
+@dataclass
+class Tweet:
+    tweet_id: int
+    author_id: int
+    content: str
+    timestamp: float
+    fanout_writes: int = 0  # cache writes during push
+
+@dataclass
+class FanoutMetrics:
+    strategy: str
+    total_tweets: int = 0
+    total_cache_writes: int = 0
+    total_db_reads: int = 0
+    total_timeline_loads: int = 0
+    write_latencies: List[float] = field(default_factory=list)
+    read_latencies: List[float] = field(default_factory=list)</code></pre>
+
+<h3>Timeline Cache</h3>
+
+<p>The simulator uses Redis-like sorted sets for timeline caching:</p>
+
+<pre><code class="language-python">import heapq
+from collections import defaultdict
+
+class TimelineCache:
+    """Simulates Redis sorted sets for timeline caching."""
+    def __init__(self, max_timeline_size: int = 200):
+        self.max_size = max_timeline_size
+        self.timelines: Dict[int, List[Tuple[float, int]]] = defaultdict(list)
+        self.total_writes = 0
+
+    def push(self, user_id: int, tweet_id: int, timestamp: float):
+        timeline = self.timelines[user_id]
+        heapq.heappush(timeline, (-timestamp, tweet_id))
+        if len(timeline) > self.max_size:
+            heapq.heappop(timeline)
+        self.total_writes += 1
+
+    def get_timeline(self, user_id: int, count: int = 20):
+        timeline = self.timelines.get(user_id, [])
+        sorted_tl = sorted(timeline)[:count]
+        return [tid for _, tid in sorted_tl]</code></pre>
+
+<h3>Fan-Out Strategies</h3>
+
+<ul>
+  <li><strong>Push (Fan-Out on Write):</strong> On each tweet, iterate through all followers and write the tweet ID into their timeline caches. Fast reads but expensive writes for popular users.</li>
+  <li><strong>Pull (Fan-Out on Read):</strong> On timeline load, query all followed users' tweet lists and merge. No write amplification but slow reads.</li>
+  <li><strong>Hybrid:</strong> Users below the celebrity threshold use push. Celebrities use pull. Timeline read merges cached tweets with on-demand celebrity tweets.</li>
+</ul>
+
+<h3>Social Graph Generation</h3>
+
+<p>The simulator generates a realistic social graph using a power-law distribution -- most users have few followers, a small number have many. This models real social networks where celebrities have disproportionate reach.</p>
+
+<h3>Metrics Collected</h3>
+
+<ul>
+  <li><strong>Cache writes per tweet:</strong> How many timeline caches are updated (push cost)</li>
+  <li><strong>DB reads per timeline load:</strong> How many user tweet lists are queried (pull cost)</li>
+  <li><strong>Average and p99 write latency:</strong> Time to complete a tweet's fan-out</li>
+  <li><strong>Average and p99 read latency:</strong> Time to generate a timeline</li>
+</ul>
+
+<h3>Key Findings</h3>
+
+<ul>
+  <li>Pure push collapses when a celebrity with millions of followers tweets (millions of cache writes)</li>
+  <li>Pure pull gives consistent write speed but timeline loads are slow (must query many users)</li>
+  <li>Hybrid with a ~5K-10K follower threshold offers the best balance of write and read performance</li>
+  <li>The optimal threshold depends on the read/write ratio and follower distribution of the specific platform</li>
+</ul>

@@ -1,0 +1,127 @@
+<h2>6-Step LLD Interview Framework</h2>
+
+<p>A repeatable approach for any Low-Level Design interview question. Follow these steps in order, adjusting time based on the interview length.</p>
+
+<h3>Time Budget (45-minute interview)</h3>
+
+<ul>
+    <li>Step 1: Clarify Requirements -- 2-3 min</li>
+    <li>Step 2: Identify Core Entities -- 2-3 min</li>
+    <li>Step 3: Define Interfaces/APIs -- 3-5 min</li>
+    <li>Step 4: Design Class Hierarchy -- 5-7 min</li>
+    <li>Step 5: Implement Core Logic -- 15-20 min</li>
+    <li>Step 6: Discuss Trade-offs -- 2-3 min</li>
+</ul>
+
+<h3>Step 1: Clarify Requirements</h3>
+
+<p>Before writing any code, ask clarifying questions. This shows maturity and prevents wasted effort.</p>
+
+<p>Template questions:</p>
+<ol>
+    <li>"What are the main use cases / features?"</li>
+    <li>"How many users / scale should I design for?"</li>
+    <li>"Should I handle concurrency / thread safety?"</li>
+    <li>"What is in scope and what is NOT in scope?"</li>
+    <li>"Are there specific design patterns you'd like to see?"</li>
+</ol>
+
+<p>Split requirements into three categories:</p>
+
+<ul>
+    <li><strong>Functional</strong> -- what the system does ("Users can create short URLs")</li>
+    <li><strong>Non-functional</strong> -- how it performs ("Handle 1000 req/sec")</li>
+    <li><strong>Out of scope</strong> -- explicitly exclude ("No user authentication")</li>
+</ul>
+
+<h3>Step 2: Identify Core Entities</h3>
+
+<p>Use the <strong>noun extraction</strong> technique: read each requirement and underline the nouns.</p>
+
+<pre><code>"VEHICLES can enter and exit the PARKING LOT"
+  -> Vehicle, ParkingLot
+
+"Different VEHICLE TYPES: CAR, MOTORCYCLE, TRUCK"
+  -> Vehicle (abstract), Car, Motorcycle, Truck
+
+"Different PARKING SPOT SIZES: SMALL, MEDIUM, LARGE"
+  -> ParkingSpot, SpotSize (enum)
+
+"Calculate PARKING FEE based on DURATION"
+  -> ParkingTicket, FeeCalculator
+</code></pre>
+
+<p>Classify each noun:</p>
+<ul>
+    <li>If it has its own behavior -- <strong>Entity</strong> (class)</li>
+    <li>If it is just a value -- <strong>Attribute</strong> (field on a class)</li>
+    <li>If it is a fixed set of values -- <strong>Enum</strong></li>
+</ul>
+
+<h3>Step 3: Define Interfaces / APIs</h3>
+
+<p>Define the public API before implementation. This forces you to think about how the system is used.</p>
+
+<pre><code class="language-python">class ParkingLot:
+    def park(self, vehicle: Vehicle) -> Optional[ParkingTicket]: ...
+    def unpark(self, ticket: ParkingTicket) -> float: ...
+    def available_spots(self) -> Dict[SpotType, int]: ...
+
+class ParkingSpot(ABC):
+    @abstractmethod
+    def can_fit(self, vehicle: Vehicle) -> bool: ...
+    def park(self, vehicle: Vehicle) -> None: ...
+    def release(self) -> None: ...
+</code></pre>
+
+<h3>Step 4: Design Class Hierarchy</h3>
+
+<p>Draw the UML diagram showing classes, relationships, and patterns:</p>
+
+<ul>
+    <li>Use <strong>inheritance</strong> for "is-a" (Vehicle -> Car, Truck)</li>
+    <li>Use <strong>composition</strong> for "owns" (ParkingLot owns ParkingSpots)</li>
+    <li>Use <strong>enums</strong> for fixed categories (VehicleType, SpotSize)</li>
+    <li>Apply <strong>design patterns</strong> where appropriate (Strategy for fee calculation)</li>
+</ul>
+
+<h3>Step 5: Implement Core Logic</h3>
+
+<p>Start with the most important classes. Implement the "happy path" first, then edge cases.</p>
+
+<pre><code class="language-python">class ParkingLot:
+    def __init__(self, floors: List[ParkingFloor], rate: PricingStrategy):
+        self._floors = floors
+        self._rate = rate
+        self._tickets: Dict[str, ParkingTicket] = {}
+
+    def park(self, vehicle: Vehicle) -> Optional[ParkingTicket]:
+        for floor in self._floors:
+            spot = floor.find_spot(vehicle)
+            if spot:
+                spot.park(vehicle)
+                ticket = ParkingTicket(vehicle, spot, datetime.now())
+                self._tickets[ticket.ticket_id] = ticket
+                return ticket
+        return None  # lot is full
+</code></pre>
+
+<h3>Step 6: Discuss Trade-offs</h3>
+
+<p>After implementation, discuss your design choices:</p>
+
+<ul>
+    <li><strong>Extensibility</strong>: "Adding a new vehicle type is easy -- just create a new subclass"</li>
+    <li><strong>Patterns</strong>: "I used Strategy for pricing so we can swap algorithms without changing the lot"</li>
+    <li><strong>Concurrency</strong>: "In a real system, I'd add locks around spot allocation"</li>
+    <li><strong>Testing</strong>: "The abstract interfaces make it easy to mock in unit tests"</li>
+</ul>
+
+<h3>Common Mistakes</h3>
+
+<ul>
+    <li>Jumping straight into code without clarifying requirements</li>
+    <li>Over-engineering with too many patterns</li>
+    <li>Ignoring edge cases (lot full, invalid ticket)</li>
+    <li>Not discussing trade-offs at the end</li>
+</ul>

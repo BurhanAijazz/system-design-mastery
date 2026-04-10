@@ -1,0 +1,78 @@
+<h2>Amazon / E-Commerce Platform Design</h2>
+
+<p>An e-commerce platform like Amazon is a microservices-by-domain architecture covering product catalog, search, cart, checkout, inventory management, payment idempotency, and flash sale handling. The key challenge is strong consistency at checkout (no overselling) while maintaining high availability everywhere else.</p>
+
+<h3>Define: Requirements</h3>
+
+<ul>
+  <li><strong>Functional:</strong> Product catalog (browse, details), search with filters and autocomplete, shopping cart, checkout and payment, order management (track/cancel/return), reviews and ratings, seller management, recommendations</li>
+  <li><strong>Non-Functional:</strong> Search &lt;200ms, cart ops &lt;100ms, checkout &lt;2 seconds, handle flash sales (100x traffic), payment idempotency (never double-charge), inventory strong consistency, 99.99% availability for cart and checkout</li>
+</ul>
+
+<h3>Estimate</h3>
+
+<pre><code class="language-python"># 300M active customers, 2.5M sellers, 1.5B products
+# 50M DAU, 5M orders/day (20M on Prime Day)
+
+# READ:
+#   Product views: 50M x 20 pages = 1B/day = 11,600 QPS
+#   Search: 50M x 5 = 250M/day = 2,900 QPS
+
+# WRITE:
+#   Cart: 50M x 10 actions = 500M/day = 5,800 QPS
+#   Orders: 5M/day = 58 QPS (but 5-10 ops each)
+
+# FLASH SALE (Prime Day):
+#   Product views: 100K QPS (10x normal)
+#   Cart: 50K QPS
+#   Orders: 500 QPS -> all for SAME products = hot partition
+
+# STORAGE:
+#   Product catalog: 1.5B x 10 KB = 15 TB
+#   Product images: 1.5B x 5 x 500 KB = 3.75 PB (S3 + CDN)</code></pre>
+
+<h3>Architecture: Microservices by Domain</h3>
+
+<ul>
+  <li><strong>Product Service:</strong> Catalog CRUD, product details. PostgreSQL sharded by category.</li>
+  <li><strong>Search Service:</strong> Elasticsearch with autocomplete, faceted search, filters.</li>
+  <li><strong>Cart Service:</strong> Redis for active carts (fast), DynamoDB for persistence. Cart survives session expiry.</li>
+  <li><strong>Inventory Service:</strong> Strong consistency required. Uses pessimistic locking or compare-and-swap at checkout.</li>
+  <li><strong>Order Service:</strong> Orchestrates the checkout saga across inventory, payment, and fulfillment.</li>
+  <li><strong>Payment Service:</strong> Idempotent payment processing with idempotency keys.</li>
+  <li><strong>Recommendation Service:</strong> Collaborative filtering, "customers also bought" computed offline.</li>
+</ul>
+
+<h3>Checkout Saga Pattern</h3>
+
+<pre><code class="language-python"># The checkout is a distributed transaction (saga):
+# Step 1: Reserve inventory (lock items)
+# Step 2: Process payment (charge card)
+# Step 3: Confirm order (update status)
+# Step 4: Notify fulfillment (ship it)
+
+# If Step 2 fails (payment declined):
+#   Compensate Step 1: release inventory
+# If Step 3 fails:
+#   Compensate Step 2: refund payment
+#   Compensate Step 1: release inventory
+
+# Each step is idempotent - safe to retry on failure</code></pre>
+
+<h3>Flash Sale Architecture</h3>
+
+<ul>
+  <li><strong>Problem:</strong> Millions of users trying to buy the same product simultaneously creates a hot partition</li>
+  <li><strong>Pre-warm caches:</strong> Product page and inventory counts cached in Redis before the sale starts</li>
+  <li><strong>Queue-based ordering:</strong> Place users in a virtual queue; process orders sequentially to prevent overselling</li>
+  <li><strong>Inventory pre-partitioning:</strong> Split 10,000 units across 100 partitions (100 units each) to distribute write contention</li>
+</ul>
+
+<h3>Key Design Decisions</h3>
+
+<ul>
+  <li><strong>Eventual consistency for catalog:</strong> Product details can be stale by a few seconds without harm</li>
+  <li><strong>Strong consistency for inventory:</strong> Overselling is unacceptable; use distributed locks or serialized queues</li>
+  <li><strong>Payment idempotency:</strong> Every payment request includes an idempotency key; retries are safe</li>
+  <li><strong>Cart in Redis:</strong> Sub-millisecond cart operations; persist to DynamoDB asynchronously for durability</li>
+</ul>

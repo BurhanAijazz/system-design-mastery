@@ -1,0 +1,362 @@
+<h2>Project: System Design Estimation Calculator</h2>
+
+<p>
+  Build a Python-based estimation calculator that automates back-of-envelope calculations
+  for system design problems. The calculator should accept high-level inputs (users, actions,
+  data sizes) and produce a comprehensive estimation report covering traffic, storage,
+  bandwidth, compute, and cache requirements.
+</p>
+
+<h3>Project Overview</h3>
+
+<ul>
+  <li><strong>Goal:</strong> Build a reusable estimation tool for system design practice.</li>
+  <li><strong>Skills tested:</strong> Estimation methodology, Python OOP, data modeling</li>
+  <li><strong>Estimated time:</strong> 2-3 hours</li>
+  <li><strong>Deliverable:</strong> A Python module with CLI interface and preset templates</li>
+</ul>
+
+<h3>Core Data Models</h3>
+
+<pre><code class="language-python">from dataclasses import dataclass, field
+from enum import Enum
+
+
+class DataUnit(Enum):
+    BYTES = 1
+    KB = 1024
+    MB = 1024 ** 2
+    GB = 1024 ** 3
+    TB = 1024 ** 4
+    PB = 1024 ** 5
+
+
+@dataclass
+class SystemInputs:
+    """High-level inputs for estimation."""
+    name: str
+    monthly_active_users: int
+    daily_active_users: int
+    actions_per_user_per_day: float
+    read_write_ratio: float = 10.0
+    avg_write_size_bytes: int = 500
+    avg_read_size_bytes: int = 1000
+    retention_years: int = 5
+    peak_multiplier: float = 3.0
+    cdn_offload_percent: float = 0.0  # 0-100
+    cache_hit_rate: float = 0.80
+    replication_factor: int = 3
+
+
+@dataclass
+class TrafficEstimate:
+    avg_write_rps: float
+    avg_read_rps: float
+    peak_write_rps: float
+    peak_read_rps: float
+    peak_total_rps: float
+    daily_writes: int
+    daily_reads: int
+
+
+@dataclass
+class StorageEstimate:
+    daily_new_data_bytes: int
+    monthly_new_data_bytes: int
+    yearly_new_data_bytes: int
+    total_data_bytes: int  # over retention period
+    with_replication_bytes: int
+    daily_new_data_human: str
+    total_data_human: str
+    with_replication_human: str
+
+
+@dataclass
+class BandwidthEstimate:
+    incoming_bytes_per_sec: float
+    outgoing_bytes_per_sec: float
+    outgoing_after_cdn_bytes_per_sec: float
+    incoming_human: str
+    outgoing_human: str
+    outgoing_after_cdn_human: str
+
+
+@dataclass
+class ComputeEstimate:
+    servers_for_avg_load: int
+    servers_for_peak_load: int
+    requests_per_server: int
+
+
+@dataclass
+class CacheEstimate:
+    daily_read_data_bytes: int
+    cache_size_bytes: int  # for hot data
+    cache_size_human: str
+    estimated_hit_rate: float
+    reads_hitting_db_rps: float
+
+
+@dataclass
+class EstimationReport:
+    inputs: SystemInputs
+    traffic: TrafficEstimate
+    storage: StorageEstimate
+    bandwidth: BandwidthEstimate
+    compute: ComputeEstimate
+    cache: CacheEstimate
+</code></pre>
+
+<h3>The Estimation Engine</h3>
+
+<pre><code class="language-python">class EstimationEngine:
+    """Core engine that performs all back-of-envelope calculations."""
+
+    SECONDS_PER_DAY = 86_400
+    DAYS_PER_MONTH = 30
+    DAYS_PER_YEAR = 365
+    DEFAULT_RPS_PER_SERVER = 5_000
+
+    def __init__(self, rps_per_server: int = DEFAULT_RPS_PER_SERVER):
+        self._rps_per_server = rps_per_server
+
+    def estimate(self, inputs: SystemInputs) -> EstimationReport:
+        traffic = self._estimate_traffic(inputs)
+        storage = self._estimate_storage(inputs, traffic)
+        bandwidth = self._estimate_bandwidth(inputs, traffic)
+        compute = self._estimate_compute(inputs, traffic)
+        cache = self._estimate_cache(inputs, traffic)
+
+        return EstimationReport(
+            inputs=inputs,
+            traffic=traffic,
+            storage=storage,
+            bandwidth=bandwidth,
+            compute=compute,
+            cache=cache,
+        )
+
+    def _estimate_traffic(self, inputs: SystemInputs) -> TrafficEstimate:
+        daily_writes = int(inputs.daily_active_users * inputs.actions_per_user_per_day)
+        daily_reads = int(daily_writes * inputs.read_write_ratio)
+
+        avg_write_rps = daily_writes / self.SECONDS_PER_DAY
+        avg_read_rps = daily_reads / self.SECONDS_PER_DAY
+
+        peak_write_rps = avg_write_rps * inputs.peak_multiplier
+        peak_read_rps = avg_read_rps * inputs.peak_multiplier
+
+        return TrafficEstimate(
+            avg_write_rps=avg_write_rps,
+            avg_read_rps=avg_read_rps,
+            peak_write_rps=peak_write_rps,
+            peak_read_rps=peak_read_rps,
+            peak_total_rps=peak_write_rps + peak_read_rps,
+            daily_writes=daily_writes,
+            daily_reads=daily_reads,
+        )
+
+    def _estimate_storage(self, inputs: SystemInputs, traffic: TrafficEstimate) -> StorageEstimate:
+        daily = traffic.daily_writes * inputs.avg_write_size_bytes
+        monthly = daily * self.DAYS_PER_MONTH
+        yearly = daily * self.DAYS_PER_YEAR
+        total = yearly * inputs.retention_years
+        with_replication = total * inputs.replication_factor
+
+        return StorageEstimate(
+            daily_new_data_bytes=daily,
+            monthly_new_data_bytes=monthly,
+            yearly_new_data_bytes=yearly,
+            total_data_bytes=total,
+            with_replication_bytes=with_replication,
+            daily_new_data_human=self._humanize_bytes(daily),
+            total_data_human=self._humanize_bytes(total),
+            with_replication_human=self._humanize_bytes(with_replication),
+        )
+
+    def _estimate_bandwidth(self, inputs: SystemInputs, traffic: TrafficEstimate) -> BandwidthEstimate:
+        incoming = traffic.avg_write_rps * inputs.avg_write_size_bytes
+        outgoing = traffic.avg_read_rps * inputs.avg_read_size_bytes
+        after_cdn = outgoing * (1 - inputs.cdn_offload_percent / 100)
+
+        return BandwidthEstimate(
+            incoming_bytes_per_sec=incoming,
+            outgoing_bytes_per_sec=outgoing,
+            outgoing_after_cdn_bytes_per_sec=after_cdn,
+            incoming_human=self._humanize_bandwidth(incoming),
+            outgoing_human=self._humanize_bandwidth(outgoing),
+            outgoing_after_cdn_human=self._humanize_bandwidth(after_cdn),
+        )
+
+    def _estimate_compute(self, inputs: SystemInputs, traffic: TrafficEstimate) -> ComputeEstimate:
+        avg_total_rps = traffic.avg_write_rps + traffic.avg_read_rps
+        peak_total_rps = traffic.peak_total_rps
+
+        return ComputeEstimate(
+            servers_for_avg_load=max(1, int(avg_total_rps / self._rps_per_server) + 1),
+            servers_for_peak_load=max(1, int(peak_total_rps / self._rps_per_server) + 1),
+            requests_per_server=self._rps_per_server,
+        )
+
+    def _estimate_cache(self, inputs: SystemInputs, traffic: TrafficEstimate) -> CacheEstimate:
+        daily_read_data = traffic.daily_reads * inputs.avg_read_size_bytes
+        # Cache 20% of daily read data (Pareto: 20% of data serves 80% of reads)
+        cache_size = int(daily_read_data * 0.20)
+        reads_hitting_db = traffic.avg_read_rps * (1 - inputs.cache_hit_rate)
+
+        return CacheEstimate(
+            daily_read_data_bytes=daily_read_data,
+            cache_size_bytes=cache_size,
+            cache_size_human=self._humanize_bytes(cache_size),
+            estimated_hit_rate=inputs.cache_hit_rate,
+            reads_hitting_db_rps=reads_hitting_db,
+        )
+
+    @staticmethod
+    def _humanize_bytes(num_bytes: int) -> str:
+        for unit in ["B", "KB", "MB", "GB", "TB", "PB"]:
+            if abs(num_bytes) < 1024:
+                return f"{num_bytes:.1f} {unit}"
+            num_bytes /= 1024
+        return f"{num_bytes:.1f} EB"
+
+    @staticmethod
+    def _humanize_bandwidth(bytes_per_sec: float) -> str:
+        bits_per_sec = bytes_per_sec * 8
+        for unit in ["bps", "Kbps", "Mbps", "Gbps", "Tbps"]:
+            if abs(bits_per_sec) < 1000:
+                return f"{bits_per_sec:.1f} {unit}"
+            bits_per_sec /= 1000
+        return f"{bits_per_sec:.1f} Pbps"
+</code></pre>
+
+<h3>Report Formatter</h3>
+
+<pre><code class="language-python">class ReportPrinter:
+    @staticmethod
+    def print_report(report: EstimationReport):
+        i = report.inputs
+        print(f"\n{'=' * 60}")
+        print(f"  ESTIMATION REPORT: {i.name}")
+        print(f"{'=' * 60}")
+
+        print(f"\n  MAU: {i.monthly_active_users:,}")
+        print(f"  DAU: {i.daily_active_users:,}")
+        print(f"  Actions/user/day: {i.actions_per_user_per_day}")
+        print(f"  Read/Write ratio: {i.read_write_ratio}:1")
+
+        t = report.traffic
+        print(f"\n--- TRAFFIC ---")
+        print(f"  Avg Write RPS:  {t.avg_write_rps:,.0f}")
+        print(f"  Avg Read RPS:   {t.avg_read_rps:,.0f}")
+        print(f"  Peak Total RPS: {t.peak_total_rps:,.0f}")
+
+        s = report.storage
+        print(f"\n--- STORAGE ---")
+        print(f"  Daily new data:  {s.daily_new_data_human}")
+        print(f"  Total ({i.retention_years}yr):    {s.total_data_human}")
+        print(f"  With replication: {s.with_replication_human}")
+
+        b = report.bandwidth
+        print(f"\n--- BANDWIDTH ---")
+        print(f"  Incoming:  {b.incoming_human}")
+        print(f"  Outgoing:  {b.outgoing_human}")
+        if i.cdn_offload_percent > 0:
+            print(f"  After CDN: {b.outgoing_after_cdn_human}")
+
+        c = report.compute
+        print(f"\n--- COMPUTE ---")
+        print(f"  Servers (avg):  {c.servers_for_avg_load}")
+        print(f"  Servers (peak): {c.servers_for_peak_load}")
+
+        ca = report.cache
+        print(f"\n--- CACHE ---")
+        print(f"  Cache size:  {ca.cache_size_human}")
+        print(f"  Hit rate:    {ca.estimated_hit_rate:.0%}")
+        print(f"  DB read RPS: {ca.reads_hitting_db_rps:,.0f}")
+
+        print(f"\n{'=' * 60}\n")
+</code></pre>
+
+<h3>Preset Templates</h3>
+
+<pre><code class="language-python"># Built-in templates for common system design problems
+
+PRESETS = {
+    "url_shortener": SystemInputs(
+        name="URL Shortener (like bit.ly)",
+        monthly_active_users=500_000_000,
+        daily_active_users=100_000_000,
+        actions_per_user_per_day=1,
+        read_write_ratio=100,
+        avg_write_size_bytes=500,
+        avg_read_size_bytes=500,
+        retention_years=5,
+    ),
+    "twitter": SystemInputs(
+        name="Microblogging Platform (like Twitter)",
+        monthly_active_users=500_000_000,
+        daily_active_users=200_000_000,
+        actions_per_user_per_day=2,
+        read_write_ratio=100,
+        avg_write_size_bytes=500,
+        avg_read_size_bytes=2000,
+        retention_years=10,
+    ),
+    "instagram": SystemInputs(
+        name="Photo Sharing (like Instagram)",
+        monthly_active_users=2_000_000_000,
+        daily_active_users=500_000_000,
+        actions_per_user_per_day=0.14,  # 1 photo/week
+        read_write_ratio=200,
+        avg_write_size_bytes=2_000_000,  # 2 MB photo
+        avg_read_size_bytes=500_000,  # compressed/resized
+        retention_years=10,
+        cdn_offload_percent=90,
+    ),
+}
+</code></pre>
+
+<h3>Requirements Checklist</h3>
+
+<ul>
+  <li>Implement the <code>EstimationEngine</code> with all five estimation categories.</li>
+  <li>Human-readable formatting for all byte and bandwidth values.</li>
+  <li>At least 3 preset templates for common system design problems.</li>
+  <li>A CLI interface that accepts custom inputs or selects a preset.</li>
+  <li>Unit tests for the engine (verify calculations are correct).</li>
+  <li>Export report to JSON format for later reference.</li>
+</ul>
+
+<h3>Example Usage</h3>
+
+<pre><code class="language-python">engine = EstimationEngine()
+
+# Use a preset
+report = engine.estimate(PRESETS["twitter"])
+ReportPrinter.print_report(report)
+
+# Custom estimation
+custom = SystemInputs(
+    name="My Chat Application",
+    monthly_active_users=50_000_000,
+    daily_active_users=20_000_000,
+    actions_per_user_per_day=40,
+    read_write_ratio=5,
+    avg_write_size_bytes=200,
+    avg_read_size_bytes=200,
+    retention_years=3,
+    cache_hit_rate=0.90,
+)
+report = engine.estimate(custom)
+ReportPrinter.print_report(report)
+</code></pre>
+
+<h3>Stretch Goals</h3>
+
+<ul>
+  <li>Add a cost estimator that maps compute/storage/bandwidth to approximate cloud costs (AWS/GCP pricing).</li>
+  <li>Add a "what-if" mode: show how estimates change if DAU doubles or read/write ratio changes.</li>
+  <li>Generate a visual ASCII chart of traffic patterns (daily peaks and valleys).</li>
+  <li>Add database-specific recommendations based on the estimation (when to shard, which DB to use).</li>
+</ul>

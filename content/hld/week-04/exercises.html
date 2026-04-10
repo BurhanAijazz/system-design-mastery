@@ -1,0 +1,76 @@
+<h2>Week 4 Exercises: Caching and Performance</h2>
+
+<p>These exercises test your understanding of caching strategies, invalidation patterns, and consistent hashing. Think through the trade-offs before reviewing solutions.</p>
+
+<h3>Exercise 1: Caching Strategy Selection</h3>
+<p>For each scenario, choose the best caching pattern and explain why.</p>
+<ul>
+  <li><strong>Scenario A</strong>: A social media feed that shows posts from users you follow. Posts are created frequently but each user's feed is read 100x more than it is updated</li>
+  <li><strong>Scenario B</strong>: A banking application showing account balance. Balance must always be accurate. Users check it after every transaction</li>
+  <li><strong>Scenario C</strong>: A product catalog with 10 million items. 80% of traffic goes to the top 1,000 products. Prices update once per day</li>
+</ul>
+
+<pre><code class="language-python"># For each scenario, reason about:
+# 1. Read/write ratio
+# 2. Staleness tolerance (how bad is stale data?)
+# 3. Cache hit rate potential
+# 4. Invalidation strategy
+
+scenarios = {
+    "social_feed":     "??? pattern, because ...",
+    "bank_balance":    "??? pattern, because ...",
+    "product_catalog": "??? pattern, because ...",
+}
+
+# Hint: Cache-Aside, Write-Through, Write-Behind,
+#        Read-Through, Refresh-Ahead
+</code></pre>
+
+<h3>Exercise 2: Cache Failure Modes</h3>
+<p>Diagnose the problem and propose a fix for each situation:</p>
+<ul>
+  <li><strong>Situation A</strong>: Every night at midnight, your cache hit rate drops to 0% for 2 minutes, and the database CPU spikes to 100%. All cache entries have a 24-hour TTL set at the same time</li>
+  <li><strong>Situation B</strong>: An attacker sends millions of requests for random user IDs that don't exist. Each request bypasses the cache and hits the database</li>
+  <li><strong>Situation C</strong>: A celebrity with 50 million followers posts a new photo. The cache entry for their profile expires, and 50 million simultaneous requests flood the database</li>
+</ul>
+
+<pre><code class="language-python"># Identify the failure mode for each:
+# - Cache Stampede (thundering herd)
+# - Cache Penetration (non-existent keys)
+# - Cache Avalanche (mass expiration)
+# - Hot Key Problem
+
+# For each, implement a defense:
+import random
+
+def jittered_ttl(base_ttl: int, jitter_pct: float = 0.1) -> int:
+    """Add random jitter to TTL to prevent mass expiration."""
+    jitter = int(base_ttl * jitter_pct)
+    return base_ttl + random.randint(-jitter, jitter)
+</code></pre>
+
+<h3>Exercise 3: Consistent Hashing Analysis</h3>
+<p>You have a distributed cache with 5 Redis nodes and 100,000 cached keys.</p>
+<ul>
+  <li>One node crashes. How many keys need to be re-fetched from the database? Compare with and without consistent hashing</li>
+  <li>You add 2 more nodes for capacity. What percentage of keys move? How does the number of virtual nodes affect distribution evenness?</li>
+  <li>Write a function that measures the standard deviation of key distribution across nodes as you vary the virtual node count from 1 to 500</li>
+</ul>
+
+<pre><code class="language-python"># Experiment: measure distribution evenness
+import hashlib
+from collections import defaultdict
+import statistics
+
+def measure_evenness(num_nodes, num_keys, virtual_nodes):
+    """Return std dev of key distribution."""
+    # Build ring, distribute keys, compute std dev
+    # Lower std dev = more even distribution
+    counts = defaultdict(int)
+    # ... implement consistent hash ring here ...
+    values = list(counts.values())
+    return statistics.stdev(values) if len(values) > 1 else 0
+
+# Try: virtual_nodes = 1, 10, 50, 150, 500
+# Observe how distribution evenness improves
+</code></pre>

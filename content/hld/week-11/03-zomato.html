@@ -1,0 +1,85 @@
+<h2>Zomato / Food Delivery Platform Design</h2>
+
+<p>Food delivery is a <strong>three-sided marketplace</strong>: customer, restaurant, and delivery partner. Unlike Uber's two-sided model, the added complexity of food preparation time creates a unique timing coordination challenge -- the delivery partner should arrive at the restaurant exactly when the food is ready.</p>
+
+<h3>Define: Requirements</h3>
+
+<ul>
+  <li><strong>Functional:</strong> Browse restaurants (location, cuisine, rating), view menu and order, restaurant receives and prepares order, assign delivery partner with real-time tracking, payment (prepaid or cash), ratings for restaurant and delivery</li>
+  <li><strong>Non-Functional:</strong> Order placed within 2 seconds, delivery partner assigned within 60 seconds, real-time tracking every 5 seconds, average delivery 30-40 minutes, 99.9% order success</li>
+</ul>
+
+<h3>Three-Sided Marketplace Challenge</h3>
+
+<pre><code class="language-python"># Timing coordination is the key difference from Uber:
+#
+# Customer places order at 12:00
+# Restaurant starts cooking (est. 20 min prep)
+#
+# If partner arrives at 12:10 -> waits 10 min (wasted time)
+# If partner arrives at 12:25 -> food gets cold (bad experience)
+#
+# IDEAL: partner arrives at 12:20 exactly when food is ready
+#
+# Solution: predict prep time per restaurant (ML model),
+# dispatch partner with estimated arrival = predicted prep time</code></pre>
+
+<h3>Estimate</h3>
+
+<pre><code class="language-python"># 50M MAU, 10M DAU, 500K restaurants, 300K delivery partners
+# 5M orders/day (peak 15M on holidays)
+
+# ORDERS:
+#   5M / 86400 = 58 QPS (peak lunch/dinner ~300 QPS)
+
+# DELIVERY PARTNER LOCATIONS:
+#   300K partners x 1 update/5 sec = 60K updates/sec
+
+# ORDER TRACKING:
+#   500K concurrent active orders at peak
+#   500K x 0.2 updates/sec = 100K pushes/sec
+
+# STORAGE:
+#   Orders: 5M/day x 5 KB = 25 GB/day = 9 TB/year
+#   Restaurant menus: 500K x 50 items x 500B = 12.5 GB (small!)
+#   Partner locations: 60K/sec x 50B x 86400 = 259 GB/day</code></pre>
+
+<h3>Architecture</h3>
+
+<ul>
+  <li><strong>Restaurant Service:</strong> Menu management, availability, prep time estimation. Menus cached aggressively (change infrequently).</li>
+  <li><strong>Order Service:</strong> Order creation, state machine (placed -> accepted -> preparing -> ready -> picked_up -> delivered).</li>
+  <li><strong>Dispatch Service:</strong> Matches orders with delivery partners based on location, estimated prep time, and partner availability.</li>
+  <li><strong>Location Service:</strong> Tracks 300K delivery partners, geohash-indexed for fast nearby queries.</li>
+  <li><strong>Tracking Service:</strong> Real-time order status and delivery partner location pushed to customer via WebSocket.</li>
+  <li><strong>Payment Service:</strong> Handles prepaid orders and cash-on-delivery reconciliation.</li>
+</ul>
+
+<h3>Order State Machine</h3>
+
+<ul>
+  <li><strong>Placed:</strong> Customer submitted order, sent to restaurant</li>
+  <li><strong>Accepted:</strong> Restaurant confirmed, cooking begins</li>
+  <li><strong>Preparing:</strong> Food being cooked, prep time countdown active</li>
+  <li><strong>Ready:</strong> Food ready for pickup, partner notified</li>
+  <li><strong>Picked Up:</strong> Partner collected food, en route to customer</li>
+  <li><strong>Delivered:</strong> Customer received food, payment finalized</li>
+</ul>
+
+<h3>Intelligent Dispatch</h3>
+
+<ul>
+  <li>Predict restaurant prep time using historical data (ML model per restaurant)</li>
+  <li>Calculate optimal dispatch time = prep_time - estimated_travel_time_to_restaurant</li>
+  <li>Order batching: if two orders go from nearby restaurants to nearby customers, one partner can handle both</li>
+  <li>Re-assignment: if assigned partner becomes unavailable, quickly find a replacement</li>
+</ul>
+
+<h3>Key Design Decisions</h3>
+
+<ul>
+  <li><strong>Restaurant menus are heavily cached:</strong> Small dataset that changes rarely, read millions of times per day</li>
+  <li><strong>Prep time prediction is critical:</strong> Poor estimation leads to either cold food or waiting delivery partners</li>
+  <li><strong>Peak handling:</strong> Lunch (12-1 PM) and dinner (7-9 PM) peaks require auto-scaling of order and dispatch services</li>
+  <li><strong>Cash-on-delivery:</strong> Adds reconciliation complexity but is essential in markets where digital payments are not universal</li>
+</ul>

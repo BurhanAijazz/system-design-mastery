@@ -1,0 +1,43 @@
+<h2>Design: Leaderboard System</h2>
+<p>Design a real-time leaderboard that can handle millions of players.</p>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Update player scores in real-time</li>
+  <li>Get top-K players efficiently</li>
+  <li>Get a player's rank</li>
+</ul>
+
+<h3>Core Architecture</h3>
+<pre><code class="language-python"># Using Redis Sorted Sets concept
+class Leaderboard:
+    def __init__(self):
+        self._scores = {}  # player_id -> score
+        self._sorted = []  # maintained sorted list
+
+    def update_score(self, player_id, score):
+        self._scores[player_id] = score
+        self._rebuild_sorted()
+
+    def get_top_k(self, k):
+        return self._sorted[:k]
+
+    def get_rank(self, player_id):
+        for i, (pid, score) in enumerate(self._sorted):
+            if pid == player_id:
+                return i + 1
+        return -1
+
+    def _rebuild_sorted(self):
+        self._sorted = sorted(
+            self._scores.items(),
+            key=lambda x: -x[1]
+        )
+</code></pre>
+
+<h3>At Scale</h3>
+<ul>
+  <li>Use Redis Sorted Sets (ZADD, ZRANGE, ZRANK) for O(log N) operations</li>
+  <li>Partition by game/region for horizontal scaling</li>
+  <li>Cache top-K results with short TTL</li>
+</ul>

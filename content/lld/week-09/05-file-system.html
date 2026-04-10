@@ -1,0 +1,96 @@
+<h2>In-Memory File System Design</h2>
+
+<p>A classic LLD problem that uses the Composite pattern to model the tree structure of files and directories. This lesson covers file system modeling, path resolution, permissions, directory traversal, and search.</p>
+
+<h3>Permissions Model</h3>
+
+<p>Simplified Unix-style permissions using Flag enum. Permissions are composable: READ | WRITE gives read and write access.</p>
+
+<pre><code class="language-python">class Permission(Flag):
+    NONE = 0
+    READ = auto()
+    WRITE = auto()
+    EXECUTE = auto()
+    ALL = READ | WRITE | EXECUTE
+
+# Composable:
+# READ | WRITE -> read+write
+# READ in ALL -> True</code></pre>
+
+<h3>FileSystemNode (Composite Pattern)</h3>
+
+<p>The Composite pattern models the tree structure where both files and directories share a common interface:</p>
+<ul>
+  <li><strong>FileSystemNode</strong> (abstract) -- common interface with name, path, permissions, owner, timestamps</li>
+  <li><strong>File</strong> (leaf) -- has content and reports its own size</li>
+  <li><strong>Directory</strong> (composite) -- has children, can contain files and other directories, size is sum of children</li>
+</ul>
+
+<pre><code class="language-python">class FileSystemNode(ABC):
+    """Abstract node in the file system tree."""
+
+    def __init__(self, name: str, owner: str = "root",
+                 permissions: Permission = Permission.ALL):
+        self.name = name
+        self.owner = owner
+        self.permissions = permissions
+        self.created_at = datetime.now()
+        self.modified_at = datetime.now()
+        self._parent: Optional[Directory] = None
+
+    @property
+    def path(self) -> str:
+        if self._parent is None:
+            return "/" if self.name == "/" else f"/{self.name}"
+        parent_path = self._parent.path
+        if parent_path == "/":
+            return f"/{self.name}"
+        return f"{parent_path}/{self.name}"
+
+    @abstractmethod
+    def get_size(self) -> int:
+        pass</code></pre>
+
+<h3>File and Directory</h3>
+
+<pre><code class="language-python">class File(FileSystemNode):
+    def __init__(self, name, content="", **kwargs):
+        super().__init__(name, **kwargs)
+        self.content = content
+
+    def get_size(self) -> int:
+        return len(self.content)
+
+
+class Directory(FileSystemNode):
+    def __init__(self, name, **kwargs):
+        super().__init__(name, **kwargs)
+        self._children: Dict[str, FileSystemNode] = {}
+
+    def add(self, node: FileSystemNode) -> None:
+        self._children[node.name] = node
+        node._parent = self
+
+    def get_size(self) -> int:
+        return sum(child.get_size() for child in self._children.values())</code></pre>
+
+<h3>Path Resolution</h3>
+
+<p>The FileSystem class provides a <code>resolve(path)</code> method that walks the tree by splitting the path on "/" and following each component through the directory children. Handle edge cases: root path "/", trailing slashes, non-existent paths.</p>
+
+<h3>Directory Traversal</h3>
+
+<p>Implement traversal using both DFS and BFS with the Iterator pattern:</p>
+<ul>
+  <li><strong>DFS (depth-first)</strong> -- useful for finding files deep in the tree, uses a stack</li>
+  <li><strong>BFS (breadth-first)</strong> -- useful for finding files at a certain depth level, uses a queue</li>
+</ul>
+
+<h3>Key Design Takeaways</h3>
+<ul>
+  <li>Composite pattern is the natural fit for tree structures like file systems</li>
+  <li>Flag enum makes permissions composable and easy to check with the <code>in</code> operator</li>
+  <li>Path property is computed by walking up the parent chain -- no need to store full paths</li>
+  <li>get_size() demonstrates the power of Composite: directory delegates to children recursively</li>
+  <li>Permission checks should verify the user has the required flag before any operation</li>
+</ul>

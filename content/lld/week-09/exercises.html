@@ -1,0 +1,85 @@
+<h2>Week 9 Exercises: Infrastructure Systems</h2>
+
+<p>These exercises reinforce the infrastructure system patterns covered this week: cache design, rate limiting, logging frameworks, pub/sub messaging, and file system modeling. Focus on choosing the right data structures and composing patterns effectively.</p>
+
+<h3>Exercise 1: LRU Cache with TTL</h3>
+
+<p>Implement a cache that combines LRU eviction with time-to-live expiration. Requirements:</p>
+<ul>
+  <li>O(1) get and put operations using a doubly-linked list and HashMap</li>
+  <li>Each entry has a configurable TTL (time-to-live in seconds)</li>
+  <li>On <code>get(key)</code>: if the entry exists but is expired, remove it and return None</li>
+  <li>On <code>put(key, value, ttl)</code>: insert with the specified TTL, evict LRU if at capacity</li>
+  <li>Track and report cache statistics: hits, misses, evictions, expirations</li>
+</ul>
+
+<p><strong>Key patterns:</strong> DLL + HashMap for O(1) operations, lazy expiration for TTL, dataclass for CacheStats.</p>
+
+<pre><code class="language-python"># Starter hint:
+class DLLNode:
+    def __init__(self, key="", value=None, expires_at=None):
+        self.key = key
+        self.value = value
+        self.expires_at = expires_at  # timestamp or None
+        self.prev = None
+        self.next = None
+
+# Implement LRUWithTTLCache(Cache):
+#   - get(): check expiry, move to head if valid
+#   - put(): insert at head, evict from tail if full
+#   - _is_expired(node): check against current time</code></pre>
+
+<h3>Exercise 2: Composed Rate Limiter</h3>
+
+<p>Build a rate limiting system that supports layered rules. Requirements:</p>
+<ul>
+  <li>Support at least two algorithms: Token Bucket and Fixed Window Counter</li>
+  <li>Allow composing multiple rules: e.g., 10 requests/second AND 1000 requests/hour</li>
+  <li>A request is allowed only if ALL rules pass (Chain of Responsibility)</li>
+  <li>Return a <code>RateLimitResult</code> with allowed status, remaining count, and retry_after</li>
+  <li>Create a <code>@rate_limited</code> decorator that applies rate limiting to any function</li>
+</ul>
+
+<p><strong>Key patterns:</strong> Strategy for algorithm selection, Chain of Responsibility for composing rules, Decorator for transparent application.</p>
+
+<pre><code class="language-python"># Starter hint:
+@dataclass
+class RateLimitRule:
+    name: str
+    max_requests: int
+    window_seconds: float
+    algorithm: str  # "token_bucket" or "fixed_window"
+
+class ComposedLimiter:
+    def __init__(self, rules: List[RateLimitRule]):
+        self._limiters = [self._create(r) for r in rules]
+
+    def allow_request(self, client_id: str) -> RateLimitResult:
+        # ALL limiters must allow
+        pass</code></pre>
+
+<h3>Exercise 3: Mini Pub/Sub System</h3>
+
+<p>Implement a simple in-memory pub/sub message broker with these features:</p>
+<ul>
+  <li>Topics with subscribe and unsubscribe operations</li>
+  <li>Publish a message to a topic and fan-out to all subscribers</li>
+  <li>At-least-once delivery: retry up to 3 times on subscriber failure</li>
+  <li>Dead letter queue for messages that exhaust all retries</li>
+  <li>Message priority: CRITICAL messages are delivered before NORMAL ones</li>
+</ul>
+
+<p><strong>Key patterns:</strong> Observer for fan-out, Priority enum for ordering, DLQ for failure handling.</p>
+
+<pre><code class="language-python"># Starter hint:
+class MessageBroker:
+    def __init__(self):
+        self._topics: Dict[str, List[Subscriber]] = {}
+        self._dlq: List[Message] = []
+
+    def publish(self, topic: str, payload: Any,
+                priority: Priority = Priority.NORMAL): ...
+    def subscribe(self, topic: str, subscriber: Subscriber): ...
+    def get_dead_letters(self) -> List[Message]: ...</code></pre>
+
+<p><strong>Bonus challenge:</strong> Add a message deduplication filter using message content hashing to prevent duplicate deliveries within a time window.</p>

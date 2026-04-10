@@ -1,0 +1,89 @@
+<h2>Project: Rate Limiter System</h2>
+
+<p>A full LLD implementation of a configurable rate limiting system. This project uses Strategy for algorithm selection, Factory for creating limiters from configuration, Decorator for transparently applying rate limits, and Chain of Responsibility for composing multiple rules.</p>
+
+<h3>Requirements</h3>
+
+<p><strong>Functional:</strong></p>
+<ul>
+  <li>Multiple rate limiting algorithms (Token Bucket, Sliding Window, Fixed Window)</li>
+  <li>Configurable limits per rule (max requests, window size)</li>
+  <li>Per-client tracking (by client_id)</li>
+  <li>Composed limiters (multiple rules: 10/sec AND 1000/hour)</li>
+  <li>Rate limit any function via decorator</li>
+  <li>Rate limit result with remaining count and retry-after</li>
+  <li>Rule scopes: per-user, per-endpoint, global</li>
+</ul>
+
+<p><strong>Out of scope:</strong> Distributed rate limiting (Redis-based), IP-based tracking, response header injection.</p>
+
+<h3>Core Entities</h3>
+
+<pre><code class="language-python">class Algorithm(Enum):
+    TOKEN_BUCKET = "token_bucket"
+    SLIDING_WINDOW = "sliding_window"
+    FIXED_WINDOW = "fixed_window"
+
+class Scope(Enum):
+    GLOBAL = "global"         # One limit for all clients
+    PER_USER = "per_user"     # Separate limit per client_id
+    PER_ENDPOINT = "per_endpoint"
+
+@dataclass
+class RateLimitRule:
+    name: str
+    max_requests: int
+    window_seconds: float
+    algorithm: Algorithm = Algorithm.TOKEN_BUCKET
+    scope: Scope = Scope.PER_USER
+
+@dataclass
+class RateLimitResult:
+    allowed: bool
+    remaining: int
+    retry_after: Optional[float] = None
+    rule_name: Optional[str] = None</code></pre>
+
+<h3>Design Patterns Used</h3>
+
+<ul>
+  <li><strong>Strategy</strong> -- Each algorithm (TokenBucketLimiter, SlidingWindowLimiter, FixedWindowLimiter) implements the RateLimiter interface. The RateLimitService selects the right strategy based on the rule's algorithm field</li>
+  <li><strong>Factory</strong> -- RateLimiterFactory.create(rule) returns the appropriate limiter instance based on the Algorithm enum</li>
+  <li><strong>Decorator</strong> -- The <code>@rate_limited</code> decorator wraps any function to automatically check rate limits before execution, raising RateLimitExceeded if blocked</li>
+  <li><strong>Chain of Responsibility</strong> -- ComposedLimiter chains multiple rules together. A request must pass ALL rules to be allowed. The first failing rule determines the retry_after value</li>
+</ul>
+
+<h3>Key Implementation Detail</h3>
+
+<pre><code class="language-python">class RateLimitService:
+    """Manages rules and checks rate limits."""
+
+    def __init__(self):
+        self._rules: List[RateLimitRule] = []
+        self._limiters: Dict[str, RateLimiter] = {}
+
+    def add_rule(self, rule: RateLimitRule) -> None:
+        self._rules.append(rule)
+        self._limiters[rule.name] = RateLimiterFactory.create(rule)
+
+    def check(self, client_id: str) -> RateLimitResult:
+        for rule in self._rules:
+            limiter = self._limiters[rule.name]
+            key = self._build_key(client_id, rule)
+            if not limiter.allow_request(key):
+                return RateLimitResult(
+                    allowed=False, remaining=0,
+                    rule_name=rule.name
+                )
+        return RateLimitResult(allowed=True, remaining=-1)</code></pre>
+
+<h3>Implementation Steps</h3>
+<ul>
+  <li>Define entities: Algorithm, Scope, RateLimitRule, RateLimitResult</li>
+  <li>Implement three algorithm strategies: Token Bucket, Sliding Window, Fixed Window</li>
+  <li>Build the RateLimiterFactory to create limiters from rules</li>
+  <li>Create the RateLimitService that manages rules and checks requests</li>
+  <li>Implement the ComposedLimiter for layered protection</li>
+  <li>Add the @rate_limited decorator for transparent application</li>
+  <li>Handle scope-based key generation (global, per-user, per-endpoint)</li>
+</ul>

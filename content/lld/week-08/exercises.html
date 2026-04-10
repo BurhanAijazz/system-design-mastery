@@ -1,0 +1,76 @@
+<h2>Week 8 Exercises: Platform Systems</h2>
+
+<p>These exercises reinforce the platform system patterns covered this week: user and role management, search and catalog design, notification dispatch, and transaction ledgers. Work through each exercise, focusing on identifying the right entities and applying the appropriate design patterns.</p>
+
+<h3>Exercise 1: Permission System for a Content Platform</h3>
+
+<p>Design a role-based permission system for a content platform (like Medium or Dev.to) with the following requirements:</p>
+<ul>
+  <li>Three roles: READER (can read articles), AUTHOR (can read and write articles), ADMIN (full access including delete and user management)</li>
+  <li>Permissions should be composable using Flag enums (READ, WRITE, DELETE, MANAGE_USERS)</li>
+  <li>A user can have multiple roles; effective permissions are the union of all role permissions</li>
+  <li>Implement a <code>has_permission(user, permission)</code> check that aggregates across roles</li>
+</ul>
+
+<p><strong>Key patterns:</strong> Flag enum for permissions, Set of roles per user, aggregate root (User).</p>
+
+<pre><code class="language-python"># Starter hint:
+class Permission(Flag):
+    READ = auto()
+    WRITE = auto()
+    DELETE = auto()
+    MANAGE_USERS = auto()
+
+# Define roles as named bundles of permissions
+# Implement User with a set of roles
+# Implement has_permission() that unions all role permissions</code></pre>
+
+<h3>Exercise 2: Multi-Criteria Search with Pagination</h3>
+
+<p>Build a search system for a hotel listing platform. Given a list of hotels, implement:</p>
+<ul>
+  <li>A <code>SearchCriteria</code> data class with fields: city, min_price, max_price, min_rating, amenities (list), sort_by</li>
+  <li>A filter chain that applies each non-None criterion sequentially (Chain of Responsibility)</li>
+  <li>At least two sort strategies: by price (ascending) and by rating (descending)</li>
+  <li>A generic <code>Page</code> class that wraps results with page number, total pages, and has_next</li>
+</ul>
+
+<p><strong>Key patterns:</strong> Chain of Responsibility for filters, Strategy for sorting, Generic for pagination.</p>
+
+<pre><code class="language-python"># Starter hint:
+@dataclass
+class SearchCriteria:
+    city: Optional[str] = None
+    min_price: Optional[float] = None
+    max_price: Optional[float] = None
+    min_rating: Optional[float] = None
+    sort_by: str = "price"
+    page: int = 1
+    page_size: int = 10
+
+# Implement filter chain, sort strategies, and Page wrapper</code></pre>
+
+<h3>Exercise 3: Expense Splitting with Ledger</h3>
+
+<p>Implement a simplified Splitwise-like expense tracker with these requirements:</p>
+<ul>
+  <li>Support three split strategies: Equal, Exact, and Percentage</li>
+  <li>Use an append-only ledger to record all transactions</li>
+  <li>Compute net balances for each user from the ledger</li>
+  <li>Implement a <code>simplify_debts()</code> method that minimizes the number of settlements</li>
+</ul>
+
+<p><strong>Key patterns:</strong> Strategy for split calculation, append-only ledger, greedy algorithm for debt simplification.</p>
+
+<pre><code class="language-python"># Starter hint:
+class SplitStrategy(ABC):
+    @abstractmethod
+    def calculate(self, total: float, participants: List[str],
+                  **kwargs) -> List[Split]:
+        pass
+
+# Implement EqualSplit, ExactSplit, PercentageSplit
+# Implement Ledger with add_entry() and get_balances()
+# Implement simplify_debts() using net balances</code></pre>
+
+<p><strong>Bonus challenge:</strong> Add an undo feature using the Command pattern -- each expense addition is a command that can be reversed by adding a compensating ledger entry.</p>

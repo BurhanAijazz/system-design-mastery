@@ -1,0 +1,85 @@
+<h2>Instagram / Photo Sharing Design</h2>
+
+<p>Instagram is similar to Twitter but with images as the primary content. This means a much more complex upload pipeline, massive storage requirements, and heavy reliance on CDN for global image delivery.</p>
+
+<h3>Define: Requirements</h3>
+
+<ul>
+  <li><strong>Functional:</strong> Upload photos (with filters, captions, tags), news feed (ranked photos from followed users), stories (24-hour ephemeral), like/comment/share, follow/unfollow, explore/discover page</li>
+  <li><strong>Non-Functional:</strong> Upload completes within 5 seconds, feed loads in &lt;200ms, availability over consistency, global low-latency image serving via CDN</li>
+</ul>
+
+<h3>Key Differences from Twitter</h3>
+
+<ul>
+  <li>Content is images (2-5 MB each) vs text (280 chars)</li>
+  <li>Upload pipeline is more complex: resize, apply filters, compress, generate multiple variants</li>
+  <li>CDN is even more critical since images are bandwidth-heavy</li>
+  <li>Feed ranking matters more for visual content (not purely chronological)</li>
+</ul>
+
+<h3>Estimate</h3>
+
+<pre><code class="language-python"># 500M DAU, 100M photos uploaded/day
+
+# UPLOAD: 100M / 86400 ~ 1,157 uploads/sec (peak ~3,500)
+
+# STORAGE (per photo):
+#   Original: 5 MB
+#   4 variants: thumb (50KB), small (200KB), medium (1MB), large (3MB)
+#   Total per photo: ~9 MB
+#   Daily: 100M x 9 MB = 900 TB/day (!!)
+#   Yearly: ~328 PB/year -> S3 is the only option
+
+# FEED READS:
+#   5B / 86400 ~ 58,000 QPS (peak ~175,000 QPS)
+#   Each feed: 20 photos x 200KB = 4 MB per load
+#   Peak: 175K x 4 MB = 700 GB/sec -> CDN handles this
+
+# METADATA: 100M photos/day x 500 bytes = 50 GB/day (easy)</code></pre>
+
+<h3>Image Upload Pipeline</h3>
+
+<pre><code class="language-python"># Upload flow:
+# 1. Client requests upload -> Upload Service returns pre-signed S3 URL
+# 2. Client uploads original image directly to S3
+# 3. S3 triggers event -> Image Processing Queue (Kafka)
+# 4. Processing workers:
+#    a. Generate thumbnail (150x150)
+#    b. Generate small (320px wide)
+#    c. Generate medium (640px wide)
+#    d. Generate large (1080px wide)
+#    e. Apply requested filter
+#    f. Strip EXIF metadata (privacy)
+# 5. Write all variants to S3
+# 6. Update metadata DB with image URLs
+# 7. Trigger fan-out to followers' feeds</code></pre>
+
+<h3>Feed Generation</h3>
+
+<ul>
+  <li><strong>Hybrid fan-out:</strong> Same approach as Twitter -- push for regular users, pull for celebrities</li>
+  <li><strong>Ranking:</strong> ML model scores posts by predicted engagement (not pure chronological)</li>
+  <li><strong>Feed cache:</strong> Pre-computed ranked list of post IDs in Redis; client fetches metadata + image URLs on load</li>
+  <li><strong>Pagination:</strong> Cursor-based pagination to avoid duplicates as new posts arrive</li>
+</ul>
+
+<h3>Stories (Ephemeral Content)</h3>
+
+<ul>
+  <li>Stories expire after 24 hours -- store with TTL</li>
+  <li>Separate storage path: optimized for sequential viewing (swipe through stories)</li>
+  <li>Pre-fetch next story while current one is being viewed</li>
+  <li>Lower resolution requirements (stories are full-screen, not in a feed grid)</li>
+</ul>
+
+<h3>Architecture Components</h3>
+
+<ul>
+  <li><strong>Upload Service:</strong> Pre-signed URL generation, metadata creation</li>
+  <li><strong>Image Processing Service:</strong> Async workers for resize, filter, compress</li>
+  <li><strong>Feed Service:</strong> Timeline generation with ranking</li>
+  <li><strong>CDN:</strong> Edge caching for images globally (Cloudflare, Akamai)</li>
+  <li><strong>Metadata DB:</strong> PostgreSQL for posts, users, follows; Cassandra for feed timelines</li>
+  <li><strong>Object Store (S3):</strong> All image variants stored as objects</li>
+</ul>

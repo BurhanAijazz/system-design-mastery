@@ -1,0 +1,226 @@
+<h2>Project: Document Workflow Engine</h2>
+
+<p>This project combines all five behavioral patterns from Week 3 into a document approval workflow system. A document moves through a lifecycle from Draft to Published, with various actors (authors, reviewers, editors) interacting through a coordinated workflow.</p>
+
+<h3>Patterns Used</h3>
+
+<ul>
+    <li><strong>State</strong> -- Document lifecycle (Draft, UnderReview, Approved, Rejected, Published)</li>
+    <li><strong>Command</strong> -- Document actions with undo (Submit, Approve, Reject, Publish, Revise)</li>
+    <li><strong>Chain of Responsibility</strong> -- Approval chain (Reviewer, Editor, ChiefEditor)</li>
+    <li><strong>Template Method</strong> -- Different document types with different review steps</li>
+    <li><strong>Mediator</strong> -- Coordination between Author, Reviewer, Editor, Publisher</li>
+</ul>
+
+<h3>Data Models</h3>
+
+<pre><code class="language-python">from dataclasses import dataclass, field
+from typing import List, Optional
+from datetime import datetime
+
+@dataclass
+class AuditEntry:
+    """A record of an action taken on a document."""
+    timestamp: str
+    action: str
+    actor: str
+    details: str
+
+
+@dataclass
+class DocumentData:
+    """The document being processed through the workflow."""
+    id: str
+    title: str
+    content: str
+    doc_type: str  # "article", "blog_post", "research_paper"
+    author: str
+    state_name: str = "Draft"
+    assigned_reviewer: Optional[str] = None
+    review_comments: List[str] = field(default_factory=list)
+    audit_trail: List[AuditEntry] = field(default_factory=list)
+    version: int = 1
+
+    def add_audit(self, action: str, actor: str, details: str = "") -> None:
+        entry = AuditEntry(
+            timestamp=datetime.now().strftime("%H:%M:%S"),
+            action=action, actor=actor, details=details,
+        )
+        self.audit_trail.append(entry)
+</code></pre>
+
+<h3>Part 1: State Pattern -- Document Lifecycle</h3>
+
+<p>Each state controls what actions are valid. The transition diagram is:</p>
+
+<ul>
+    <li>Draft --> UnderReview (via submit)</li>
+    <li>UnderReview --> Approved (via approve)</li>
+    <li>UnderReview --> Rejected (via reject) --> Draft</li>
+    <li>Approved --> Published (via publish)</li>
+    <li>Approved --> Draft (via revise)</li>
+    <li>Published --> (final state)</li>
+</ul>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+
+class DocState(ABC):
+    """Abstract state for the document workflow."""
+
+    @abstractmethod
+    def submit(self, doc: DocumentData) -> str: pass
+
+    @abstractmethod
+    def approve(self, doc: DocumentData, reviewer: str) -> str: pass
+
+    @abstractmethod
+    def reject(self, doc: DocumentData, reviewer: str, reason: str) -> str: pass
+
+    @abstractmethod
+    def publish(self, doc: DocumentData) -> str: pass
+
+    @abstractmethod
+    def revise(self, doc: DocumentData) -> str: pass
+
+
+class DraftState(DocState):
+    def submit(self, doc):
+        doc.state_name = "UnderReview"
+        doc.add_audit("submit", doc.author, "Submitted for review")
+        return f"Document '{doc.title}' submitted for review."
+
+    def approve(self, doc, reviewer):
+        return "Cannot approve -- document is still in draft."
+
+    def reject(self, doc, reviewer, reason):
+        return "Cannot reject -- document is still in draft."
+
+    def publish(self, doc):
+        return "Cannot publish -- document must be approved first."
+
+    def revise(self, doc):
+        return "Already in draft -- edit directly."
+</code></pre>
+
+<h3>Part 2: Command Pattern -- Undo Support</h3>
+
+<p>Each workflow action is wrapped in a Command that saves state for undo:</p>
+
+<pre><code class="language-python">class WorkflowCommand(ABC):
+    @abstractmethod
+    def execute(self) -> str: pass
+
+    @abstractmethod
+    def undo(self) -> str: pass
+
+
+class SubmitCommand(WorkflowCommand):
+    def __init__(self, doc: DocumentData, state_manager):
+        self._doc = doc
+        self._state_mgr = state_manager
+        self._previous_state = doc.state_name
+
+    def execute(self) -> str:
+        return self._state_mgr.submit(self._doc)
+
+    def undo(self) -> str:
+        self._doc.state_name = self._previous_state
+        return f"Undo submit: '{self._doc.title}' back to {self._previous_state}"
+</code></pre>
+
+<h3>Part 3: Chain of Responsibility -- Approval Chain</h3>
+
+<p>Documents pass through an approval chain based on type:</p>
+
+<pre><code class="language-python">class ApprovalHandler(ABC):
+    def __init__(self):
+        self._next: Optional["ApprovalHandler"] = None
+
+    def set_next(self, handler: "ApprovalHandler") -> "ApprovalHandler":
+        self._next = handler
+        return handler
+
+    def handle(self, doc: DocumentData) -> str:
+        if self.can_approve(doc):
+            return self.approve(doc)
+        elif self._next:
+            return self._next.handle(doc)
+        return f"No approver for document '{doc.title}'"
+
+    @abstractmethod
+    def can_approve(self, doc: DocumentData) -> bool: pass
+
+    @abstractmethod
+    def approve(self, doc: DocumentData) -> str: pass
+
+
+class ReviewerApproval(ApprovalHandler):
+    def can_approve(self, doc):
+        return doc.doc_type == "blog_post"
+
+    def approve(self, doc):
+        doc.state_name = "Approved"
+        return f"Reviewer approved blog post '{doc.title}'"
+
+
+class EditorApproval(ApprovalHandler):
+    def can_approve(self, doc):
+        return doc.doc_type == "article"
+
+    def approve(self, doc):
+        doc.state_name = "Approved"
+        return f"Editor approved article '{doc.title}'"
+</code></pre>
+
+<h3>Part 4: Template Method -- Document Review Process</h3>
+
+<p>Different document types follow different review processes but share the same overall structure:</p>
+
+<pre><code class="language-python">class DocumentReview(ABC):
+    def review(self, doc: DocumentData) -> str:
+        """Template method for the review process."""
+        self.check_format(doc)
+        self.check_content(doc)
+        self.check_compliance(doc)     # Hook
+        return self.generate_feedback(doc)
+
+    @abstractmethod
+    def check_format(self, doc: DocumentData) -> None: pass
+
+    @abstractmethod
+    def check_content(self, doc: DocumentData) -> None: pass
+
+    def check_compliance(self, doc: DocumentData) -> None:
+        """Hook -- only research papers need compliance checks."""
+        pass
+
+    @abstractmethod
+    def generate_feedback(self, doc: DocumentData) -> str: pass
+</code></pre>
+
+<h3>Part 5: Mediator -- Workflow Coordinator</h3>
+
+<p>The WorkflowMediator coordinates communication between authors, reviewers, editors, and publishers:</p>
+
+<pre><code class="language-python">class WorkflowMediator:
+    """Coordinates all participants in the workflow."""
+
+    def __init__(self):
+        self._documents: dict[str, DocumentData] = {}
+        self._approval_chain = self._build_chain()
+
+    def _build_chain(self):
+        reviewer = ReviewerApproval()
+        editor = EditorApproval()
+        reviewer.set_next(editor)
+        return reviewer
+
+    def submit_document(self, doc: DocumentData) -> str:
+        self._documents[doc.id] = doc
+        doc.state_name = "UnderReview"
+        return self._approval_chain.handle(doc)
+</code></pre>
+
+<h3>Architecture Summary</h3>
+
+<p>This project demonstrates how behavioral patterns compose in a real system. Each pattern has a specific role: State manages valid transitions, Command enables undo, Chain of Responsibility routes approvals, Template Method standardizes review processes, and Mediator decouples the participants.</p>

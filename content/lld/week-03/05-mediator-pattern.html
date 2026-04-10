@@ -1,0 +1,137 @@
+<h2>Mediator Pattern</h2>
+
+<p>The Mediator pattern defines an object that encapsulates how a set of objects interact. Objects communicate through the mediator instead of directly, reducing coupling between them.</p>
+
+<h3>The Problem: All-to-All Coupling</h3>
+
+<p>Without a mediator, N objects talking to each other creates N*(N-1)/2 connections. Consider pilots trying to coordinate landings:</p>
+
+<pre><code class="language-python">class PilotNaive:
+    """Each pilot must know about every other pilot -- tight coupling."""
+
+    def __init__(self, name: str):
+        self.name = name
+        self.other_pilots: list[PilotNaive] = []
+
+    def register_other(self, pilot: "PilotNaive") -> None:
+        self.other_pilots.append(pilot)
+
+    def request_landing(self) -> None:
+        print(f"{self.name} asks EVERY other pilot for clearance...")
+        for pilot in self.other_pilots:
+            print(f"  -> Checking with {pilot.name}")
+        # 10 planes = 10*9 = 90 direct connections!
+</code></pre>
+
+<p>With a mediator, each object only knows about the mediator -- N connections total instead of N*(N-1)/2.</p>
+
+<h3>Solution: Mediator Pattern</h3>
+
+<p>Create a central Air Traffic Control (ATC) mediator that coordinates all aircraft:</p>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+from typing import List, Optional
+
+class ATCMediator(ABC):
+    """Abstract mediator for air traffic control."""
+
+    @abstractmethod
+    def request_landing(self, aircraft: "Aircraft") -> bool:
+        pass
+
+    @abstractmethod
+    def request_takeoff(self, aircraft: "Aircraft") -> bool:
+        pass
+
+    @abstractmethod
+    def notify_landed(self, aircraft: "Aircraft") -> None:
+        pass
+
+
+class Aircraft:
+    """Colleague -- communicates only through the mediator."""
+
+    def __init__(self, call_sign: str, mediator: ATCMediator):
+        self.call_sign = call_sign
+        self._mediator = mediator
+
+    def land(self) -> None:
+        if self._mediator.request_landing(self):
+            print(f"[{self.call_sign}] Landing cleared! Touching down.")
+            self._mediator.notify_landed(self)
+        else:
+            print(f"[{self.call_sign}] Landing denied. Holding pattern.")
+
+    def take_off(self) -> None:
+        if self._mediator.request_takeoff(self):
+            print(f"[{self.call_sign}] Takeoff cleared! Departing.")
+        else:
+            print(f"[{self.call_sign}] Takeoff denied. Waiting.")
+</code></pre>
+
+<h3>The Concrete Mediator</h3>
+
+<pre><code class="language-python">class TowerControl(ATCMediator):
+    """Concrete mediator -- manages runway and coordinates aircraft."""
+
+    def __init__(self):
+        self._runway_free = True
+        self._aircraft: list[Aircraft] = []
+
+    def register(self, aircraft: Aircraft) -> None:
+        self._aircraft.append(aircraft)
+
+    def request_landing(self, aircraft: Aircraft) -> bool:
+        if self._runway_free:
+            self._runway_free = False
+            print(f"  [Tower] Cleared {aircraft.call_sign} for landing.")
+            return True
+        print(f"  [Tower] Runway busy. {aircraft.call_sign} hold.")
+        return False
+
+    def request_takeoff(self, aircraft: Aircraft) -> bool:
+        if self._runway_free:
+            self._runway_free = False
+            print(f"  [Tower] Cleared {aircraft.call_sign} for takeoff.")
+            return True
+        return False
+
+    def notify_landed(self, aircraft: Aircraft) -> None:
+        self._runway_free = True
+        print(f"  [Tower] {aircraft.call_sign} landed. Runway free.")
+</code></pre>
+
+<h3>Usage</h3>
+
+<pre><code class="language-python">tower = TowerControl()
+f1 = Aircraft("Flight 101", tower)
+f2 = Aircraft("Flight 202", tower)
+tower.register(f1)
+tower.register(f2)
+
+f1.land()   # Cleared -- runway now busy
+f2.land()   # Denied -- runway occupied
+</code></pre>
+
+<h3>When to Use the Mediator Pattern</h3>
+
+<ul>
+    <li><strong>Chat rooms</strong> -- users send messages through the chat room, not directly to each other</li>
+    <li><strong>Air traffic control</strong> -- aircraft communicate through a tower</li>
+    <li><strong>UI dialogs</strong> -- form fields coordinate through a dialog mediator</li>
+    <li><strong>Event systems</strong> -- components publish/subscribe through an event bus</li>
+    <li><strong>Multiplayer game servers</strong> -- players interact through the server</li>
+</ul>
+
+<h3>Key Benefits</h3>
+
+<ul>
+    <li>Reduces coupling between components from O(N^2) to O(N)</li>
+    <li>Centralizes complex coordination logic</li>
+    <li>Components are reusable -- they only depend on the mediator interface</li>
+    <li>Easy to change interaction rules by swapping the mediator</li>
+</ul>
+
+<h3>Caution: God Object</h3>
+
+<p>Be careful not to let the mediator grow into a "God Object" that knows too much. If the mediator becomes overly complex, consider splitting it into multiple specialized mediators.</p>

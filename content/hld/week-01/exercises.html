@@ -1,0 +1,300 @@
+<h2>Week 1 Exercises: HLD Foundations</h2>
+
+<p>
+  These exercises test your understanding of scalability, estimation, CAP theorem,
+  and the DERSC framework. Work through each exercise and check your reasoning
+  against the provided solutions.
+</p>
+
+<h3>Exercise 1: Back-of-Envelope Estimation for Instagram</h3>
+
+<p>
+  Instagram has approximately 2 billion monthly active users and 500 million daily
+  active users. Each user uploads an average of 1 photo per week. Each photo is
+  approximately 2 MB. The read/write ratio for viewing photos is 200:1. Estimate:
+</p>
+
+<ul>
+  <li>Write RPS (photo uploads per second)</li>
+  <li>Read RPS (photo views per second)</li>
+  <li>Daily and yearly storage requirements</li>
+  <li>Outgoing bandwidth for serving photos</li>
+  <li>How many application servers are needed at peak (assume 3x average, 5000 req/sec per server)</li>
+</ul>
+
+<pre><code class="language-python"># Your workspace - try to estimate before revealing the solution:
+
+monthly_active_users = 2_000_000_000
+daily_active_users = 500_000_000
+photos_per_user_per_week = 1
+avg_photo_size_mb = 2
+read_write_ratio = 200
+
+# Calculate:
+# write_rps = ?
+# read_rps = ?
+# daily_storage_tb = ?
+# yearly_storage_tb = ?
+# outgoing_bandwidth_gbps = ?
+# servers_needed = ?
+</code></pre>
+
+<div class="reveal-answer" style="margin-top: 1rem;">
+  <button onclick="this.nextElementSibling.style.display='block'; this.style.display='none';"
+          style="padding: 8px 16px; cursor: pointer; background: #2563eb; color: white; border: none; border-radius: 4px;">
+    Reveal Solution
+  </button>
+  <div style="display: none;">
+    <h4>Solution</h4>
+    <pre><code class="language-python">monthly_active_users = 2_000_000_000
+daily_active_users = 500_000_000
+photos_per_user_per_week = 1
+
+# Photo uploads per second
+total_photos_per_day = monthly_active_users * photos_per_user_per_week / 7
+write_rps = total_photos_per_day / 86400
+print(f"Write RPS: {write_rps:,.0f}")  # ~3,300 uploads/sec
+
+# Photo views per second
+read_rps = write_rps * 200
+print(f"Read RPS: {read_rps:,.0f}")  # ~660,000 views/sec
+
+# Storage
+avg_photo_size_bytes = 2 * 1024 * 1024  # 2 MB
+daily_storage_bytes = total_photos_per_day * avg_photo_size_bytes
+daily_storage_tb = daily_storage_bytes / (1024 ** 4)
+yearly_storage_tb = daily_storage_tb * 365
+print(f"Daily storage: {daily_storage_tb:.0f} TB")    # ~520 TB/day
+print(f"Yearly storage: {yearly_storage_tb:,.0f} TB")  # ~190,000 TB = ~190 PB
+
+# Bandwidth for serving photos
+outgoing_bytes_per_sec = read_rps * avg_photo_size_bytes
+outgoing_gbps = outgoing_bytes_per_sec * 8 / (1024 ** 3)
+print(f"Outgoing bandwidth: {outgoing_gbps:,.0f} Gbps")  # ~9,800 Gbps
+# Note: This is why CDNs are essential. A CDN would handle 90%+ of this.
+
+# Servers needed
+peak_rps = (write_rps + read_rps) * 3
+servers = peak_rps / 5000
+print(f"Peak total RPS: {peak_rps:,.0f}")       # ~1.99M
+print(f"Servers needed: {servers:,.0f}")          # ~398
+
+# Key insight: Without a CDN, the bandwidth requirement is absurd.
+# With a CDN absorbing 95% of reads, direct server bandwidth drops
+# from ~9,800 Gbps to ~490 Gbps, which is still enormous.
+# This is why Instagram uses multiple CDN providers globally.
+</code></pre>
+  </div>
+</div>
+
+<h3>Exercise 2: CAP Theorem Trade-Off Analysis</h3>
+
+<p>
+  For each of the following systems, decide whether you would prioritize Consistency (CP)
+  or Availability (AP) during a network partition, and explain why:
+</p>
+
+<ul>
+  <li>A bank's balance checking system</li>
+  <li>A social media "like" counter</li>
+  <li>An airline seat reservation system</li>
+  <li>A real-time multiplayer game leaderboard</li>
+  <li>A distributed lock service for microservices</li>
+</ul>
+
+<pre><code class="language-python"># For each system, analyze:
+# 1. What happens if we show stale data? (cost of inconsistency)
+# 2. What happens if the system is unavailable? (cost of downtime)
+# 3. Which cost is worse?
+
+# Example format:
+# system = "Bank balance"
+# choice = "CP"
+# reasoning = "Showing wrong balance could lead to overdrafts or fraud.
+#              A brief unavailability is better than incorrect balances."
+</code></pre>
+
+<div class="reveal-answer" style="margin-top: 1rem;">
+  <button onclick="this.nextElementSibling.style.display='block'; this.style.display='none';"
+          style="padding: 8px 16px; cursor: pointer; background: #2563eb; color: white; border: none; border-radius: 4px;">
+    Reveal Solution
+  </button>
+  <div style="display: none;">
+    <h4>Solution</h4>
+    <pre><code class="language-python">analysis = {
+    "Bank balance checking": {
+        "choice": "CP",
+        "reasoning": (
+            "Showing an incorrect balance could lead to overdrafts, "
+            "fraud, or customers making financial decisions on wrong data. "
+            "A brief error message is much better than a wrong balance. "
+            "Regulatory requirements also mandate correctness."
+        ),
+    },
+    "Social media like counter": {
+        "choice": "AP",
+        "reasoning": (
+            "Showing '4,231 likes' vs '4,228 likes' is harmless. "
+            "Users expect slight delays in like counts. "
+            "But if the like button does not work (unavailable), users get frustrated. "
+            "Use eventual consistency - counts will converge."
+        ),
+    },
+    "Airline seat reservation": {
+        "choice": "CP",
+        "reasoning": (
+            "Double-booking a seat is a serious problem: two people show up "
+            "for the same seat. It is better to show 'system temporarily "
+            "unavailable' than to sell the same seat twice. "
+            "The financial and reputational cost of overbooking is high."
+        ),
+    },
+    "Game leaderboard": {
+        "choice": "AP",
+        "reasoning": (
+            "A leaderboard that is slightly out of date is acceptable - "
+            "scores converge quickly. But a leaderboard that is unavailable "
+            "breaks the game experience. Players expect real-time-ish updates "
+            "but will tolerate a few seconds of staleness."
+        ),
+    },
+    "Distributed lock service": {
+        "choice": "CP",
+        "reasoning": (
+            "A lock service MUST be consistent. If two services both believe "
+            "they hold the lock, data corruption occurs. It is better for the "
+            "lock service to be unavailable (blocking the operation) than to "
+            "grant the same lock to two holders simultaneously. "
+            "This is why ZooKeeper and etcd choose CP."
+        ),
+    },
+}
+
+for system, info in analysis.items():
+    print(f"\n{system}: {info['choice']}")
+    print(f"  {info['reasoning']}")
+</code></pre>
+  </div>
+</div>
+
+<h3>Exercise 3: Apply DERSC to a Chat System</h3>
+
+<p>
+  Design a real-time chat application (like WhatsApp or Slack) using the DERSC framework.
+  Complete each step with concrete numbers and architectural decisions.
+</p>
+
+<pre><code class="language-python"># Complete each DERSC step:
+#
+# D - DETERMINE REQUIREMENTS
+#   Functional: ?
+#   Non-functional: ?
+#   Out of scope: ?
+#
+# E - ESTIMATE SCALE
+#   Assumptions: 100M DAU, 40 messages per user per day
+#   Calculate: write RPS, read RPS, storage, bandwidth
+#
+# R - RESOURCE PLANNING
+#   App servers: ? Database: ? Cache: ? Message queue: ?
+#
+# S - SYSTEM ARCHITECTURE
+#   Draw the component diagram (describe in text)
+#   Define the data flow for sending and receiving messages
+#
+# C - CRITICAL DEEP DIVE
+#   Pick one: real-time delivery OR message storage
+#   Design it in detail with trade-offs
+</code></pre>
+
+<div class="reveal-answer" style="margin-top: 1rem;">
+  <button onclick="this.nextElementSibling.style.display='block'; this.style.display='none';"
+          style="padding: 8px 16px; cursor: pointer; background: #2563eb; color: white; border: none; border-radius: 4px;">
+    Reveal Solution
+  </button>
+  <div style="display: none;">
+    <h4>Solution</h4>
+    <pre><code class="language-python"># D - DETERMINE REQUIREMENTS
+requirements = {
+    "functional": [
+        "1:1 messaging between users",
+        "Group chats (up to 500 members)",
+        "Online/offline status indicators",
+        "Message delivery receipts (sent, delivered, read)",
+        "Message history (scroll back)",
+    ],
+    "non_functional": {
+        "latency": "Messages delivered in < 100ms for online users",
+        "availability": "99.99%",
+        "consistency": "Eventual consistency OK for status; strong for messages",
+        "scale": "100M DAU",
+        "durability": "Messages never lost once accepted",
+    },
+    "out_of_scope": [
+        "Voice/video calls",
+        "File sharing (beyond text)",
+        "End-to-end encryption (mention only)",
+    ],
+}
+
+# E - ESTIMATE SCALE
+dau = 100_000_000
+msgs_per_user_per_day = 40
+avg_msg_bytes = 200  # text + metadata
+
+write_rps = dau * msgs_per_user_per_day / 86400  # ~46,000 msg/sec
+read_rps = write_rps * 5  # users read more than they write: ~230,000
+
+daily_storage_gb = dau * msgs_per_user_per_day * avg_msg_bytes / 1e9  # ~800 GB/day
+yearly_storage_tb = daily_storage_gb * 365 / 1000  # ~292 TB/year
+
+outgoing_mbps = read_rps * avg_msg_bytes * 8 / 1e6  # ~368 Mbps
+
+# R - RESOURCE PLANNING
+resources = {
+    "websocket_servers": "100 servers (each handles 1M concurrent connections)",
+    "api_servers": "50 servers for REST endpoints",
+    "database": "Cassandra cluster (sharded by conversation_id)",
+    "cache": "Redis cluster, 500 GB (recent messages + user presence)",
+    "message_queue": "Kafka (for message fan-out to recipients)",
+}
+
+# S - SYSTEM ARCHITECTURE
+# [Clients] <--WebSocket--> [WS Gateway Servers]
+#                                 |
+#                           [Message Router Service]
+#                                 |
+#                    +------------+------------+
+#                    |                         |
+#              [Kafka Topics]           [Presence Service]
+#                    |                    (Redis)
+#              [Message Workers]
+#                    |
+#            [Message Store]          [Push Notification
+#            (Cassandra)               Service] (for offline)
+
+# C - CRITICAL DEEP DIVE: Real-time Message Delivery
+#
+# When User A sends a message to User B:
+# 1. User A's WS connection sends message to WS Gateway
+# 2. Gateway validates and publishes to Kafka topic
+# 3. Message Worker persists to Cassandra
+# 4. Message Router checks: Is User B online?
+#    a. YES: Route to User B's WS Gateway, push via WebSocket
+#    b. NO: Queue for push notification service
+# 5. WS Gateway sends delivery receipt back to User A
+#
+# Key trade-off: Fan-out for group messages
+# - Small groups (< 50): Fan out to all members' connections
+# - Large groups (50-500): Use pub/sub topic per group
+</code></pre>
+  </div>
+</div>
+
+<h3>Bonus Challenge</h3>
+
+<p>
+  Take the chat system design from Exercise 3 and identify what changes if the
+  requirement shifts to 1 billion DAU. Which components break first? What
+  architectural changes are needed?
+</p>

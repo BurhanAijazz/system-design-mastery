@@ -1,0 +1,209 @@
+<h2>Project: Tic-Tac-Toe</h2>
+
+<p>A full LLD implementation of Tic-Tac-Toe following the 6-step framework. This project demonstrates State, Strategy, Command, and Observer patterns working together in a game.</p>
+
+<h3>Patterns Used</h3>
+
+<ul>
+    <li><strong>State</strong> -- Game lifecycle (NotStarted, InProgress, Finished)</li>
+    <li><strong>Strategy</strong> -- Win checking, AI move selection</li>
+    <li><strong>Command</strong> -- Moves with undo/redo</li>
+    <li><strong>Observer</strong> -- Game events (move made, win, draw)</li>
+</ul>
+
+<h3>Requirements</h3>
+
+<pre><code>Functional:
+  1. Two players take turns placing X and O on a 3x3 board
+  2. First player to get 3 in a row (row/col/diagonal) wins
+  3. If all cells are filled with no winner, it's a draw
+  4. Support human and AI players
+  5. Support undo last move
+  6. Validate moves (bounds, empty cell, game not over)
+
+Out of scope:
+  - Variable board sizes
+  - Network multiplayer
+  - Minimax AI
+</code></pre>
+
+<h3>Core Entities</h3>
+
+<pre><code class="language-python">from enum import Enum
+from dataclasses import dataclass
+
+class GameStatus(Enum):
+    NOT_STARTED = "not_started"
+    IN_PROGRESS = "in_progress"
+    WON = "won"
+    DRAW = "draw"
+
+class GameEvent(Enum):
+    MOVE_MADE = "move_made"
+    GAME_WON = "game_won"
+    GAME_DRAW = "game_draw"
+    INVALID_MOVE = "invalid_move"
+    MOVE_UNDONE = "move_undone"
+
+@dataclass(frozen=True)
+class Position:
+    row: int
+    col: int
+
+    def is_within(self, size: int) -> bool:
+        return 0 <= self.row < size and 0 <= self.col < size
+</code></pre>
+
+<h3>Player Abstraction</h3>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+import random
+
+class Player(ABC):
+    def __init__(self, name: str, symbol: str):
+        self.name = name
+        self.symbol = symbol
+
+    @abstractmethod
+    def get_move(self, board: "Board") -> Position:
+        pass
+
+class HumanPlayer(Player):
+    def get_move(self, board):
+        row = int(input(f"{self.name} ({self.symbol}), enter row (0-2): "))
+        col = int(input(f"Enter col (0-2): "))
+        return Position(row, col)
+
+class AIPlayer(Player):
+    def get_move(self, board):
+        empty = board.empty_positions()
+        return random.choice(empty) if empty else Position(0, 0)
+</code></pre>
+
+<h3>Board</h3>
+
+<pre><code class="language-python">class Board:
+    def __init__(self, size: int = 3):
+        self._size = size
+        self._grid = [[" "] * size for _ in range(size)]
+
+    def place(self, pos: Position, symbol: str) -> bool:
+        if not pos.is_within(self._size):
+            return False
+        if self._grid[pos.row][pos.col] != " ":
+            return False
+        self._grid[pos.row][pos.col] = symbol
+        return True
+
+    def clear(self, pos: Position) -> None:
+        self._grid[pos.row][pos.col] = " "
+
+    def get(self, pos: Position) -> str:
+        return self._grid[pos.row][pos.col]
+
+    def is_full(self) -> bool:
+        return all(
+            self._grid[r][c] != " "
+            for r in range(self._size)
+            for c in range(self._size)
+        )
+
+    def empty_positions(self) -> list:
+        return [
+            Position(r, c)
+            for r in range(self._size)
+            for c in range(self._size)
+            if self._grid[r][c] == " "
+        ]
+
+    def display(self) -> None:
+        for i, row in enumerate(self._grid):
+            print(" | ".join(row))
+            if i < self._size - 1:
+                print("-" * (4 * self._size - 1))
+</code></pre>
+
+<h3>Win Checker (Strategy)</h3>
+
+<pre><code class="language-python">class WinChecker:
+    def __init__(self, size: int = 3):
+        self._size = size
+
+    def check(self, board: Board, symbol: str) -> bool:
+        # Check rows
+        for r in range(self._size):
+            if all(board.get(Position(r, c)) == symbol for c in range(self._size)):
+                return True
+        # Check columns
+        for c in range(self._size):
+            if all(board.get(Position(r, c)) == symbol for r in range(self._size)):
+                return True
+        # Check diagonals
+        if all(board.get(Position(i, i)) == symbol for i in range(self._size)):
+            return True
+        if all(board.get(Position(i, self._size - 1 - i)) == symbol
+               for i in range(self._size)):
+            return True
+        return False
+</code></pre>
+
+<h3>Move Command (Undo Support)</h3>
+
+<pre><code class="language-python">class MoveCommand:
+    def __init__(self, board: Board, pos: Position, symbol: str):
+        self._board = board
+        self._pos = pos
+        self._symbol = symbol
+
+    def execute(self) -> bool:
+        return self._board.place(self._pos, self._symbol)
+
+    def undo(self) -> None:
+        self._board.clear(self._pos)
+</code></pre>
+
+<h3>Game Controller</h3>
+
+<pre><code class="language-python">class TicTacToe:
+    def __init__(self, player1: Player, player2: Player):
+        self._board = Board()
+        self._players = [player1, player2]
+        self._current = 0
+        self._status = GameStatus.NOT_STARTED
+        self._winner = None
+        self._history: list[MoveCommand] = []
+        self._win_checker = WinChecker()
+
+    def play_turn(self) -> str:
+        if self._status == GameStatus.NOT_STARTED:
+            self._status = GameStatus.IN_PROGRESS
+
+        player = self._players[self._current]
+        pos = player.get_move(self._board)
+        cmd = MoveCommand(self._board, pos, player.symbol)
+
+        if not cmd.execute():
+            return f"Invalid move at {pos}"
+
+        self._history.append(cmd)
+
+        if self._win_checker.check(self._board, player.symbol):
+            self._status = GameStatus.WON
+            self._winner = player
+            return f"{player.name} wins!"
+
+        if self._board.is_full():
+            self._status = GameStatus.DRAW
+            return "It's a draw!"
+
+        self._current = 1 - self._current
+        return f"{player.name} placed {player.symbol} at {pos}"
+
+    def undo(self) -> bool:
+        if not self._history:
+            return False
+        cmd = self._history.pop()
+        cmd.undo()
+        self._current = 1 - self._current
+        return True
+</code></pre>

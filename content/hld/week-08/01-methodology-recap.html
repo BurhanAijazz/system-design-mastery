@@ -1,0 +1,71 @@
+<h2>HLD Walkthrough Methodology Recap</h2>
+
+<p>Every system design interview follows the same structured framework. From this week onward, every design problem uses the <strong>DERSC</strong> method with a strict timing guide to keep you on track during a 40-45 minute session.</p>
+
+<h3>The DERSC Framework</h3>
+
+<p>DERSC stands for Define, Estimate, aRchitect, Scale, and Confirm. Each step has a dedicated time budget:</p>
+
+<ul>
+  <li><strong>D - Define (5 min):</strong> Clarify requirements and scope</li>
+  <li><strong>E - Estimate (5 min):</strong> Back-of-envelope math to determine scale</li>
+  <li><strong>R - aRchitect (15 min):</strong> Core design, components, and data flow</li>
+  <li><strong>S - Scale (10 min):</strong> Handle bottlenecks and failure modes</li>
+  <li><strong>C - Confirm (5 min):</strong> Deep dives, trade-offs, and wrap-up</li>
+</ul>
+
+<h3>Step 1: Define - Clarify Before You Design</h3>
+
+<p>The number one mistake candidates make is jumping straight into architecture. Always ask clarifying questions first, covering both functional and non-functional requirements:</p>
+
+<pre><code class="language-python"># Functional requirements questions:
+# "What are the core features?"
+# "Who are the users? How do they interact?"
+# "Any features we should explicitly exclude?"
+
+# Non-functional requirements questions:
+# "What's the expected scale? (DAU, requests/sec, data volume)"
+# "What's more important: consistency or availability?"
+# "What's the acceptable latency?"
+
+# SCOPE TRICK:
+# "For the core design, I'll focus on [X, Y, Z].
+#  I'll mention [A, B] as extensions if we have time."</code></pre>
+
+<h3>Step 2: Estimate - Back-of-Envelope Math</h3>
+
+<p>Estimation determines the scale that drives architecture decisions. A system serving 100 QPS is very different from one serving 100K QPS.</p>
+
+<pre><code class="language-python"># Estimation cheat sheet:
+# Time conversions:
+#   1 day   = 86,400 sec  (round to 10^5)
+#   1 month = 2.6M sec    (round to 2.5M)
+#   1 year  = 31.5M sec   (round to 3 x 10^7)
+
+# Data sizes:
+#   1 char = 1 byte (ASCII), 2-4 bytes (Unicode)
+#   Average URL = ~200 bytes
+#   Average tweet = ~300 bytes (text + metadata)
+#   1 image = 200KB - 5MB
+#   1 minute of video = 50-150 MB</code></pre>
+
+<h3>Steps 3-5: Architect, Scale, Confirm</h3>
+
+<ul>
+  <li><strong>Architect:</strong> Draw the high-level diagram with API design, data models, and component interactions. This is the bulk of your interview.</li>
+  <li><strong>Scale:</strong> Identify bottlenecks, add caching, sharding, replication. Discuss failure modes and how the system recovers.</li>
+  <li><strong>Confirm:</strong> Revisit requirements, discuss trade-offs you made, and mention extensions you would add given more time.</li>
+</ul>
+
+<h3>Common Mistakes to Avoid</h3>
+
+<ul>
+  <li>Jumping to solution without clarifying requirements</li>
+  <li>Skipping estimation entirely (no numbers means no justification)</li>
+  <li>Over-engineering for a scale that does not exist</li>
+  <li>Monologuing for 20 minutes without checking in with the interviewer</li>
+  <li>Ignoring interviewer hints (they are giving you free points)</li>
+  <li>Dropping buzzwords you cannot explain in depth</li>
+</ul>
+
+<p>The interviewer will interrupt and steer the conversation. That is expected. Adapt your timing based on their signals and treat the interview as a collaborative conversation.</p>

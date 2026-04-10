@@ -1,0 +1,155 @@
+<h2>Memento Pattern</h2>
+
+<p>The Memento pattern captures and restores an object's internal state without violating encapsulation. The object itself creates the snapshot; an external caretaker stores and manages snapshots.</p>
+
+<h3>Key Components</h3>
+
+<ul>
+    <li><strong>Originator</strong> -- the object whose state is saved/restored</li>
+    <li><strong>Memento</strong> -- an opaque snapshot of the originator's state</li>
+    <li><strong>Caretaker</strong> -- stores mementos (undo stack, history, save slots)</li>
+</ul>
+
+<p>The Memento is a "black box" -- only the originator can read/write it. The caretaker just stores and passes it around.</p>
+
+<h3>The Problem: Exposing Internal State</h3>
+
+<pre><code class="language-python">class EditorNaive:
+    """To support undo, we'd need to expose all internal state
+    or clone the entire object. Both approaches are messy."""
+
+    def __init__(self):
+        self.content = ""
+        self.cursor_pos = 0
+        self.selection_start = 0
+        self.selection_end = 0
+        self.font = "Arial"
+        self.font_size = 12
+
+    def type_text(self, text: str) -> None:
+        self.content = (self.content[:self.cursor_pos]
+                       + text
+                       + self.content[self.cursor_pos:])
+        self.cursor_pos += len(text)
+</code></pre>
+
+<p>To undo, external code would need to save ALL those fields. That breaks encapsulation -- external code knows about internal state.</p>
+
+<h3>Solution: Memento Pattern</h3>
+
+<pre><code class="language-python">from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class EditorMemento:
+    """Memento -- an immutable snapshot of the editor's state.
+    frozen=True makes it immutable (can't accidentally modify it)."""
+    content: str
+    cursor_pos: int
+    font: str
+    font_size: int
+    timestamp: str = ""
+
+
+class TextEditor:
+    """Originator -- creates and restores from mementos."""
+
+    def __init__(self):
+        self._content = ""
+        self._cursor_pos = 0
+        self._font = "Arial"
+        self._font_size = 12
+
+    def type_text(self, text: str) -> None:
+        self._content = (self._content[:self._cursor_pos]
+                        + text
+                        + self._content[self._cursor_pos:])
+        self._cursor_pos += len(text)
+
+    def delete(self, count: int = 1) -> None:
+        start = max(0, self._cursor_pos - count)
+        self._content = self._content[:start] + self._content[self._cursor_pos:]
+        self._cursor_pos = start
+
+    # --- Memento methods ---
+
+    def save(self) -> EditorMemento:
+        """Create a snapshot of current state."""
+        return EditorMemento(
+            content=self._content,
+            cursor_pos=self._cursor_pos,
+            font=self._font,
+            font_size=self._font_size,
+        )
+
+    def restore(self, memento: EditorMemento) -> None:
+        """Restore state from a snapshot."""
+        self._content = memento.content
+        self._cursor_pos = memento.cursor_pos
+        self._font = memento.font
+        self._font_size = memento.font_size
+</code></pre>
+
+<h3>The Caretaker</h3>
+
+<pre><code class="language-python">class EditorHistory:
+    """Caretaker -- stores mementos without knowing their contents."""
+
+    def __init__(self, editor: TextEditor):
+        self._editor = editor
+        self._undo_stack: list[EditorMemento] = []
+        self._redo_stack: list[EditorMemento] = []
+
+    def save(self) -> None:
+        """Save current state before each action."""
+        self._undo_stack.append(self._editor.save())
+        self._redo_stack.clear()
+
+    def undo(self) -> bool:
+        if not self._undo_stack:
+            return False
+        self._redo_stack.append(self._editor.save())
+        memento = self._undo_stack.pop()
+        self._editor.restore(memento)
+        return True
+
+    def redo(self) -> bool:
+        if not self._redo_stack:
+            return False
+        self._undo_stack.append(self._editor.save())
+        memento = self._redo_stack.pop()
+        self._editor.restore(memento)
+        return True
+</code></pre>
+
+<h3>Usage</h3>
+
+<pre><code class="language-python">editor = TextEditor()
+history = EditorHistory(editor)
+
+history.save()
+editor.type_text("Hello ")
+history.save()
+editor.type_text("World")
+
+# Content is "Hello World"
+history.undo()   # Back to "Hello "
+history.undo()   # Back to ""
+history.redo()   # Forward to "Hello "
+</code></pre>
+
+<h3>Memento vs Command for Undo</h3>
+
+<ul>
+    <li><strong>Command</strong> stores the inverse operation -- works well when operations are easily reversible</li>
+    <li><strong>Memento</strong> stores the full state snapshot -- works when state is complex or operations are hard to reverse</li>
+    <li>Both patterns are often combined: Command for undo logic, Memento for cursor/selection state</li>
+</ul>
+
+<h3>When to Use</h3>
+
+<ul>
+    <li><strong>Text editors</strong> -- save/restore content and cursor state</li>
+    <li><strong>Game save/load</strong> -- snapshot game state into save slots</li>
+    <li><strong>Transaction rollback</strong> -- restore state if a transaction fails</li>
+    <li><strong>Configuration snapshots</strong> -- revert settings to a previous version</li>
+</ul>

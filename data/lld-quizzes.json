@@ -1,0 +1,112 @@
+{
+  "courseId": "lld",
+  "quizzes": [
+    {
+      "weekId": "week-01", "title": "SOLID Principles Quiz", "passingScore": 70,
+      "questions": [
+        { "id": "lld-w01-q01", "type": "mcq", "question": "Which SOLID principle does this code violate?", "code": "class UserManager:\n    def save_to_db(self, user): ...\n    def send_email(self, user, msg): ...\n    def generate_pdf_report(self, user): ...", "options": ["Open/Closed Principle", "Single Responsibility Principle", "Liskov Substitution Principle", "Interface Segregation Principle"], "correct": 1, "explanation": "UserManager has three unrelated responsibilities: persistence, email, and reporting — violating SRP." },
+        { "id": "lld-w01-q02", "type": "multi-select", "question": "Select ALL benefits of the Dependency Inversion Principle:", "options": ["Easier unit testing with mocks", "Faster runtime performance", "Reduced coupling between modules", "Automatic memory management"], "correct": [0, 2], "explanation": "DIP enables mock injection for testing and decouples high-level from low-level modules." },
+        { "id": "lld-w01-q03", "type": "true-false", "question": "The Liskov Substitution Principle states that a subclass must be usable wherever its parent class is used without breaking behavior.", "correct": true, "explanation": "LSP requires behavioral substitutability — subclasses must honor the parent's contract." },
+        { "id": "lld-w01-q04", "type": "mcq", "question": "What is the classic violation example for LSP?", "options": ["Logger with multiple outputs", "Square extending Rectangle", "God class with many methods", "Circular dependency"], "correct": 1, "explanation": "Square/Rectangle: Square overrides setters in a way that breaks Rectangle's contract." },
+        { "id": "lld-w01-q05", "type": "mcq", "question": "Which principle says 'depend on abstractions, not concretions'?", "options": ["SRP", "OCP", "ISP", "DIP"], "correct": 3, "explanation": "DIP states high-level modules should depend on abstractions, not concrete implementations." },
+        { "id": "lld-w01-q06", "type": "mcq", "question": "Which principle recommends many small interfaces instead of one large one?", "options": ["SRP", "OCP", "ISP", "DIP"], "correct": 2, "explanation": "ISP says clients should not be forced to depend on methods they don't use." },
+        { "id": "lld-w01-q07", "type": "true-false", "question": "The Open/Closed Principle means you should never modify existing code.", "correct": false, "explanation": "OCP means open for extension, closed for modification — but bug fixes are still valid modifications." },
+        { "id": "lld-w01-q08", "type": "mcq", "question": "How does OCP typically achieve extensibility in Python?", "options": ["if/elif chains", "Abstract base class with polymorphic subclasses", "Global config variables", "Nested functions"], "correct": 1, "explanation": "OCP is achieved through polymorphism: define an interface, extend via new subclasses." }
+      ]
+    },
+    {
+      "weekId": "week-02", "title": "Structural Patterns Quiz", "passingScore": 70,
+      "questions": [
+        { "id": "lld-w02-q01", "type": "mcq", "question": "Which pattern converts one interface into another that clients expect?", "options": ["Facade", "Adapter", "Proxy", "Composite"], "correct": 1, "explanation": "Adapter converts an incompatible interface into one clients expect." },
+        { "id": "lld-w02-q02", "type": "mcq", "question": "Which pattern provides a simplified interface to a complex subsystem?", "options": ["Adapter", "Proxy", "Facade", "Flyweight"], "correct": 2, "explanation": "Facade provides a unified, simplified interface to a subsystem." },
+        { "id": "lld-w02-q03", "type": "mcq", "question": "The Composite pattern is best suited for:", "options": ["Converting interfaces", "Representing tree structures", "Controlling access", "Reducing memory"], "correct": 1, "explanation": "Composite lets clients treat individual objects and compositions uniformly — ideal for trees." },
+        { "id": "lld-w02-q04", "type": "true-false", "question": "The Flyweight pattern saves memory by sharing common state between similar objects.", "correct": true, "explanation": "Flyweight separates intrinsic (shared) from extrinsic (unique) state." },
+        { "id": "lld-w02-q05", "type": "multi-select", "question": "Which are valid types of Proxy pattern?", "options": ["Virtual Proxy (lazy loading)", "Protection Proxy (access control)", "Caching Proxy", "Inheritance Proxy"], "correct": [0, 1, 2], "explanation": "Virtual, Protection, and Caching are valid proxy types. 'Inheritance Proxy' doesn't exist." },
+        { "id": "lld-w02-q06", "type": "mcq", "question": "To add access control to an existing object without modifying it, use:", "options": ["Adapter", "Facade", "Proxy", "Composite"], "correct": 2, "explanation": "A Protection Proxy controls access without modifying the underlying object." }
+      ]
+    },
+    {
+      "weekId": "week-03", "title": "Behavioral Patterns Part 1 Quiz", "passingScore": 70,
+      "questions": [
+        { "id": "lld-w03-q01", "type": "mcq", "question": "Which pattern encapsulates state-dependent behavior into separate classes?", "options": ["Command", "State", "Strategy", "Observer"], "correct": 1, "explanation": "State pattern moves state-specific behavior into dedicated state classes." },
+        { "id": "lld-w03-q02", "type": "mcq", "question": "The Command pattern enables which key feature?", "options": ["Tree traversal", "Undo/Redo operations", "Memory sharing", "Interface simplification"], "correct": 1, "explanation": "Command encapsulates operations as objects with execute()/undo() methods." },
+        { "id": "lld-w03-q03", "type": "mcq", "question": "Chain of Responsibility is commonly used for:", "options": ["State transitions", "Middleware/validation pipelines", "Object creation", "Data traversal"], "correct": 1, "explanation": "CoR passes requests along a chain of handlers — perfect for middleware, validation, support escalation." },
+        { "id": "lld-w03-q04", "type": "true-false", "question": "Template Method defines an algorithm skeleton in a base class, letting subclasses override specific steps.", "correct": true, "explanation": "Template Method defines the algorithm structure; subclasses customize individual steps." },
+        { "id": "lld-w03-q05", "type": "mcq", "question": "Which pattern centralizes communication between objects to avoid N-to-N connections?", "options": ["Observer", "Mediator", "Chain of Responsibility", "Command"], "correct": 1, "explanation": "Mediator centralizes communication — N objects connect to 1 mediator instead of each other." },
+        { "id": "lld-w03-q06", "type": "mcq", "question": "A vending machine with states (Idle, HasMoney, Dispensing) best uses which pattern?", "options": ["Command", "Strategy", "State", "Template Method"], "correct": 2, "explanation": "Vending machines are a classic State pattern example — behavior changes based on current state." }
+      ]
+    },
+    {
+      "weekId": "week-04", "title": "Behavioral Patterns Part 2 Quiz", "passingScore": 70,
+      "questions": [
+        { "id": "lld-w04-q01", "type": "mcq", "question": "Which pattern provides multiple traversal strategies over one collection?", "options": ["Visitor", "Iterator", "Memento", "Null Object"], "correct": 1, "explanation": "Iterator abstracts traversal, enabling DFS, BFS, in-order etc. over the same structure." },
+        { "id": "lld-w04-q02", "type": "mcq", "question": "The Null Object pattern eliminates:", "options": ["Memory leaks", "Null/None checks throughout code", "Circular dependencies", "Deep inheritance"], "correct": 1, "explanation": "Null Object provides a no-op implementation, removing the need for if-None checks." },
+        { "id": "lld-w04-q03", "type": "mcq", "question": "Memento pattern captures and restores an object's state. Which component stores the snapshots?", "options": ["Originator", "Memento", "Caretaker", "Observer"], "correct": 2, "explanation": "Caretaker holds the stack of Memento objects. Originator creates/restores them." },
+        { "id": "lld-w04-q04", "type": "true-false", "question": "The Visitor pattern uses double dispatch to add operations without modifying existing classes.", "correct": true, "explanation": "Visitor achieves double dispatch: element.accept(visitor) calls visitor.visit(element)." },
+        { "id": "lld-w04-q05", "type": "mcq", "question": "To implement undo/redo in a text editor, which patterns work best together?", "options": ["Adapter + Facade", "Command + Memento", "Proxy + Flyweight", "State + Observer"], "correct": 1, "explanation": "Command encapsulates operations (with undo), Memento captures editor state for complex undos." }
+      ]
+    },
+    {
+      "weekId": "week-05", "title": "UML & LLD Methodology Quiz", "passingScore": 70,
+      "questions": [
+        { "id": "lld-w05-q01", "type": "mcq", "question": "In UML, a filled diamond represents:", "options": ["Association", "Aggregation", "Composition", "Dependency"], "correct": 2, "explanation": "Filled diamond = Composition (strong ownership, part can't exist without whole)." },
+        { "id": "lld-w05-q02", "type": "mcq", "question": "In the 6-step LLD framework, which step takes the most time?", "options": ["Clarify Requirements (2-3 min)", "Identify Entities (2-3 min)", "Implement Core Logic (15-20 min)", "Trade-offs (2-3 min)"], "correct": 2, "explanation": "Implementation is the bulk at 15-20 minutes of a 45-minute interview." },
+        { "id": "lld-w05-q03", "type": "true-false", "question": "Aggregation means the part's lifecycle is tied to the whole.", "correct": false, "explanation": "That's Composition. In Aggregation, parts can exist independently of the whole." },
+        { "id": "lld-w05-q04", "type": "mcq", "question": "The first step in any LLD interview should be:", "options": ["Draw class diagram", "Write code immediately", "Clarify requirements", "Choose design patterns"], "correct": 2, "explanation": "Always start by clarifying requirements — scope, constraints, and core use cases." },
+        { "id": "lld-w05-q05", "type": "multi-select", "question": "Which are non-functional requirements?", "options": ["Users can create accounts", "System handles 1000 concurrent users", "Response time under 200ms", "Users can search products"], "correct": [1, 2], "explanation": "Concurrent users and response time are non-functional. Account creation and search are functional." }
+      ]
+    },
+    {
+      "weekId": "week-06", "title": "Game & Board Problems Quiz", "passingScore": 70,
+      "questions": [
+        { "id": "lld-w06-q01", "type": "mcq", "question": "In a chess game LLD, what pattern manages piece movement rules?", "options": ["State", "Strategy", "Observer", "Singleton"], "correct": 1, "explanation": "Each piece type (Rook, Bishop, etc.) has a different movement strategy — classic Strategy pattern." },
+        { "id": "lld-w06-q02", "type": "mcq", "question": "A Tic-Tac-Toe game cycling through WAITING, IN_PROGRESS, FINISHED uses which pattern?", "options": ["Strategy", "Command", "State", "Factory"], "correct": 2, "explanation": "Game lifecycle states are modeled with the State pattern." },
+        { "id": "lld-w06-q03", "type": "true-false", "question": "In a board game, using a 2D array to represent the board is an example of the Composite pattern.", "correct": false, "explanation": "A 2D array is a simple data structure. Composite would be a tree of Cell/Board objects." },
+        { "id": "lld-w06-q04", "type": "mcq", "question": "To support move history and undo in a turn-based game, use:", "options": ["Observer", "Command", "Adapter", "Proxy"], "correct": 1, "explanation": "Command pattern stores each move as an object with execute()/undo() for move history." }
+      ]
+    },
+    {
+      "weekId": "week-07", "title": "Real-World Systems Quiz", "passingScore": 70,
+      "questions": [
+        { "id": "lld-w07-q01", "type": "mcq", "question": "In a parking lot system, what determines the parking fee?", "options": ["Singleton pattern", "Strategy pattern for different pricing rules", "Observer for notifications", "Adapter for payment"], "correct": 1, "explanation": "Different pricing strategies (hourly, daily, weekend) are implemented via Strategy pattern." },
+        { "id": "lld-w07-q02", "type": "mcq", "question": "To prevent two users booking the same elevator at the same time:", "options": ["Use Singleton", "Use locks/synchronization", "Use Observer", "Use Facade"], "correct": 1, "explanation": "Concurrency control via locks prevents race conditions in booking systems." },
+        { "id": "lld-w07-q03", "type": "mcq", "question": "A vending machine changes behavior based on whether coins are inserted. This is:", "options": ["Observer pattern", "Strategy pattern", "State pattern", "Command pattern"], "correct": 2, "explanation": "Vending machine states: NoCoin → HasCoin → Dispensing. Classic State pattern." },
+        { "id": "lld-w07-q04", "type": "true-false", "question": "In an elevator system, the SCAN algorithm moves in one direction until no more requests, then reverses.", "correct": true, "explanation": "SCAN (elevator algorithm) services all requests in one direction before reversing." }
+      ]
+    },
+    {
+      "weekId": "week-08", "title": "Platform Systems Quiz", "passingScore": 70,
+      "questions": [
+        { "id": "lld-w08-q01", "type": "mcq", "question": "RBAC stands for:", "options": ["Resource-Based Access Control", "Role-Based Access Control", "Rule-Based Authorization Check", "Request-Based Auth Cache"], "correct": 1, "explanation": "Role-Based Access Control assigns permissions to roles, then roles to users." },
+        { "id": "lld-w08-q02", "type": "mcq", "question": "In Splitwise, simplifying debts (A→B→C becomes A→C) is called:", "options": ["Debt factoring", "Debt simplification/optimization", "Payment routing", "Balance forwarding"], "correct": 1, "explanation": "Debt simplification reduces the number of transactions needed to settle all debts." },
+        { "id": "lld-w08-q03", "type": "mcq", "question": "BookMyShow preventing two users from booking the same seat uses:", "options": ["Optimistic locking", "Seat hold with timeout", "Global mutex", "Observer pattern"], "correct": 1, "explanation": "Seats are held temporarily during booking; if not confirmed, they're released after timeout." },
+        { "id": "lld-w08-q04", "type": "true-false", "question": "A double-entry ledger records every transaction as both a debit and a credit.", "correct": true, "explanation": "Double-entry bookkeeping: every transaction affects at least two accounts (debit + credit)." }
+      ]
+    },
+    {
+      "weekId": "week-09", "title": "Infrastructure Systems Quiz", "passingScore": 70,
+      "questions": [
+        { "id": "lld-w09-q01", "type": "mcq", "question": "LRU Cache achieves O(1) get and put using:", "options": ["Array + Binary Search", "HashMap + Doubly-Linked List", "Heap + HashMap", "BST + Array"], "correct": 1, "explanation": "HashMap for O(1) lookup, doubly-linked list for O(1) insertion/removal at both ends." },
+        { "id": "lld-w09-q02", "type": "mcq", "question": "Token Bucket rate limiter allows:", "options": ["Fixed requests per second only", "Burst traffic up to bucket capacity", "Only one request at a time", "Unlimited requests with logging"], "correct": 1, "explanation": "Token bucket allows bursts (spending accumulated tokens) while maintaining an average rate." },
+        { "id": "lld-w09-q03", "type": "mcq", "question": "A logging framework with ConsoleHandler → FileHandler → NetworkHandler is which pattern?", "options": ["Observer", "Strategy", "Chain of Responsibility", "Decorator"], "correct": 2, "explanation": "Handlers form a chain; each decides whether to handle or pass to the next handler." },
+        { "id": "lld-w09-q04", "type": "true-false", "question": "In Pub/Sub, publishers need to know about specific subscribers.", "correct": false, "explanation": "Pub/Sub decouples publishers from subscribers — publishers emit to topics, subscribers listen." },
+        { "id": "lld-w09-q05", "type": "mcq", "question": "An in-memory file system with File and Directory classes best uses:", "options": ["Adapter", "Composite", "Proxy", "Flyweight"], "correct": 1, "explanation": "Composite: Directory contains Files and other Directories, treated uniformly." }
+      ]
+    },
+    {
+      "weekId": "week-10", "title": "Advanced & Mock Interview Quiz", "passingScore": 70,
+      "questions": [
+        { "id": "lld-w10-q01", "type": "mcq", "question": "In a food delivery system, the order lifecycle (Placed → Preparing → PickedUp → Delivered) uses:", "options": ["Strategy", "Observer", "State", "Command"], "correct": 2, "explanation": "Order states transition through a lifecycle — classic State pattern." },
+        { "id": "lld-w10-q02", "type": "mcq", "question": "Which is an LLD interview anti-pattern?", "options": ["Starting with requirements", "Jumping straight to code without clarifying scope", "Drawing a class diagram", "Discussing trade-offs"], "correct": 1, "explanation": "Jumping to code without understanding requirements is the #1 interview mistake." },
+        { "id": "lld-w10-q03", "type": "mcq", "question": "In a 45-min LLD interview, how much time should you spend on implementation?", "options": ["5 minutes", "10 minutes", "15-20 minutes", "35 minutes"], "correct": 2, "explanation": "15-20 minutes for implementation, with remaining time split across requirements, design, and trade-offs." },
+        { "id": "lld-w10-q04", "type": "true-false", "question": "An ATM machine that changes behavior based on card insertion state is a good use of the State pattern.", "correct": true, "explanation": "ATM states: Idle → CardInserted → PINEntered → TransactionSelected — textbook State pattern." }
+      ]
+    }
+  ],
+  "revision": {
+    "title": "LLD Mixed Revision Quiz",
+    "description": "Random questions from all LLD weeks",
+    "poolSize": 20,
+    "questions": ["lld-w01-q01","lld-w01-q02","lld-w01-q05","lld-w02-q01","lld-w02-q03","lld-w03-q01","lld-w03-q02","lld-w03-q06","lld-w04-q01","lld-w04-q05","lld-w05-q01","lld-w05-q02","lld-w06-q01","lld-w06-q04","lld-w07-q01","lld-w07-q03","lld-w08-q02","lld-w09-q01","lld-w09-q02","lld-w10-q01"]
+  }
+}

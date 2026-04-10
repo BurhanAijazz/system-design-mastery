@@ -1,0 +1,78 @@
+<h2>Food Delivery System Walkthrough</h2>
+
+<p>This lesson walks through designing a Food Delivery System (like Swiggy/Zomato) using the 6-step LLD interview framework. The focus is on the thinking process: how to clarify requirements, identify entities, select patterns, and discuss trade-offs.</p>
+
+<h3>Step 1: Clarify Requirements</h3>
+
+<p>Start by asking the interviewer clarifying questions. Never dive into code immediately.</p>
+<ul>
+  <li>"Who are the main actors?" -- Customers, Restaurants, and Delivery Agents</li>
+  <li>"Can a customer order from multiple restaurants at once?" -- No, one order per restaurant</li>
+  <li>"Should I model a full payment gateway?" -- Keep payment simple, just track method and amount</li>
+  <li>"Should I handle real-time delivery tracking?" -- Yes, customer should see status updates</li>
+</ul>
+
+<p><strong>Functional Requirements:</strong></p>
+<ul>
+  <li>Customer can browse restaurants and menus</li>
+  <li>Customer can add items to cart and place an order</li>
+  <li>Order lifecycle: Placed -> Confirmed -> Preparing -> ReadyForPickup -> OutForDelivery -> Delivered</li>
+  <li>System assigns a delivery agent to the order</li>
+  <li>Real-time order status tracking</li>
+  <li>Customer can rate and review restaurant/agent</li>
+</ul>
+
+<p><strong>Out of scope:</strong> Multiple orders from different restaurants, coupons/promotions, surge pricing, route optimization.</p>
+
+<h3>Step 2: Identify Entities</h3>
+
+<pre><code class="language-python"># Core entities:
+# User         - id, name, email, phone, addresses
+# Restaurant   - id, name, address, menu, is_open, rating
+# MenuItem     - id, name, price, category, available
+# Cart         - user_id, restaurant_id, items, total
+# Order        - id, user, restaurant, items, status, agent, payment
+# DeliveryAgent- id, name, phone, status, location
+# Payment      - id, order_id, method, amount, status
+# Review       - id, user_id, target_id, rating, comment
+
+# Key relationships:
+# User has many Addresses (1:N)
+# Restaurant has one Menu (1:1), Menu has many MenuItems (1:N)
+# Order has many OrderItems (1:N)
+# Order has one DeliveryAgent (1:1) and one Payment (1:1)</code></pre>
+
+<h3>Step 3: Select Patterns</h3>
+<ul>
+  <li><strong>State</strong> -- Order lifecycle with 7 states and strict transition rules</li>
+  <li><strong>Strategy</strong> -- Delivery agent assignment: NearestAgent vs LeastBusyAgent</li>
+  <li><strong>Observer</strong> -- Real-time order tracking: when status changes, all observers are notified</li>
+  <li><strong>Chain of Responsibility</strong> -- Order validation: restaurant open? items available? payment valid?</li>
+</ul>
+
+<h3>Step 4: Implementation Highlights</h3>
+
+<pre><code class="language-python">class OrderStatus(Enum):
+    PLACED = "placed"
+    CONFIRMED = "confirmed"
+    PREPARING = "preparing"
+    READY_FOR_PICKUP = "ready_for_pickup"
+    OUT_FOR_DELIVERY = "out_for_delivery"
+    DELIVERED = "delivered"
+    CANCELLED = "cancelled"
+
+@dataclass
+class Location:
+    lat: float
+    lng: float
+
+    def distance_to(self, other: Location) -> float:
+        return math.sqrt((self.lat - other.lat)**2 +
+                         (self.lng - other.lng)**2)</code></pre>
+
+<h3>Step 5: Trade-offs</h3>
+<ul>
+  <li>State pattern adds more classes but makes each state's logic self-contained vs a simpler enum + switch</li>
+  <li>NearestAgent strategy is simple but may overload agents near popular restaurants; LeastBusy balances load but may increase delivery time</li>
+  <li>Observer for tracking is clean but could generate many notifications; consider batching or throttling</li>
+</ul>

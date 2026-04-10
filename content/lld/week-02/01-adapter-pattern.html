@@ -1,0 +1,244 @@
+<h2>Adapter Pattern</h2>
+
+<p>
+  The Adapter pattern converts the interface of a class into another interface that
+  clients expect. It allows classes with incompatible interfaces to work together. This
+  is one of the most frequently used structural patterns, especially when integrating
+  with third-party libraries or legacy systems.
+</p>
+
+<h3>When to Use the Adapter Pattern</h3>
+
+<ul>
+  <li>You want to use an existing class, but its interface does not match what you need.</li>
+  <li>You are integrating with a third-party API that may change independently.</li>
+  <li>You need to create a reusable class that cooperates with classes that have incompatible interfaces.</li>
+  <li>You want to isolate your code from changes in external systems.</li>
+</ul>
+
+<h3>Real-World Analogy</h3>
+
+<p>
+  A power adapter lets you plug a US device into a European socket. The adapter does
+  not change the device or the socket &mdash; it translates between two incompatible interfaces.
+</p>
+
+<h3>Problem: Integrating a Legacy Payment System</h3>
+
+<p>
+  Your application uses a modern <code>PaymentGateway</code> interface, but you need
+  to integrate with a legacy payment processor that has a completely different API:
+</p>
+
+<pre><code class="language-python"># --- Your modern interface ---
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+
+@dataclass
+class PaymentRequest:
+    amount: float
+    currency: str
+    customer_id: str
+    description: str
+
+
+@dataclass
+class PaymentResult:
+    success: bool
+    transaction_id: str
+    message: str
+
+
+class PaymentGateway(ABC):
+    @abstractmethod
+    def process_payment(self, request: PaymentRequest) -> PaymentResult:
+        pass
+
+    @abstractmethod
+    def refund(self, transaction_id: str, amount: float) -> PaymentResult:
+        pass
+
+
+# --- The legacy system you cannot modify ---
+
+class LegacyPaymentProcessor:
+    """Third-party legacy system with an incompatible interface.
+    You cannot modify this class - it comes from an external library."""
+
+    def submit_payment(self, amount_cents: int, currency_code: str,
+                       merchant_ref: str, memo: str) -> dict:
+        # Simulated legacy API response
+        return {
+            "status_code": 0,  # 0 means success
+            "ref_number": f"LEG-{merchant_ref}-001",
+            "status_text": "APPROVED",
+        }
+
+    def reverse_transaction(self, ref_number: str, amount_cents: int) -> dict:
+        return {
+            "status_code": 0,
+            "ref_number": ref_number,
+            "status_text": "REVERSED",
+        }
+
+    def check_status(self, ref_number: str) -> dict:
+        return {"status_code": 0, "status_text": "ACTIVE"}
+</code></pre>
+
+<h3>Solution: The Adapter</h3>
+
+<p>
+  Create an adapter that implements your <code>PaymentGateway</code> interface and
+  internally delegates to the legacy system, translating data formats in both directions:
+</p>
+
+<pre><code class="language-python">class LegacyPaymentAdapter(PaymentGateway):
+    """Adapts the LegacyPaymentProcessor to the PaymentGateway interface."""
+
+    def __init__(self, legacy_processor: LegacyPaymentProcessor):
+        self._legacy = legacy_processor
+
+    def process_payment(self, request: PaymentRequest) -> PaymentResult:
+        # Translate: dollars to cents, map field names
+        amount_cents = int(request.amount * 100)
+
+        legacy_response = self._legacy.submit_payment(
+            amount_cents=amount_cents,
+            currency_code=request.currency.upper(),
+            merchant_ref=request.customer_id,
+            memo=request.description,
+        )
+
+        # Translate the response back to our format
+        return PaymentResult(
+            success=legacy_response["status_code"] == 0,
+            transaction_id=legacy_response["ref_number"],
+            message=legacy_response["status_text"],
+        )
+
+    def refund(self, transaction_id: str, amount: float) -> PaymentResult:
+        amount_cents = int(amount * 100)
+
+        legacy_response = self._legacy.reverse_transaction(
+            ref_number=transaction_id,
+            amount_cents=amount_cents,
+        )
+
+        return PaymentResult(
+            success=legacy_response["status_code"] == 0,
+            transaction_id=legacy_response["ref_number"],
+            message=legacy_response["status_text"],
+        )
+</code></pre>
+
+<h3>Usage: Transparent Integration</h3>
+
+<pre><code class="language-python">def checkout(gateway: PaymentGateway, cart_total: float, customer_id: str):
+    """Business logic only knows about PaymentGateway - not the legacy system."""
+    request = PaymentRequest(
+        amount=cart_total,
+        currency="USD",
+        customer_id=customer_id,
+        description=f"Order for customer {customer_id}",
+    )
+    result = gateway.process_payment(request)
+
+    if result.success:
+        print(f"Payment successful! Transaction: {result.transaction_id}")
+    else:
+        print(f"Payment failed: {result.message}")
+
+    return result
+
+
+# Wire up with the adapter
+legacy = LegacyPaymentProcessor()
+adapter = LegacyPaymentAdapter(legacy)
+
+# Business logic uses the modern interface
+checkout(adapter, 99.99, "CUST-42")
+</code></pre>
+
+<h3>Adapter with Multiple Legacy Systems</h3>
+
+<p>
+  The pattern shines when you have multiple incompatible systems behind one interface:
+</p>
+
+<pre><code class="language-python">class StripePaymentAdapter(PaymentGateway):
+    def __init__(self, api_key: str):
+        self._api_key = api_key
+
+    def process_payment(self, request: PaymentRequest) -> PaymentResult:
+        # Stripe-specific API calls
+        return PaymentResult(True, "stripe_txn_123", "Approved")
+
+    def refund(self, transaction_id: str, amount: float) -> PaymentResult:
+        return PaymentResult(True, transaction_id, "Refunded")
+
+
+class PayPalAdapter(PaymentGateway):
+    def __init__(self, client_id: str, secret: str):
+        self._client_id = client_id
+        self._secret = secret
+
+    def process_payment(self, request: PaymentRequest) -> PaymentResult:
+        # PayPal-specific API calls
+        return PaymentResult(True, "pp_txn_456", "Completed")
+
+    def refund(self, transaction_id: str, amount: float) -> PaymentResult:
+        return PaymentResult(True, transaction_id, "Refunded")
+
+
+# Factory to select the right adapter
+def get_payment_gateway(provider: str) -> PaymentGateway:
+    if provider == "legacy":
+        return LegacyPaymentAdapter(LegacyPaymentProcessor())
+    elif provider == "stripe":
+        return StripePaymentAdapter("sk_test_key")
+    elif provider == "paypal":
+        return PayPalAdapter("client_id", "secret")
+    else:
+        raise ValueError(f"Unknown provider: {provider}")
+</code></pre>
+
+<h3>Testing Adapters</h3>
+
+<pre><code class="language-python">def test_legacy_adapter_translates_payment():
+    legacy = LegacyPaymentProcessor()
+    adapter = LegacyPaymentAdapter(legacy)
+
+    request = PaymentRequest(
+        amount=49.99,
+        currency="USD",
+        customer_id="C-100",
+        description="Test payment",
+    )
+    result = adapter.process_payment(request)
+
+    assert result.success is True
+    assert result.transaction_id.startswith("LEG-")
+    assert result.message == "APPROVED"
+
+
+def test_legacy_adapter_translates_refund():
+    legacy = LegacyPaymentProcessor()
+    adapter = LegacyPaymentAdapter(legacy)
+
+    result = adapter.refund("LEG-C-100-001", 49.99)
+
+    assert result.success is True
+    assert result.message == "REVERSED"
+</code></pre>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>The Adapter pattern is about interface translation, not behavior modification.</li>
+  <li>The adapter wraps the adaptee without changing it.</li>
+  <li>Your business logic stays decoupled from third-party API specifics.</li>
+  <li>When the external system changes, only the adapter needs updating.</li>
+  <li>Adapters naturally follow DIP: business logic depends on the abstract gateway, not the concrete legacy system.</li>
+</ul>

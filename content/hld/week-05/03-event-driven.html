@@ -1,0 +1,78 @@
+<h2>Event-Driven Architecture</h2>
+
+<p>Events as the backbone of modern distributed systems. Instead of services calling each other directly, services publish events and other services react. This creates loose coupling and extensibility.</p>
+
+<h3>Imperative vs Event-Driven</h3>
+<ul>
+  <li><strong>Imperative</strong>: OrderService calls PaymentService, then InventoryService, then NotificationService directly</li>
+  <li><strong>Event-Driven</strong>: OrderService publishes "OrderCreated". Payment, Inventory, Notification, and Analytics services all subscribe independently</li>
+</ul>
+
+<h3>Event Types</h3>
+<ul>
+  <li><strong>Domain Events</strong>: Something happened -- "OrderPlaced", "PaymentProcessed". Past tense, immutable facts</li>
+  <li><strong>Integration Events</strong>: Cross-service communication via message broker. Loose coupling</li>
+  <li><strong>Commands</strong>: Requests to do something -- "ProcessPayment", "SendEmail". Can fail and be rejected</li>
+</ul>
+
+<h3>Simple Event Bus</h3>
+<pre><code class="language-python">from dataclasses import dataclass, field
+from typing import Dict, Any, List, Callable
+from collections import defaultdict
+import time
+
+@dataclass
+class Event:
+    event_type: str
+    data: Dict[str, Any]
+    event_id: int = 0
+    timestamp: float = 0.0
+    source: str = ""
+
+    def __post_init__(self):
+        if not self.timestamp:
+            self.timestamp = time.time()
+
+class EventBus:
+    """In-process publish-subscribe event bus."""
+    def __init__(self):
+        self.subscribers: Dict[str, List[Callable]] = defaultdict(list)
+        self.event_log: List[Event] = []
+
+    def subscribe(self, event_type: str, handler: Callable):
+        self.subscribers[event_type].append(handler)
+
+    def publish(self, event: Event):
+        self.event_log.append(event)
+        for handler in self.subscribers.get(event.event_type, []):
+            handler(event)
+
+# Usage:
+bus = EventBus()
+bus.subscribe("OrderCreated", lambda e: print(f"Payment for {e.data}"))
+bus.subscribe("OrderCreated", lambda e: print(f"Inventory for {e.data}"))
+bus.publish(Event("OrderCreated", {"order_id": "123", "amount": 99.99}))
+</code></pre>
+
+<h3>Choreography vs Orchestration</h3>
+<ul>
+  <li><strong>Choreography</strong>: Each service listens for events and decides what to do. No central coordinator. Good for simple flows but hard to debug complex ones</li>
+  <li><strong>Orchestration</strong>: A central orchestrator tells each service what to do and when. Easier to understand and monitor. Single point of failure risk</li>
+</ul>
+
+<h3>Event Sourcing</h3>
+<p>Instead of storing current state, store the <strong>sequence of events</strong> that led to the current state. The current state is derived by replaying events.</p>
+<ul>
+  <li><strong>Pro</strong>: Complete audit trail, can reconstruct state at any point in time</li>
+  <li><strong>Pro</strong>: Events are immutable -- no data loss from overwrites</li>
+  <li><strong>Con</strong>: More complex queries (need to rebuild state from events)</li>
+  <li><strong>Con</strong>: Event schema evolution is challenging</li>
+</ul>
+
+<h3>CQRS: Command Query Responsibility Segregation</h3>
+<p>Separate the write model (commands) from the read model (queries). Write to an event store, build optimized read views from the events.</p>
+<ul>
+  <li>Write side: append events to the event store</li>
+  <li>Read side: materialized views optimized for specific query patterns</li>
+  <li>Often paired with event sourcing for maximum flexibility</li>
+</ul>

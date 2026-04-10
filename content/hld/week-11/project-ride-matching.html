@@ -1,0 +1,112 @@
+<h2>Project: Ride Matching Simulator</h2>
+
+<p>This project implements geohash-based driver matching with spatial indexing, ETA estimation based on distance and traffic, surge pricing based on supply/demand, and real-time driver pool management.</p>
+
+<h3>Geohash Engine</h3>
+
+<pre><code class="language-python">import math
+
+BASE32 = "0123456789bcdefghjkmnpqrstuvwxyz"
+
+def geohash_encode(lat: float, lng: float, precision: int = 6) -> str:
+    """Encode lat/lng to geohash string."""
+    lat_range = [-90.0, 90.0]
+    lng_range = [-180.0, 180.0]
+    bits, is_lng = [], True
+    while len(bits) < precision * 5:
+        if is_lng:
+            mid = (lng_range[0] + lng_range[1]) / 2
+            if lng >= mid:
+                bits.append(1); lng_range[0] = mid
+            else:
+                bits.append(0); lng_range[1] = mid
+        else:
+            mid = (lat_range[0] + lat_range[1]) / 2
+            if lat >= mid:
+                bits.append(1); lat_range[0] = mid
+            else:
+                bits.append(0); lat_range[1] = mid
+        is_lng = not is_lng
+    result = []
+    for i in range(0, len(bits), 5):
+        chunk = bits[i:i+5]
+        idx = sum(b << (4-j) for j, b in enumerate(chunk))
+        result.append(BASE32[idx])
+    return "".join(result)
+
+def haversine(lat1, lng1, lat2, lng2) -> float:
+    """Distance in km between two coordinates."""
+    R = 6371
+    dlat = math.radians(lat2 - lat1)
+    dlng = math.radians(lng2 - lng1)
+    a = (math.sin(dlat/2)**2 +
+         math.cos(math.radians(lat1)) *
+         math.cos(math.radians(lat2)) *
+         math.sin(dlng/2)**2)
+    return R * 2 * math.asin(math.sqrt(min(1, a)))</code></pre>
+
+<h3>Core Data Structures</h3>
+
+<pre><code class="language-python">from dataclasses import dataclass
+
+@dataclass
+class Driver:
+    driver_id: int
+    lat: float
+    lng: float
+    available: bool = True
+    rating: float = 4.8
+    geohash: str = ""
+    total_rides: int = 0
+    total_earnings: float = 0.0
+
+@dataclass
+class RideRequest:
+    request_id: int
+    rider_id: int
+    pickup_lat: float
+    pickup_lng: float
+    dest_lat: float
+    dest_lng: float
+    timestamp: float = 0.0</code></pre>
+
+<h3>Matching Algorithm</h3>
+
+<p>The matching process works in stages:</p>
+
+<ul>
+  <li><strong>Stage 1 - Candidate discovery:</strong> Compute geohash of pickup location, query drivers in the same cell plus 8 neighboring cells</li>
+  <li><strong>Stage 2 - Distance filtering:</strong> Calculate haversine distance to each candidate, filter by max radius (e.g., 5 km)</li>
+  <li><strong>Stage 3 - Scoring:</strong> Rank candidates by weighted score combining distance, rating, and acceptance history</li>
+  <li><strong>Stage 4 - Offer:</strong> Send ride offer to top-scored driver. If declined or timed out, offer to next candidate.</li>
+</ul>
+
+<h3>Surge Pricing</h3>
+
+<ul>
+  <li>City divided into zones (geohash-based)</li>
+  <li>Each zone tracks active drivers (supply) and recent ride requests (demand)</li>
+  <li>Surge multiplier = demand_count / supply_count, bounded between 1.0x and 3.0x</li>
+  <li>Recalculated every 2-5 minutes to reflect current conditions</li>
+</ul>
+
+<h3>Simulation Results</h3>
+
+<p>The simulator generates drivers distributed across a city grid and processes ride requests to measure:</p>
+
+<ul>
+  <li><strong>Match success rate:</strong> Percentage of rides successfully matched</li>
+  <li><strong>Average match distance:</strong> How far the matched driver is from pickup</li>
+  <li><strong>Average ETA:</strong> Estimated time for driver to reach pickup</li>
+  <li><strong>Surge distribution:</strong> Which zones experience surge and at what multiplier</li>
+  <li><strong>Driver utilization:</strong> Percentage of time drivers are on active rides vs idle</li>
+</ul>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>Geohash enables O(1) lookup for nearby drivers instead of scanning all drivers</li>
+  <li>Precision 6 geohash (~1 km cells) is the sweet spot for urban ride matching</li>
+  <li>Surge pricing naturally balances supply and demand by incentivizing drivers to enter high-demand zones</li>
+  <li>The expanding ring search (try adjacent cells if no drivers found) handles sparse areas gracefully</li>
+</ul>

@@ -1,0 +1,246 @@
+<h2>Week 4 Exercises: Behavioral Patterns Part 2</h2>
+
+<p>These exercises cover the Iterator, Null Object, Memento, Visitor, and pattern combination concepts. Try to solve each one before revealing the answer.</p>
+
+<h3>Exercise 1: Playlist Iterator</h3>
+
+<p>Design a <code>Playlist</code> class that supports three iteration modes over a list of songs:</p>
+
+<ul>
+    <li><code>SequentialIterator</code> -- plays songs in order</li>
+    <li><code>ShuffleIterator</code> -- plays songs in random order (each song exactly once)</li>
+    <li><code>RepeatIterator</code> -- plays songs in order, looping forever (use a max count to stop)</li>
+</ul>
+
+<p>The <code>Playlist</code> should provide <code>sequential()</code>, <code>shuffled()</code>, and <code>repeat(max_plays)</code> methods that return the appropriate iterator.</p>
+
+<details>
+    <summary>Reveal Answer</summary>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+from typing import List, Iterator
+import random
+
+class Song:
+    def __init__(self, title: str, artist: str):
+        self.title = title
+        self.artist = artist
+    def __repr__(self):
+        return f"{self.title} - {self.artist}"
+
+
+class PlaylistIterator(ABC):
+    @abstractmethod
+    def __iter__(self) -> Iterator[Song]:
+        pass
+
+
+class SequentialIterator(PlaylistIterator):
+    def __init__(self, songs: List[Song]):
+        self._songs = songs
+    def __iter__(self):
+        for song in self._songs:
+            yield song
+
+
+class ShuffleIterator(PlaylistIterator):
+    def __init__(self, songs: List[Song]):
+        self._songs = list(songs)  # copy to avoid mutating original
+    def __iter__(self):
+        shuffled = list(self._songs)
+        random.shuffle(shuffled)
+        for song in shuffled:
+            yield song
+
+
+class RepeatIterator(PlaylistIterator):
+    def __init__(self, songs: List[Song], max_plays: int = 3):
+        self._songs = songs
+        self._max = max_plays
+    def __iter__(self):
+        count = 0
+        while count < self._max:
+            for song in self._songs:
+                yield song
+            count += 1
+
+
+class Playlist:
+    def __init__(self, name: str):
+        self.name = name
+        self._songs: List[Song] = []
+
+    def add(self, song: Song):
+        self._songs.append(song)
+
+    def sequential(self) -> SequentialIterator:
+        return SequentialIterator(self._songs)
+
+    def shuffled(self) -> ShuffleIterator:
+        return ShuffleIterator(self._songs)
+
+    def repeat(self, max_plays: int = 3) -> RepeatIterator:
+        return RepeatIterator(self._songs, max_plays)
+</code></pre>
+</details>
+
+<h3>Exercise 2: Game Save System with Memento</h3>
+
+<p>Create a simple RPG character with <code>health</code>, <code>mana</code>, <code>level</code>, and <code>position</code> (x, y). Implement:</p>
+
+<ul>
+    <li>A <code>CharacterMemento</code> (frozen dataclass) that captures all character state</li>
+    <li>A <code>SaveSlotManager</code> (caretaker) with 3 named save slots ("slot1", "slot2", "slot3")</li>
+    <li>Methods: <code>save_to_slot(name)</code>, <code>load_from_slot(name)</code>, <code>list_slots()</code></li>
+</ul>
+
+<details>
+    <summary>Reveal Answer</summary>
+
+<pre><code class="language-python">from dataclasses import dataclass
+from typing import Dict, Optional
+from datetime import datetime
+
+@dataclass(frozen=True)
+class CharacterMemento:
+    health: int
+    mana: int
+    level: int
+    pos_x: int
+    pos_y: int
+    saved_at: str
+
+
+class GameCharacter:
+    def __init__(self, name: str):
+        self.name = name
+        self.health = 100
+        self.mana = 50
+        self.level = 1
+        self.pos_x = 0
+        self.pos_y = 0
+
+    def take_damage(self, amount: int):
+        self.health = max(0, self.health - amount)
+
+    def move(self, dx: int, dy: int):
+        self.pos_x += dx
+        self.pos_y += dy
+
+    def level_up(self):
+        self.level += 1
+        self.mana += 10
+
+    def save(self) -> CharacterMemento:
+        return CharacterMemento(
+            health=self.health, mana=self.mana,
+            level=self.level, pos_x=self.pos_x, pos_y=self.pos_y,
+            saved_at=datetime.now().strftime("%H:%M:%S"),
+        )
+
+    def restore(self, memento: CharacterMemento):
+        self.health = memento.health
+        self.mana = memento.mana
+        self.level = memento.level
+        self.pos_x = memento.pos_x
+        self.pos_y = memento.pos_y
+
+
+class SaveSlotManager:
+    def __init__(self, character: GameCharacter):
+        self._character = character
+        self._slots: Dict[str, CharacterMemento] = {}
+
+    def save_to_slot(self, name: str) -> str:
+        self._slots[name] = self._character.save()
+        return f"Saved to '{name}'"
+
+    def load_from_slot(self, name: str) -> str:
+        if name not in self._slots:
+            return f"Slot '{name}' is empty"
+        self._character.restore(self._slots[name])
+        return f"Loaded from '{name}'"
+
+    def list_slots(self) -> Dict[str, str]:
+        return {
+            name: f"Saved at {m.saved_at}, Level {m.level}"
+            for name, m in self._slots.items()
+        }
+</code></pre>
+</details>
+
+<h3>Exercise 3: Document Exporter with Visitor</h3>
+
+<p>Create a document structure with three element types: <code>Heading</code>, <code>Paragraph</code>, and <code>CodeBlock</code>. Each has a <code>content</code> field. Implement two visitors:</p>
+
+<ul>
+    <li><code>HTMLExportVisitor</code> -- exports elements as HTML strings</li>
+    <li><code>MarkdownExportVisitor</code> -- exports elements as Markdown strings</li>
+</ul>
+
+<p>The <code>HTMLExportVisitor</code> should wrap headings in <code>&lt;h2&gt;</code>, paragraphs in <code>&lt;p&gt;</code>, and code blocks in <code>&lt;pre&gt;&lt;code&gt;</code>. The Markdown visitor should use <code>##</code> for headings and triple backticks for code blocks.</p>
+
+<details>
+    <summary>Reveal Answer</summary>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import List
+
+class DocElement(ABC):
+    @abstractmethod
+    def accept(self, visitor: "DocVisitor") -> None:
+        pass
+
+@dataclass
+class Heading(DocElement):
+    content: str
+    level: int = 2
+    def accept(self, visitor):
+        visitor.visit_heading(self)
+
+@dataclass
+class Paragraph(DocElement):
+    content: str
+    def accept(self, visitor):
+        visitor.visit_paragraph(self)
+
+@dataclass
+class CodeBlock(DocElement):
+    content: str
+    language: str = "python"
+    def accept(self, visitor):
+        visitor.visit_code_block(self)
+
+
+class DocVisitor(ABC):
+    @abstractmethod
+    def visit_heading(self, h: Heading): pass
+    @abstractmethod
+    def visit_paragraph(self, p: Paragraph): pass
+    @abstractmethod
+    def visit_code_block(self, c: CodeBlock): pass
+
+
+class HTMLExportVisitor(DocVisitor):
+    def __init__(self):
+        self.output = []
+    def visit_heading(self, h):
+        self.output.append(f"&lt;h{h.level}&gt;{h.content}&lt;/h{h.level}&gt;")
+    def visit_paragraph(self, p):
+        self.output.append(f"&lt;p&gt;{p.content}&lt;/p&gt;")
+    def visit_code_block(self, c):
+        self.output.append(f"&lt;pre&gt;&lt;code&gt;{c.content}&lt;/code&gt;&lt;/pre&gt;")
+
+
+class MarkdownExportVisitor(DocVisitor):
+    def __init__(self):
+        self.output = []
+    def visit_heading(self, h):
+        self.output.append(f"{'#' * h.level} {h.content}")
+    def visit_paragraph(self, p):
+        self.output.append(p.content)
+    def visit_code_block(self, c):
+        self.output.append(f"```{c.language}\n{c.content}\n```")
+</code></pre>
+</details>

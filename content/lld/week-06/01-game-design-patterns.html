@@ -1,0 +1,166 @@
+<h2>Game Design Patterns</h2>
+
+<p>Games are among the most frequently asked LLD interview topics because they have clear rules, well-defined entities, and require careful state management. This lesson covers the patterns that appear most often in game design problems.</p>
+
+<h3>Patterns in Games</h3>
+
+<ul>
+    <li><strong>State</strong> -- game lifecycle, piece states</li>
+    <li><strong>Strategy</strong> -- AI players, win checking, movement rules</li>
+    <li><strong>Command</strong> -- moves with undo/redo</li>
+    <li><strong>Observer</strong> -- game events (win, check, turn change)</li>
+    <li><strong>Template Method</strong> -- generic game loop</li>
+    <li><strong>Chain of Responsibility</strong> -- move validation pipeline</li>
+</ul>
+
+<h3>Player Abstraction</h3>
+
+<p>In any game, players can be Human (takes input), AI/Computer (computes a move), or Remote (receives move over network). Use an abstract Player class so the game engine does not care what kind of player is playing.</p>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+from typing import List, Tuple
+import random
+
+class Player(ABC):
+    """Abstract player -- the game engine only knows this interface."""
+
+    def __init__(self, name: str, symbol: str):
+        self.name = name
+        self.symbol = symbol
+
+    @abstractmethod
+    def get_move(self, board: List[List[str]]) -> Tuple[int, int]:
+        """Return (row, col) for the next move."""
+        pass
+
+
+class HumanPlayer(Player):
+    """Takes move from console input."""
+    def get_move(self, board):
+        # In a real game, read from stdin
+        row = int(input(f"{self.name}, enter row: "))
+        col = int(input(f"{self.name}, enter col: "))
+        return (row, col)
+
+
+class RandomAIPlayer(Player):
+    """Picks a random valid move."""
+    def get_move(self, board):
+        empty = [
+            (r, c)
+            for r in range(len(board))
+            for c in range(len(board[0]))
+            if board[r][c] == " "
+        ]
+        return random.choice(empty) if empty else (0, 0)
+</code></pre>
+
+<h3>Game Engine / Controller Pattern</h3>
+
+<p>The Game class is the controller that manages game state, alternates turns, validates moves, and checks win conditions:</p>
+
+<pre><code class="language-python">class GameEngine(ABC):
+    """Abstract game engine -- Template Method pattern."""
+
+    def play(self):
+        """Template method: the game loop."""
+        self.initialize()
+        while not self.is_game_over():
+            self.display_board()
+            player = self.current_player()
+            move = player.get_move(self.get_board())
+            if self.validate_move(move):
+                self.execute_move(move, player)
+                self.check_win_condition()
+                self.next_turn()
+            else:
+                print("Invalid move, try again.")
+        self.display_result()
+
+    @abstractmethod
+    def initialize(self): pass
+    @abstractmethod
+    def display_board(self): pass
+    @abstractmethod
+    def current_player(self) -> Player: pass
+    @abstractmethod
+    def get_board(self) -> List[List[str]]: pass
+    @abstractmethod
+    def validate_move(self, move: Tuple[int, int]) -> bool: pass
+    @abstractmethod
+    def execute_move(self, move, player): pass
+    @abstractmethod
+    def check_win_condition(self): pass
+    @abstractmethod
+    def next_turn(self): pass
+    @abstractmethod
+    def is_game_over(self) -> bool: pass
+    @abstractmethod
+    def display_result(self): pass
+</code></pre>
+
+<h3>Move Validation Chain</h3>
+
+<p>Use Chain of Responsibility for move validation, where each validator checks one aspect:</p>
+
+<pre><code class="language-python">class MoveValidator(ABC):
+    def __init__(self):
+        self._next = None
+
+    def set_next(self, validator: "MoveValidator") -> "MoveValidator":
+        self._next = validator
+        return validator
+
+    def validate(self, move, board) -> bool:
+        if not self.check(move, board):
+            return False
+        if self._next:
+            return self._next.validate(move, board)
+        return True
+
+    @abstractmethod
+    def check(self, move, board) -> bool: pass
+
+
+class BoundsValidator(MoveValidator):
+    def check(self, move, board):
+        r, c = move
+        return 0 <= r < len(board) and 0 <= c < len(board[0])
+
+
+class EmptyCellValidator(MoveValidator):
+    def check(self, move, board):
+        r, c = move
+        return board[r][c] == " "
+</code></pre>
+
+<h3>Win Condition Strategy</h3>
+
+<pre><code class="language-python">class WinChecker(ABC):
+    @abstractmethod
+    def check_win(self, board, symbol) -> bool: pass
+
+
+class RowWinChecker(WinChecker):
+    def check_win(self, board, symbol):
+        return any(all(cell == symbol for cell in row) for row in board)
+
+
+class ColumnWinChecker(WinChecker):
+    def check_win(self, board, symbol):
+        size = len(board)
+        return any(
+            all(board[r][c] == symbol for r in range(size))
+            for c in range(size)
+        )
+</code></pre>
+
+<h3>Key Design Decisions for Game LLD</h3>
+
+<ul>
+    <li><strong>Board representation</strong> -- 2D array for simple games, Cell objects for complex ones</li>
+    <li><strong>Piece hierarchy</strong> -- abstract Piece with concrete subclasses per piece type</li>
+    <li><strong>Move as Command</strong> -- wrap each move in a Command for undo support</li>
+    <li><strong>Game state machine</strong> -- NOT_STARTED, IN_PROGRESS, PAUSED, FINISHED</li>
+    <li><strong>Observer for events</strong> -- decouple UI updates from game logic</li>
+</ul>

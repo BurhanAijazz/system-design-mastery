@@ -1,0 +1,96 @@
+<h2>Circuit Breaker, Retry, and Bulkhead</h2>
+
+<p>Resilience patterns that prevent cascading failures in microservices. These are the <strong>defensive patterns</strong> every production system needs.</p>
+
+<h3>Retry Pattern: Exponential Backoff with Jitter</h3>
+<p>Retry transient failures with increasing delays to give the service time to recover.</p>
+
+<pre><code class="language-python">import random
+import math
+from typing import Callable
+
+def retry_with_backoff(func: Callable, max_retries=3,
+                       base_delay=1.0, max_delay=30.0):
+    """Retry with exponential backoff and jitter."""
+    for attempt in range(max_retries + 1):
+        success, result = func()
+        if success:
+            return {"success": True, "attempts": attempt + 1}
+
+        # Exponential backoff with jitter
+        delay = min(base_delay * (2 ** attempt), max_delay)
+        jitter = random.uniform(0, delay * 0.5)
+        total_delay = delay + jitter
+        # time.sleep(total_delay)  -- wait before next retry
+
+    return {"success": False, "attempts": max_retries + 1}
+
+# Naive retry:     retry immediately, 3 times (BAD: amplifies overload)
+# Exp backoff:     wait 1s, 2s, 4s, 8s (BETTER: gives service time)
+# Backoff+jitter:  wait 1s+rand, 2s+rand, 4s+rand (BEST: prevents thundering herd)
+</code></pre>
+
+<h3>Circuit Breaker Pattern</h3>
+<p>A state machine that prevents cascading failures by stopping requests to a failing service.</p>
+
+<pre><code class="language-python">from enum import Enum
+
+class State(Enum):
+    CLOSED = "CLOSED"        # Normal operation, requests pass through
+    OPEN = "OPEN"            # Service is down, reject all requests fast
+    HALF_OPEN = "HALF_OPEN"  # Testing recovery, allow a few requests
+
+class CircuitBreaker:
+    """Prevent cascading failures with a circuit breaker."""
+    def __init__(self, failure_threshold=5, recovery_timeout=30.0):
+        self.state = State.CLOSED
+        self.failure_count = 0
+        self.failure_threshold = failure_threshold
+        self.recovery_timeout = recovery_timeout
+        self.last_failure_time = 0.0
+
+    def call(self, service_func, current_time=0.0):
+        if self.state == State.OPEN:
+            # Check if recovery timeout has elapsed
+            if current_time - self.last_failure_time >= self.recovery_timeout:
+                self.state = State.HALF_OPEN
+            else:
+                return {"rejected": True}  # Fail fast
+
+        success = service_func()
+        if success:
+            if self.state == State.HALF_OPEN:
+                self.state = State.CLOSED  # Service recovered
+            self.failure_count = 0
+        else:
+            self.failure_count += 1
+            self.last_failure_time = current_time
+            if self.failure_count >= self.failure_threshold:
+                self.state = State.OPEN  # Trip the breaker
+
+        return {"rejected": False, "success": success}
+</code></pre>
+
+<h3>Circuit Breaker States</h3>
+<ul>
+  <li><strong>CLOSED</strong>: Normal operation. Requests pass through. Failures are counted</li>
+  <li><strong>OPEN</strong>: Too many failures. All requests are rejected immediately (fail fast). Prevents overloading the failing service</li>
+  <li><strong>HALF-OPEN</strong>: After a timeout, allow a few test requests. If they succeed, close the circuit. If they fail, reopen</li>
+</ul>
+
+<h3>Bulkhead Pattern</h3>
+<p>Isolate failures so one failing dependency doesn't consume all resources. Named after ship bulkheads that contain flooding to one compartment.</p>
+<ul>
+  <li><strong>Thread pool isolation</strong>: Each dependency gets its own thread pool. If Service A's pool is exhausted, Service B is unaffected</li>
+  <li><strong>Connection pool isolation</strong>: Separate connection pools per downstream service</li>
+  <li><strong>Semaphore isolation</strong>: Limit concurrent calls to each dependency</li>
+</ul>
+
+<h3>Combining Patterns</h3>
+<p>In production, these patterns are layered together:</p>
+<ul>
+  <li><strong>Retry</strong> handles transient failures (network blip)</li>
+  <li><strong>Circuit breaker</strong> prevents cascading failures (service down)</li>
+  <li><strong>Bulkhead</strong> contains blast radius (one dependency failing doesn't kill everything)</li>
+  <li><strong>Timeout</strong> prevents indefinite blocking (always set a timeout on network calls)</li>
+</ul>

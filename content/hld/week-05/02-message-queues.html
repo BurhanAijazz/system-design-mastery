@@ -1,0 +1,77 @@
+<h2>Message Queues: Kafka, RabbitMQ, SQS</h2>
+
+<p>Three dominant messaging technologies, each optimized for different patterns. Understanding when to use which is a critical interview skill.</p>
+
+<h3>Message Queue vs Event Stream</h3>
+
+<h3>Model 1: Message Queue (Point-to-Point)</h3>
+<p>Each message is delivered to <strong>exactly one consumer</strong>. After processing, the message is deleted from the queue.</p>
+<ul>
+  <li>Examples: RabbitMQ, Amazon SQS, ActiveMQ</li>
+  <li>Use for: task queues, job processing, work distribution</li>
+</ul>
+
+<h3>Model 2: Event Stream (Pub-Sub / Log-Based)</h3>
+<p>Messages are retained in a log. Each consumer group gets <strong>every message</strong> independently. Consumers track their position (offset).</p>
+<ul>
+  <li>Examples: Apache Kafka, Amazon Kinesis, Redpanda</li>
+  <li>Use for: event streaming, CDC, audit logs, real-time analytics</li>
+</ul>
+
+<h3>RabbitMQ: Exchanges, Queues, and Routing</h3>
+<pre><code class="language-python"># RabbitMQ architecture:
+# Producer -> Exchange -> Queue -> Consumer
+# Exchange types determine routing logic:
+
+# DIRECT: route by exact routing key
+# "order.created" -> order_queue
+
+# FANOUT: broadcast to ALL bound queues
+# event -> notification_queue, analytics_queue, audit_queue
+
+# TOPIC: route by pattern matching
+# "order.created" matches "order.*"
+# "payment.failed" matches "payment.*"
+
+class SimulatedExchange:
+    """Simplified RabbitMQ exchange simulation."""
+    def __init__(self, exchange_type="direct"):
+        self.exchange_type = exchange_type
+        self.bindings = {}  # routing_key -> [queues]
+
+    def bind(self, queue, routing_key):
+        self.bindings.setdefault(routing_key, []).append(queue)
+
+    def publish(self, message, routing_key):
+        if self.exchange_type == "fanout":
+            for queues in self.bindings.values():
+                for q in queues:
+                    q.append(message)
+        elif self.exchange_type == "direct":
+            for q in self.bindings.get(routing_key, []):
+                q.append(message)
+</code></pre>
+
+<h3>Apache Kafka: Distributed Event Log</h3>
+<ul>
+  <li><strong>Topics</strong>: logical channels for events (e.g., "orders", "payments")</li>
+  <li><strong>Partitions</strong>: each topic is split into partitions for parallelism</li>
+  <li><strong>Consumer groups</strong>: each group reads every message; within a group, partitions are divided among consumers</li>
+  <li><strong>Retention</strong>: messages kept for days/weeks (default 7 days), not deleted after consumption</li>
+  <li><strong>Ordering</strong>: guaranteed within a partition, not across partitions</li>
+</ul>
+
+<h3>Amazon SQS: Managed Queue</h3>
+<ul>
+  <li>Fully managed, no infrastructure to maintain</li>
+  <li><strong>Standard</strong>: at-least-once delivery, best-effort ordering, nearly unlimited throughput</li>
+  <li><strong>FIFO</strong>: exactly-once processing, strict ordering, 3,000 msg/sec</li>
+  <li>Visibility timeout: message hidden from other consumers while being processed</li>
+</ul>
+
+<h3>Choosing the Right Technology</h3>
+<ul>
+  <li><strong>RabbitMQ</strong>: complex routing, priority queues, request-reply patterns. Best for task distribution</li>
+  <li><strong>Kafka</strong>: high throughput, event replay, multiple consumers. Best for event streaming and analytics pipelines</li>
+  <li><strong>SQS</strong>: zero ops, simple queue semantics, auto-scaling. Best for decoupling AWS services</li>
+</ul>

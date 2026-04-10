@@ -1,0 +1,95 @@
+<h2>Airbnb / Booking Platform Design</h2>
+
+<p>Airbnb combines complex search (geo + dates + filters), calendar availability management, double-booking prevention, split payments (platform fee + host payout), and a trust-based marketplace between hosts and guests.</p>
+
+<h3>Define: Requirements</h3>
+
+<ul>
+  <li><strong>Functional:</strong> Host lists property with photos and pricing, guest searches by location/dates/guests/amenities, guest books and pays, calendar management, messaging between host and guest, reviews, cancellation policies</li>
+  <li><strong>Non-Functional:</strong> Search &lt;500ms, no double-booking (critical), split payment, global availability, strong consistency for booking, eventual consistency acceptable for search</li>
+</ul>
+
+<h3>Estimate</h3>
+
+<pre><code class="language-python"># 7M active listings, 150M registered users, 20M DAU
+# 2M bookings/day (peak 5M in holiday season)
+
+# SEARCH:
+#   20M x 10 searches = 200M/day = 2,300 QPS (peak ~7K)
+#   Complex query: location + dates + filters + sort
+
+# BOOKINGS:
+#   2M/day = 23 QPS (peak ~70)
+#   Low QPS but HIGH stakes (each = $$$, no double-book)
+
+# CALENDAR:
+#   7M listings x 365 days = 2.5B availability records
+#   Each: 30 bytes -> 75 GB (fits in Redis for hot dates)
+
+# STORAGE:
+#   Listings: 7M x 50 KB = 350 GB
+#   Photos: 7M x 20 x 2 MB = 280 TB (S3 + CDN)
+#   Search index: 7M x 10 KB = 70 GB (Elasticsearch)</code></pre>
+
+<h3>Search Architecture</h3>
+
+<pre><code class="language-python"># Search query: "Paris, Dec 24-27, 2 guests, WiFi, < $150/night"
+# Must check:
+# 1. Location: geo-search within Paris bounds
+# 2. Dates: Dec 24, 25, 26 ALL available (calendar join)
+# 3. Capacity: max_guests >= 2
+# 4. Amenities: has WiFi
+# 5. Price: nightly rate for those dates < $150
+# 6. Sort by: relevance (mix of rating, price, response rate)
+
+# Approach:
+# Elasticsearch handles geo + text + filters
+# Calendar availability: separate check (Redis or DB)
+# Two-phase: ES returns candidates, then filter by availability</code></pre>
+
+<h3>Double-Booking Prevention</h3>
+
+<ul>
+  <li><strong>Problem:</strong> Two guests try to book the same property for overlapping dates simultaneously</li>
+  <li><strong>Solution: Pessimistic locking with a booking saga</strong></li>
+</ul>
+
+<pre><code class="language-python"># Booking Saga:
+# Step 1: LOCK - Acquire locks on all requested dates
+#         (10-minute TTL, auto-release if abandoned)
+# Step 2: PAY  - Process payment
+# Step 3: CONFIRM - Mark dates as booked, release locks
+
+# If payment fails:
+#   Release all date locks (compensating transaction)
+# If lock times out:
+#   Auto-release, dates become available again</code></pre>
+
+<h3>Dynamic Pricing</h3>
+
+<ul>
+  <li>Base price set by host, adjusted by demand factors</li>
+  <li>Weekend premium (Fri/Sat typically 20-30% higher)</li>
+  <li>Seasonal pricing (holidays, local events)</li>
+  <li>Demand-based suggestions: show hosts recommended price based on similar listings' occupancy</li>
+</ul>
+
+<h3>Architecture Components</h3>
+
+<ul>
+  <li><strong>Search Service:</strong> Elasticsearch for geo + text, with calendar availability post-filtering</li>
+  <li><strong>Calendar Service:</strong> Per-listing, per-date availability with pessimistic locking</li>
+  <li><strong>Booking Service:</strong> Orchestrates the lock -> pay -> confirm saga</li>
+  <li><strong>Payment Service:</strong> Split payments -- collect from guest, deduct platform fee, schedule host payout</li>
+  <li><strong>Messaging Service:</strong> Host-guest communication with booking context</li>
+  <li><strong>Review Service:</strong> Bidirectional reviews (guest reviews property, host reviews guest)</li>
+</ul>
+
+<h3>Key Design Decisions</h3>
+
+<ul>
+  <li><strong>Calendar as the source of truth:</strong> Availability is the most critical data; must be strongly consistent</li>
+  <li><strong>Search can be stale:</strong> A listing showing as available in search but taken at booking time is acceptable (show "just booked" message)</li>
+  <li><strong>Pessimistic locking over optimistic:</strong> Given the high stakes per booking, lock-then-pay is safer than check-then-hope</li>
+  <li><strong>Cancellation policies:</strong> Flexible, moderate, and strict policies require different refund calculation logic at different time horizons</li>
+</ul>

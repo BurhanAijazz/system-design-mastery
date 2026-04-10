@@ -1,0 +1,100 @@
+<h2>Project: Distributed Rate Limiter</h2>
+
+<p>This project implements a sliding window rate limiter with multiple algorithms, simulated distributed nodes sharing a Redis backend, tiered rate limits, and a traffic simulation with burst patterns.</p>
+
+<h3>Simulated Redis Backend</h3>
+
+<p>The project uses a simulated Redis to demonstrate how rate limiters interact with a centralized store in a distributed environment:</p>
+
+<pre><code class="language-python">class SimulatedRedis:
+    """Thread-safe Redis simulation for rate limiting."""
+    def __init__(self):
+        self.store = {}
+        self.expiry = {}
+        self.ops = 0
+
+    def incr(self, key: str, now: float = 0) -> int:
+        self._cleanup(key, now or time.time())
+        self.ops += 1
+        val = self.store.get(key, 0) + 1
+        self.store[key] = val
+        return val
+
+    def expire(self, key: str, seconds: float, now: float = 0):
+        self.expiry[key] = (now or time.time()) + seconds
+
+    def zadd(self, key: str, score: float, member: str, now: float = 0):
+        """Sorted set add - used by sliding window log."""
+        self._cleanup(key, now or time.time())
+        self.ops += 1
+        if key not in self.store:
+            self.store[key] = []
+        self.store[key].append((score, member))</code></pre>
+
+<h3>Token Bucket Algorithm</h3>
+
+<pre><code class="language-python">class TokenBucketLimiter:
+    """Token bucket algorithm using Redis."""
+    def __init__(self, redis: SimulatedRedis):
+        self.redis = redis
+
+    def check(self, key: str, capacity: int, refill_rate: float,
+              now: float = 0) -> tuple:
+        now = now or time.time()
+        bucket_key = f"tb:{key}"
+        last_data = self.redis.get(bucket_key, now)
+        if last_data is None:
+            self.redis.set(bucket_key,
+                {"tokens": capacity - 1, "last": now}, now)
+            return True, capacity - 1
+        # Refill tokens based on elapsed time
+        elapsed = now - last_data["last"]
+        tokens = min(capacity,
+                     last_data["tokens"] + elapsed * refill_rate)
+        if tokens >= 1:
+            tokens -= 1
+            self.redis.set(bucket_key,
+                {"tokens": tokens, "last": now}, now)
+            return True, int(tokens)
+        return False, 0</code></pre>
+
+<h3>Tiered Rate Limits</h3>
+
+<p>The system supports different rate limits per user tier, simulating real-world API products:</p>
+
+<ul>
+  <li><strong>Free tier:</strong> 100 requests/minute</li>
+  <li><strong>Pro tier:</strong> 1,000 requests/minute</li>
+  <li><strong>Enterprise tier:</strong> 10,000 requests/minute</li>
+</ul>
+
+<h3>Traffic Simulation</h3>
+
+<p>The simulator generates different traffic patterns to compare algorithm behavior:</p>
+
+<ul>
+  <li><strong>Steady traffic:</strong> Uniform request rate within limits</li>
+  <li><strong>Bursty traffic:</strong> Sudden spikes followed by quiet periods</li>
+  <li><strong>Abusive traffic:</strong> Sustained rate far above the limit</li>
+  <li><strong>Mixed traffic:</strong> Combination of all patterns across multiple users</li>
+</ul>
+
+<h3>Comparison Dashboard</h3>
+
+<p>The project compares Token Bucket, Fixed Window, and Sliding Window Counter across several metrics:</p>
+
+<ul>
+  <li><strong>Accuracy:</strong> False positives (legitimate requests blocked) vs false negatives (excess requests allowed)</li>
+  <li><strong>Redis operations:</strong> Number of Redis commands per rate check</li>
+  <li><strong>Memory usage:</strong> Per-user storage in Redis</li>
+  <li><strong>Boundary behavior:</strong> How each handles the transition between time windows</li>
+</ul>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>Sliding Window Counter is the best general-purpose algorithm: accurate, memory-efficient, and simple to implement</li>
+  <li>Token Bucket excels when you want to allow controlled bursts</li>
+  <li>Centralized Redis works well up to ~100K checks/sec; beyond that, consider local counters with periodic sync</li>
+  <li>Always implement fail-open: if the rate limiter is down, allow requests rather than blocking all traffic</li>
+</ul>

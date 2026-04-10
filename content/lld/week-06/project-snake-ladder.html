@@ -1,0 +1,192 @@
+<h2>Project: Snake and Ladder</h2>
+
+<p>A full LLD implementation of Snake and Ladder following the 6-step framework. This project uses State, Strategy, Observer, and Template Method patterns.</p>
+
+<h3>Patterns Used</h3>
+
+<ul>
+    <li><strong>State</strong> -- Game lifecycle (WaitingToStart, InProgress, Finished)</li>
+    <li><strong>Strategy</strong> -- Dice rolling strategies (normal, loaded)</li>
+    <li><strong>Observer</strong> -- Notify on snake bite, ladder climb, win</li>
+    <li><strong>Template Method</strong> -- Game loop structure</li>
+</ul>
+
+<h3>Requirements</h3>
+
+<pre><code>Functional:
+  1. Board of configurable size (default 100)
+  2. Configurable snakes (head -> tail, moves player down)
+  3. Configurable ladders (bottom -> top, moves player up)
+  4. 2+ players take turns rolling dice
+  5. Player must land exactly on final cell to win
+  6. Track game history (turns, rolls, positions)
+  7. Notify observers on snake bite, ladder climb, win
+
+Out of scope:
+  - GUI rendering
+  - Network multiplayer
+  - Saving/loading games
+</code></pre>
+
+<h3>Core Entities</h3>
+
+<pre><code class="language-python">from dataclasses import dataclass
+from enum import Enum
+from typing import Dict, List, Optional, Callable
+import random
+
+class GameStatus(Enum):
+    WAITING_TO_START = "waiting_to_start"
+    IN_PROGRESS = "in_progress"
+    FINISHED = "finished"
+
+class EventType(Enum):
+    GAME_STARTED = "game_started"
+    DICE_ROLLED = "dice_rolled"
+    PLAYER_MOVED = "player_moved"
+    SNAKE_BITE = "snake_bite"
+    LADDER_CLIMB = "ladder_climb"
+    PLAYER_WON = "player_won"
+
+@dataclass
+class Snake:
+    head: int   # higher position
+    tail: int   # lower position
+
+    def __post_init__(self):
+        if self.head <= self.tail:
+            raise ValueError(f"Snake head ({self.head}) must be > tail ({self.tail})")
+
+@dataclass
+class Ladder:
+    bottom: int  # lower position
+    top: int     # higher position
+
+    def __post_init__(self):
+        if self.bottom >= self.top:
+            raise ValueError(f"Ladder bottom ({self.bottom}) must be < top ({self.top})")
+</code></pre>
+
+<h3>Dice Strategy</h3>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+
+class Dice(ABC):
+    @abstractmethod
+    def roll(self) -> int:
+        pass
+
+class NormalDice(Dice):
+    def __init__(self, sides: int = 6):
+        self._sides = sides
+    def roll(self) -> int:
+        return random.randint(1, self._sides)
+
+class LoadedDice(Dice):
+    """Always rolls a specific value -- useful for testing."""
+    def __init__(self, values: List[int]):
+        self._values = values
+        self._index = 0
+    def roll(self) -> int:
+        val = self._values[self._index % len(self._values)]
+        self._index += 1
+        return val
+</code></pre>
+
+<h3>Board</h3>
+
+<pre><code class="language-python">class Board:
+    def __init__(self, size: int, snakes: List[Snake], ladders: List[Ladder]):
+        self._size = size
+        self._jumps: Dict[int, int] = {}
+
+        for snake in snakes:
+            self._jumps[snake.head] = snake.tail
+        for ladder in ladders:
+            self._jumps[ladder.bottom] = ladder.top
+
+    @property
+    def final_position(self) -> int:
+        return self._size
+
+    def get_destination(self, position: int) -> tuple:
+        """Returns (final_position, event_type or None)."""
+        if position in self._jumps:
+            dest = self._jumps[position]
+            event = EventType.SNAKE_BITE if dest < position else EventType.LADDER_CLIMB
+            return dest, event
+        return position, None
+</code></pre>
+
+<h3>Game Controller</h3>
+
+<pre><code class="language-python">class SnakeLadderGame:
+    def __init__(self, board: Board, players: List[str], dice: Dice = None):
+        self._board = board
+        self._players = players
+        self._positions: Dict[str, int] = {p: 0 for p in players}
+        self._dice = dice or NormalDice()
+        self._current_idx = 0
+        self._status = GameStatus.WAITING_TO_START
+        self._winner: Optional[str] = None
+        self._observers: List[Callable] = []
+
+    def on_event(self, callback: Callable) -> None:
+        self._observers.append(callback)
+
+    def _notify(self, event: EventType, data: dict) -> None:
+        for obs in self._observers:
+            obs(event, data)
+
+    def play_turn(self) -> str:
+        if self._status == GameStatus.WAITING_TO_START:
+            self._status = GameStatus.IN_PROGRESS
+            self._notify(EventType.GAME_STARTED, {})
+
+        if self._status == GameStatus.FINISHED:
+            return f"Game over! Winner: {self._winner}"
+
+        player = self._players[self._current_idx]
+        roll = self._dice.roll()
+        self._notify(EventType.DICE_ROLLED, {"player": player, "roll": roll})
+
+        old_pos = self._positions[player]
+        new_pos = old_pos + roll
+
+        # Must land exactly on final cell
+        if new_pos > self._board.final_position:
+            self._current_idx = (self._current_idx + 1) % len(self._players)
+            return f"{player} rolled {roll} but needs exact. Stay at {old_pos}."
+
+        # Check for snakes and ladders
+        final_pos, event = self._board.get_destination(new_pos)
+        self._positions[player] = final_pos
+
+        result = f"{player}: rolled {roll}, {old_pos} -> {final_pos}"
+        if event:
+            self._notify(event, {"player": player, "from": new_pos, "to": final_pos})
+
+        # Check win
+        if final_pos == self._board.final_position:
+            self._status = GameStatus.FINISHED
+            self._winner = player
+            self._notify(EventType.PLAYER_WON, {"player": player})
+            return f"{player} wins!"
+
+        self._current_idx = (self._current_idx + 1) % len(self._players)
+        return result
+</code></pre>
+
+<h3>Usage</h3>
+
+<pre><code class="language-python">snakes = [Snake(16, 6), Snake(47, 26), Snake(49, 11), Snake(56, 53)]
+ladders = [Ladder(2, 38), Ladder(7, 14), Ladder(8, 31), Ladder(21, 42)]
+
+board = Board(100, snakes, ladders)
+game = SnakeLadderGame(board, ["Alice", "Bob"])
+game.on_event(lambda e, d: print(f"  [{e.value}] {d}"))
+
+# Play turns until someone wins
+while game._status != GameStatus.FINISHED:
+    print(game.play_turn())
+</code></pre>

@@ -1,0 +1,329 @@
+<h2>Real-Time Communication: WebSockets vs SSE vs Long Polling</h2>
+
+<p>
+  Standard HTTP is request-response: the client asks, the server answers, and the
+  connection closes. But many modern applications need the server to push data to
+  clients in real time (chat messages, live scores, stock prices, notifications).
+  Three main techniques enable this: <strong>WebSockets</strong>,
+  <strong>Server-Sent Events (SSE)</strong>, and <strong>Long Polling</strong>.
+</p>
+
+<h3>The Problem with Regular HTTP</h3>
+
+<pre><code class="language-python"># Traditional HTTP: Client must poll for updates
+#
+# Client: "Any new messages?"     -> Server: "No"       (wasted request)
+# Client: "Any new messages?"     -> Server: "No"       (wasted request)
+# Client: "Any new messages?"     -> Server: "Yes! Here" (finally useful)
+# Client: "Any new messages?"     -> Server: "No"       (wasted request)
+#
+# Polling problems:
+# - Wasted bandwidth and server resources on empty responses
+# - Latency: average delay = polling interval / 2
+# - If polling too fast: server overload
+# - If polling too slow: delayed updates
+</code></pre>
+
+<h3>Long Polling</h3>
+
+<p>
+  Long polling is the simplest real-time technique. The client sends a request, and
+  the server holds it open until new data is available (or a timeout occurs).
+</p>
+
+<pre><code class="language-python">import time
+import threading
+from queue import Queue
+
+
+class LongPollingServer:
+    """Server that holds requests open until data is available."""
+
+    def __init__(self):
+        self._queues: dict[str, Queue] = {}  # user_id -> message queue
+        self._timeout = 30  # seconds
+
+    def subscribe(self, user_id: str):
+        """Register a user for long polling."""
+        if user_id not in self._queues:
+            self._queues[user_id] = Queue()
+
+    def handle_poll(self, user_id: str) -> dict:
+        """Handle a long poll request. Blocks until data or timeout."""
+        if user_id not in self._queues:
+            self.subscribe(user_id)
+
+        queue = self._queues[user_id]
+
+        try:
+            # Block until a message arrives or timeout
+            message = queue.get(timeout=self._timeout)
+            return {"status": "data", "message": message}
+        except Exception:
+            # Timeout: client should re-poll
+            return {"status": "timeout", "message": None}
+
+    def push_message(self, user_id: str, message: str):
+        """Send a message to a user. Unblocks their pending poll."""
+        if user_id in self._queues:
+            self._queues[user_id].put(message)
+
+
+# Client-side long polling loop (pseudo-code):
+# async def long_poll_loop():
+#     while True:
+#         response = await fetch("/api/poll?user_id=alice")
+#         if response["status"] == "data":
+#             display_message(response["message"])
+#         # Immediately start next poll
+</code></pre>
+
+<pre><code class="language-python"># Long Polling characteristics:
+#
+# Connection flow:
+#   Client --> [HTTP Request] --> Server (holds open)
+#                                  ... waits for data ...
+#   Client <-- [HTTP Response] <-- Server (sends data)
+#   Client --> [New HTTP Request] --> Server (immediately re-polls)
+#
+# Pros:
+#   + Works everywhere (standard HTTP, no firewall issues)
+#   + Simple to implement on both client and server
+#   + Compatible with all HTTP infrastructure (proxies, LBs)
+#
+# Cons:
+#   - Each response requires a new HTTP connection (overhead)
+#   - Headers sent with every request/response (bandwidth waste)
+#   - Server must manage many pending connections
+#   - Not truly real-time (gap between response and re-poll)
+</code></pre>
+
+<h3>Server-Sent Events (SSE)</h3>
+
+<p>
+  SSE provides a one-way channel from server to client over a single, long-lived HTTP
+  connection. The server can push events whenever it wants. It uses the standard HTTP
+  protocol with a special <code>text/event-stream</code> content type.
+</p>
+
+<pre><code class="language-python">class SSEServer:
+    """Server-Sent Events endpoint."""
+
+    def __init__(self):
+        self._clients: dict[str, list] = {}  # user_id -> list of response streams
+
+    def subscribe(self, user_id: str, response_stream):
+        """Register a client for SSE. The response stream stays open."""
+        if user_id not in self._clients:
+            self._clients[user_id] = []
+        self._clients[user_id].append(response_stream)
+
+        # Send initial connection event
+        self._send_event(response_stream, "connected", {"user_id": user_id})
+
+    def push_event(self, user_id: str, event_type: str, data: dict):
+        """Push an event to all connected clients for this user."""
+        if user_id not in self._clients:
+            return
+        for stream in self._clients[user_id]:
+            self._send_event(stream, event_type, data)
+
+    def _send_event(self, stream, event_type: str, data: dict):
+        """Format and send an SSE event."""
+        import json
+        # SSE wire format:
+        # event: message
+        # data: {"text": "Hello"}
+        #
+        # (blank line separates events)
+        stream.write(f"event: {event_type}\n")
+        stream.write(f"data: {json.dumps(data)}\n")
+        stream.write("\n")
+        stream.flush()
+
+
+# HTTP Response headers for SSE:
+# Content-Type: text/event-stream
+# Cache-Control: no-cache
+# Connection: keep-alive
+
+# Client-side (JavaScript):
+# const source = new EventSource('/api/events?user_id=alice');
+# source.addEventListener('message', (e) => {
+#     const data = JSON.parse(e.data);
+#     displayMessage(data);
+# });
+</code></pre>
+
+<pre><code class="language-python"># SSE characteristics:
+#
+# Connection flow:
+#   Client --> [HTTP Request] --> Server
+#   Client <-- [event stream]  <-- Server (keeps pushing)
+#   Client <-- [event stream]  <-- Server
+#   Client <-- [event stream]  <-- Server
+#   (single connection, multiple server pushes)
+#
+# Pros:
+#   + Simple API (EventSource in browsers, easy server implementation)
+#   + Automatic reconnection built into the protocol
+#   + Works over standard HTTP (proxy/firewall friendly)
+#   + Supports event IDs for resuming after disconnect
+#   + Lighter than WebSockets for server-to-client only streams
+#
+# Cons:
+#   - Unidirectional: server to client only
+#   - Limited to text data (no binary)
+#   - Max ~6 concurrent connections per domain in HTTP/1.1
+#   - Not suitable for high-frequency updates (> 10/sec)
+</code></pre>
+
+<h3>WebSockets</h3>
+
+<p>
+  WebSockets provide a full-duplex, bidirectional communication channel over a single
+  TCP connection. After an HTTP upgrade handshake, both client and server can send
+  messages at any time without the overhead of HTTP headers.
+</p>
+
+<pre><code class="language-python">import asyncio
+import json
+
+
+class WebSocketServer:
+    """WebSocket server for real-time bidirectional communication."""
+
+    def __init__(self):
+        self._connections: dict[str, set] = {}  # room -> set of websockets
+
+    async def handle_connection(self, websocket, user_id: str):
+        """Handle a new WebSocket connection."""
+        # Register connection
+        room = "general"
+        if room not in self._connections:
+            self._connections[room] = set()
+        self._connections[room].add(websocket)
+
+        try:
+            # Bidirectional message loop
+            async for raw_message in websocket:
+                message = json.loads(raw_message)
+                await self._handle_message(user_id, room, message)
+        finally:
+            # Clean up on disconnect
+            self._connections[room].discard(websocket)
+
+    async def _handle_message(self, user_id: str, room: str, message: dict):
+        """Process an incoming message and broadcast to room."""
+        msg_type = message.get("type")
+
+        if msg_type == "chat":
+            outgoing = {
+                "type": "chat",
+                "from": user_id,
+                "text": message["text"],
+                "timestamp": "2024-01-15T10:30:00Z",
+            }
+            await self._broadcast(room, outgoing)
+
+        elif msg_type == "typing":
+            outgoing = {"type": "typing", "user": user_id}
+            await self._broadcast(room, outgoing, exclude_sender=True)
+
+    async def _broadcast(self, room: str, message: dict, exclude_sender: bool = False):
+        """Send a message to all connections in a room."""
+        if room not in self._connections:
+            return
+        payload = json.dumps(message)
+        for ws in self._connections[room]:
+            try:
+                await ws.send(payload)
+            except Exception:
+                pass  # Connection might be closed
+
+
+# WebSocket handshake (HTTP Upgrade):
+# Client: GET /ws HTTP/1.1
+#         Upgrade: websocket
+#         Connection: Upgrade
+#
+# Server: HTTP/1.1 101 Switching Protocols
+#         Upgrade: websocket
+#         Connection: Upgrade
+#
+# After handshake: full-duplex binary frames, no HTTP overhead
+</code></pre>
+
+<pre><code class="language-python"># WebSocket characteristics:
+#
+# Connection flow:
+#   Client <--> [HTTP Upgrade handshake] <--> Server
+#   Client <--> [bidirectional frames]   <--> Server
+#   (full duplex: both sides can send at any time)
+#
+# Pros:
+#   + True bidirectional communication
+#   + Very low latency (no HTTP overhead per message)
+#   + Supports binary and text data
+#   + Efficient for high-frequency updates
+#   + Single connection handles all communication
+#
+# Cons:
+#   - More complex to implement and scale
+#   - Stateful: harder to load balance
+#   - Not all proxies/firewalls support WebSocket upgrade
+#   - No built-in reconnection (must implement in client)
+#   - Harder to cache, log, and monitor than HTTP
+</code></pre>
+
+<h3>Comparison Matrix</h3>
+
+<pre><code class="language-python"># Feature            | Long Polling    | SSE             | WebSocket
+# -------------------|-----------------|-----------------|------------------
+# Direction          | Server -> Client| Server -> Client| Bidirectional
+# Protocol           | HTTP            | HTTP            | WS (over TCP)
+# Connection         | New per response| Single, long    | Single, persistent
+# Data format        | JSON            | Text (UTF-8)    | Text + Binary
+# Reconnection       | Client handles  | Auto (built-in) | Manual
+# Browser support    | Universal       | All modern      | All modern
+# Proxy/FW friendly  | Yes             | Yes             | Sometimes not
+# Scalability        | Moderate        | Good            | Complex
+# Overhead per msg   | High (headers)  | Low             | Very low (2-6 bytes)
+# Best for           | Simple fallback | Notifications   | Chat, games, collab
+</code></pre>
+
+<h3>Decision Guide</h3>
+
+<pre><code class="language-python">def choose_realtime_protocol(requirements: dict) -> str:
+    needs_bidirectional = requirements.get("bidirectional", False)
+    update_frequency = requirements.get("updates_per_second", 1)
+    needs_binary = requirements.get("binary_data", False)
+    simplicity_priority = requirements.get("simplicity_priority", False)
+
+    if needs_bidirectional or needs_binary or update_frequency > 10:
+        return "WebSocket"
+    elif simplicity_priority or update_frequency < 1:
+        return "Long Polling (or SSE)"
+    else:
+        return "SSE"
+
+
+# Real-world examples:
+# - Slack/Discord: WebSocket (bidirectional chat)
+# - Twitter feed: SSE (server pushes new tweets)
+# - Gmail notifications: Long Polling (simple, infrequent)
+# - Multiplayer games: WebSocket (low latency, bidirectional)
+# - Stock ticker: SSE or WebSocket (depends on update frequency)
+# - Live sports scores: SSE (server pushes, no client-to-server needed)
+</code></pre>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>Long Polling is the simplest and most compatible but least efficient.</li>
+  <li>SSE is ideal for server-to-client streaming with automatic reconnection.</li>
+  <li>WebSockets are necessary for bidirectional, low-latency communication.</li>
+  <li>Most chat applications use WebSockets. Most notification systems use SSE.</li>
+  <li>WebSocket connections are stateful, which complicates load balancing (use sticky sessions or a shared pub/sub system).</li>
+  <li>Consider the infrastructure: some corporate firewalls block WebSocket upgrades.</li>
+</ul>

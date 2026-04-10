@@ -1,0 +1,192 @@
+<h2>Inventory and Slot Management</h2>
+
+<p>Tracking what is available, where it is, and how to allocate it. This pattern applies to parking spots, vending machine slots, warehouse inventory, elevator capacity, and more.</p>
+
+<h3>Slot Status</h3>
+
+<p>Every manageable slot or resource has a status:</p>
+
+<pre><code class="language-python">from enum import Enum
+from dataclasses import dataclass
+from typing import Optional, List
+from abc import ABC, abstractmethod
+
+class SlotStatus(Enum):
+    AVAILABLE = "available"
+    OCCUPIED = "occupied"
+    RESERVED = "reserved"
+    MAINTENANCE = "maintenance"
+    OUT_OF_STOCK = "out_of_stock"
+</code></pre>
+
+<h3>Generic Slot</h3>
+
+<pre><code class="language-python">@dataclass
+class Slot:
+    """A generic manageable slot."""
+    slot_id: str
+    slot_type: str
+    status: SlotStatus = SlotStatus.AVAILABLE
+    current_item: Optional[str] = None
+
+    def is_available(self) -> bool:
+        return self.status == SlotStatus.AVAILABLE
+
+    def occupy(self, item: str) -> bool:
+        if self.status != SlotStatus.AVAILABLE:
+            return False
+        self.status = SlotStatus.OCCUPIED
+        self.current_item = item
+        return True
+
+    def release(self) -> Optional[str]:
+        item = self.current_item
+        self.current_item = None
+        self.status = SlotStatus.AVAILABLE
+        return item
+
+    def set_maintenance(self) -> None:
+        self.status = SlotStatus.MAINTENANCE
+        self.current_item = None
+
+    def restore(self) -> None:
+        self.status = SlotStatus.AVAILABLE
+</code></pre>
+
+<h3>Allocation Strategies</h3>
+
+<p>When a resource is requested, how do we pick which slot?</p>
+
+<pre><code class="language-python">class AllocationStrategy(ABC):
+    @abstractmethod
+    def allocate(self, slots: List[Slot], item_type: str) -> Optional[Slot]:
+        pass
+
+
+class FirstAvailableStrategy(AllocationStrategy):
+    """Return the first available slot. Simple O(n) scan."""
+
+    def allocate(self, slots, item_type):
+        for slot in slots:
+            if slot.is_available() and slot.slot_type == item_type:
+                return slot
+        return None
+
+
+class NearestStrategy(AllocationStrategy):
+    """Return the closest available slot to a reference point.
+    Slots are assumed to be ordered by distance."""
+
+    def allocate(self, slots, item_type):
+        for slot in slots:
+            if slot.is_available() and slot.slot_type == item_type:
+                return slot
+        return None
+
+
+class OptimalFitStrategy(AllocationStrategy):
+    """Return the slot that best fits the request.
+    For parking: smallest spot that can fit the vehicle."""
+
+    SLOT_SIZES = {"motorcycle": 1, "compact": 2, "large": 3}
+
+    def allocate(self, slots, item_type):
+        min_size = self.SLOT_SIZES.get(item_type, 1)
+        candidates = [
+            s for s in slots
+            if s.is_available()
+            and self.SLOT_SIZES.get(s.slot_type, 1) >= min_size
+        ]
+        # Pick the smallest valid slot
+        candidates.sort(key=lambda s: self.SLOT_SIZES.get(s.slot_type, 1))
+        return candidates[0] if candidates else None
+</code></pre>
+
+<h3>Inventory Manager</h3>
+
+<pre><code class="language-python">class InventoryManager:
+    """Manages a collection of slots with allocation strategy."""
+
+    def __init__(self, slots: List[Slot],
+                 strategy: AllocationStrategy = None):
+        self._slots = slots
+        self._strategy = strategy or FirstAvailableStrategy()
+
+    def allocate(self, item: str, item_type: str) -> Optional[Slot]:
+        slot = self._strategy.allocate(self._slots, item_type)
+        if slot:
+            slot.occupy(item)
+            return slot
+        return None
+
+    def release(self, slot_id: str) -> Optional[str]:
+        for slot in self._slots:
+            if slot.slot_id == slot_id:
+                return slot.release()
+        return None
+
+    def available_count(self, slot_type: str = None) -> int:
+        return sum(
+            1 for s in self._slots
+            if s.is_available()
+            and (slot_type is None or s.slot_type == slot_type)
+        )
+
+    def occupied_count(self) -> int:
+        return sum(1 for s in self._slots if s.status == SlotStatus.OCCUPIED)
+
+    def occupancy_rate(self) -> float:
+        total = len(self._slots)
+        return self.occupied_count() / total if total > 0 else 0.0
+</code></pre>
+
+<h3>Usage Example: Parking Lot Inventory</h3>
+
+<pre><code class="language-python">slots = [
+    Slot("A1", "compact"), Slot("A2", "compact"),
+    Slot("B1", "large"), Slot("B2", "large"),
+    Slot("M1", "motorcycle"),
+]
+
+mgr = InventoryManager(slots, FirstAvailableStrategy())
+
+# Park a car
+slot = mgr.allocate("CAR-123", "compact")
+print(f"Parked in: {slot.slot_id}")  # A1
+
+# Check availability
+print(f"Compact available: {mgr.available_count('compact')}")  # 1
+print(f"Occupancy rate: {mgr.occupancy_rate():.0%}")  # 20%
+
+# Release
+mgr.release("A1")
+</code></pre>
+
+<h3>Restocking (Vending Machine Pattern)</h3>
+
+<pre><code class="language-python">class VendingInventory:
+    def __init__(self, slots: dict):
+        # slots = {"A1": {"item": "Cola", "price": 1.50, "qty": 5, "max": 10}}
+        self._slots = slots
+
+    def dispense(self, slot_code: str) -> Optional[str]:
+        slot = self._slots.get(slot_code)
+        if slot and slot["qty"] > 0:
+            slot["qty"] -= 1
+            return slot["item"]
+        return None
+
+    def restock(self, slot_code: str, quantity: int) -> None:
+        slot = self._slots.get(slot_code)
+        if slot:
+            slot["qty"] = min(slot["qty"] + quantity, slot["max"])
+</code></pre>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+    <li>Separate the slot/resource from the item it holds</li>
+    <li>Use Strategy pattern for allocation algorithms</li>
+    <li>Track status transitions cleanly with enums</li>
+    <li>Provide an InventoryManager with aggregate operations (count, rate)</li>
+</ul>

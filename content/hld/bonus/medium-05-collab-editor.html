@@ -1,0 +1,61 @@
+<h2>Design: Collaborative Editor</h2>
+<p>Design a real-time collaborative document editor like Google Docs.</p>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Multiple users edit the same document simultaneously</li>
+  <li>Real-time cursor and selection sync across clients</li>
+  <li>Conflict resolution when concurrent edits target the same region</li>
+  <li>Offline editing with eventual consistency upon reconnect</li>
+</ul>
+
+<h3>High-Level Architecture</h3>
+<ul>
+  <li><strong>Client Editor</strong> &mdash; Captures local operations and applies remote ones</li>
+  <li><strong>WebSocket Gateway</strong> &mdash; Persistent connection per user for low-latency sync</li>
+  <li><strong>Collaboration Server</strong> &mdash; Applies OT or CRDT merge logic, broadcasts ops</li>
+  <li><strong>Document Store</strong> &mdash; Persistent storage of latest document state and op log</li>
+</ul>
+
+<h3>Key Components</h3>
+<pre><code class="language-python"># Operational Transformation (OT) - simplified
+class OTServer:
+    def __init__(self):
+        self.doc = ""
+        self.revision = 0
+        self.op_log = []
+
+    def apply_op(self, op, client_rev):
+        # Transform op against all ops since client_rev
+        for past_op in self.op_log[client_rev:]:
+            op = self._transform(op, past_op)
+        self.doc = self._execute(self.doc, op)
+        self.op_log.append(op)
+        self.revision += 1
+        return op  # broadcast transformed op to others
+
+    def _transform(self, op_a, op_b):
+        """Adjust op_a's position given op_b happened first."""
+        if op_a["type"] == "insert" and op_b["type"] == "insert":
+            if op_a["pos"] > op_b["pos"]:
+                op_a["pos"] += len(op_b["text"])
+        return op_a
+
+    def _execute(self, doc, op):
+        if op["type"] == "insert":
+            return doc[:op["pos"]] + op["text"] + doc[op["pos"]:]
+        if op["type"] == "delete":
+            return doc[:op["pos"]] + doc[op["pos"] + op["len"]:]
+        return doc
+
+# CRDT Alternative: each character gets a unique (lamport, nodeId) ID
+# Inserts are ordered by these IDs; no transform needed; larger metadata
+</code></pre>
+
+<h3>Scaling Considerations</h3>
+<ul>
+  <li>OT requires a central server per document; CRDT allows peer-to-peer and offline</li>
+  <li>Partition by document ID &mdash; each doc lives on one collaboration server</li>
+  <li>Cursor positions sent as presence updates on a separate lightweight channel</li>
+  <li>Periodic snapshots reduce op log replay time on reconnect</li>
+</ul>

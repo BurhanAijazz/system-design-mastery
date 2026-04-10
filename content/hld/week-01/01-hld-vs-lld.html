@@ -1,0 +1,187 @@
+<h2>High-Level Design vs Low-Level Design</h2>
+
+<p>
+  System design operates at two complementary levels. <strong>High-Level Design (HLD)</strong>
+  focuses on the architecture of the entire system &mdash; its components, how they communicate,
+  and how the system scales. <strong>Low-Level Design (LLD)</strong> focuses on the internal
+  structure of individual components &mdash; classes, interfaces, data structures, and algorithms.
+</p>
+
+<h3>What Is High-Level Design?</h3>
+
+<p>
+  HLD answers the question: <em>"How do we build a system that serves millions of users
+  reliably?"</em> It deals with:
+</p>
+
+<ul>
+  <li>System architecture and component decomposition</li>
+  <li>Service boundaries and communication protocols</li>
+  <li>Data storage strategies (SQL vs NoSQL, sharding, replication)</li>
+  <li>Scalability (horizontal vs vertical scaling)</li>
+  <li>Load balancing, caching, and CDN placement</li>
+  <li>Availability, consistency, and partition tolerance trade-offs (CAP theorem)</li>
+  <li>Capacity estimation and bottleneck identification</li>
+</ul>
+
+<h3>What Is Low-Level Design?</h3>
+
+<p>
+  LLD answers the question: <em>"How do we structure the code inside a single service
+  so it is maintainable, testable, and extensible?"</em> It deals with:
+</p>
+
+<ul>
+  <li>Class diagrams and object relationships</li>
+  <li>Design patterns (Strategy, Observer, Factory, etc.)</li>
+  <li>SOLID principles and clean architecture</li>
+  <li>API contract design for individual services</li>
+  <li>Data structures and algorithm choices</li>
+  <li>Error handling and edge cases</li>
+</ul>
+
+<h3>Side-by-Side Comparison</h3>
+
+<pre><code class="language-python"># High-Level Design: URL Shortener Architecture
+#
+# [Client] --> [Load Balancer] --> [API Servers (N instances)]
+#                                       |
+#                         +-------------+-------------+
+#                         |                           |
+#                   [Write Path]                [Read Path]
+#                         |                           |
+#                   [Key Generation            [Redis Cache]
+#                    Service]                        |
+#                         |                    [Database Replicas]
+#                   [Primary Database]
+#                         |
+#                   [Analytics Queue] --> [Analytics Workers]
+#
+# Decisions at this level:
+# - How many API servers? (horizontal scaling)
+# - SQL or NoSQL for URL storage? (consistency vs throughput)
+# - Cache strategy? (write-through vs write-behind)
+# - How to generate unique short keys? (counter vs hash vs pre-generation)
+</code></pre>
+
+<pre><code class="language-python"># Low-Level Design: URL Shortener Key Generation Service
+#
+# This is ONE component from the HLD above, designed in detail.
+
+from abc import ABC, abstractmethod
+import hashlib
+import string
+
+
+class KeyGenerator(ABC):
+    """Interface for short URL key generation strategies."""
+
+    @abstractmethod
+    def generate(self, long_url: str) -> str:
+        pass
+
+
+class Base62KeyGenerator(KeyGenerator):
+    """Generates keys using Base62 encoding of a counter."""
+
+    CHARS = string.ascii_letters + string.digits  # 62 characters
+
+    def __init__(self, counter_service):
+        self._counter = counter_service
+
+    def generate(self, long_url: str) -> str:
+        counter_value = self._counter.next()
+        return self._encode(counter_value)
+
+    def _encode(self, num: int) -> str:
+        if num == 0:
+            return self.CHARS[0]
+        result = []
+        while num > 0:
+            result.append(self.CHARS[num % 62])
+            num //= 62
+        return "".join(reversed(result))
+
+
+class MD5KeyGenerator(KeyGenerator):
+    """Generates keys using MD5 hash truncation."""
+
+    def generate(self, long_url: str) -> str:
+        hash_hex = hashlib.md5(long_url.encode()).hexdigest()
+        return hash_hex[:7]  # Take first 7 characters
+
+
+# LLD decisions:
+# - Which pattern? (Strategy for key generation)
+# - Which data structure? (Base62 encoding)
+# - Error handling? (collision detection)
+# - Thread safety? (counter synchronization)
+</code></pre>
+
+<h3>How HLD and LLD Work Together</h3>
+
+<pre><code class="language-python"># The relationship between HLD and LLD:
+#
+# HLD says: "We need a Key Generation Service"
+# LLD says: "Here's how to implement it with Strategy pattern,
+#            Base62 encoding, and collision handling"
+#
+# HLD says: "Use Redis for caching with a 24-hour TTL"
+# LLD says: "Here's the CacheRepository interface, the Redis
+#            implementation, and the cache invalidation logic"
+#
+# HLD says: "API servers behind a load balancer"
+# LLD says: "Here's the API route handlers, request validation,
+#            rate limiting middleware, and error response format"
+</code></pre>
+
+<h3>When Each Matters in Interviews</h3>
+
+<ul>
+  <li><strong>HLD interviews</strong> (45-60 min): You are given a system to design from scratch (e.g., "Design Twitter"). You sketch components, discuss trade-offs, estimate capacity, and justify architectural choices.</li>
+  <li><strong>LLD interviews</strong> (45-60 min): You are given a specific component to design in detail (e.g., "Design a parking lot system"). You define classes, interfaces, and patterns.</li>
+  <li><strong>Real projects:</strong> You need both. HLD comes first to define the architecture, then LLD for each component.</li>
+</ul>
+
+<h3>Common Mistakes</h3>
+
+<ul>
+  <li><strong>Jumping to LLD too early:</strong> Designing class hierarchies before understanding the overall architecture leads to over-engineered components that do not fit together.</li>
+  <li><strong>Staying too high-level:</strong> A system design with no detail on how individual components work internally is just a block diagram, not a design.</li>
+  <li><strong>Ignoring trade-offs:</strong> Every HLD decision has trade-offs (latency vs consistency, cost vs redundancy). Acknowledge them explicitly.</li>
+</ul>
+
+<h3>The Design Process</h3>
+
+<pre><code class="language-python"># Recommended approach for any system design:
+#
+# 1. REQUIREMENTS (5 min)
+#    - Functional: What does the system do?
+#    - Non-functional: Scale, latency, availability targets
+#
+# 2. ESTIMATION (5 min)
+#    - Users, requests/sec, storage, bandwidth
+#
+# 3. HIGH-LEVEL DESIGN (15-20 min)
+#    - Component diagram
+#    - Data flow
+#    - API contracts between components
+#
+# 4. DEEP DIVE (15-20 min)
+#    - Pick 1-2 critical components
+#    - Low-level design of those components
+#    - Discuss trade-offs and alternatives
+#
+# 5. SCALING & RELIABILITY (5-10 min)
+#    - How does this handle 10x traffic?
+#    - What happens when a component fails?
+</code></pre>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>HLD is about the forest; LLD is about the trees. You need both.</li>
+  <li>Start with HLD to define system boundaries, then drill into LLD for critical components.</li>
+  <li>HLD decisions constrain LLD choices, and LLD feasibility can force HLD changes.</li>
+  <li>In interviews, explicitly state which level you are operating at and transition consciously.</li>
+</ul>

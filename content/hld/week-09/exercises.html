@@ -1,0 +1,69 @@
+<h2>Week 9 Exercises: Social and Messaging Systems</h2>
+
+<p>These exercises explore the fan-out problem, real-time messaging, and notification delivery covered this week.</p>
+
+<h3>Exercise 1: Celebrity Fan-Out Threshold Analysis</h3>
+
+<p>The hybrid fan-out model uses a follower threshold to decide between push and pull. But what is the optimal threshold?</p>
+
+<ul>
+  <li>Model a social network with 1M users following a power-law distribution (most users have few followers, a few have millions)</li>
+  <li>Simulate tweet creation with push-only, pull-only, and hybrid strategies</li>
+  <li>Vary the celebrity threshold from 1K to 100K followers</li>
+</ul>
+
+<p><strong>Tasks:</strong></p>
+<ul>
+  <li>For each threshold, measure total cache writes (push cost) and DB reads at timeline load time (pull cost)</li>
+  <li>Plot total system cost vs threshold to find the sweet spot</li>
+  <li>What happens to timeline latency (p99) at each threshold?</li>
+  <li>Consider: should the threshold be static or dynamic based on current system load?</li>
+</ul>
+
+<pre><code class="language-python"># Simplified cost model:
+# push_cost = sum(followers) for all tweets by non-celebrities
+# pull_cost = num_celebrities_followed * timeline_loads
+# total_cost = push_cost + pull_cost
+# Find threshold that minimizes total_cost</code></pre>
+
+<h3>Exercise 2: Chat Delivery Guarantees</h3>
+
+<p>Design the message delivery guarantee system for a WhatsApp-like chat, handling these failure scenarios:</p>
+
+<ul>
+  <li>Sender's device loses connection mid-send</li>
+  <li>Chat server crashes after receiving message but before routing</li>
+  <li>Recipient's device is offline for 3 days then reconnects</li>
+  <li>Recipient has two devices (phone and desktop) -- both must receive the message</li>
+</ul>
+
+<p><strong>Tasks:</strong></p>
+<ul>
+  <li>Design the message state machine: what states can a message be in, and what transitions are possible?</li>
+  <li>How do you implement exactly-once delivery (or effectively so) with at-least-once transport?</li>
+  <li>Draw the sequence diagram for a message that goes through all three receipt states (sent, delivered, read)</li>
+  <li>How does the offline message queue handle a user with 10,000 unread messages on reconnect?</li>
+</ul>
+
+<h3>Exercise 3: Notification System Load Test</h3>
+
+<p>Design a load test that simulates a flash sale notification being sent to 50M users simultaneously.</p>
+
+<pre><code class="language-python"># Scenario: E-commerce flash sale starts at 12:00 PM
+# Send push + email to 50M opted-in users within 60 seconds
+# 50M / 60 = 833K notifications/sec across two channels
+
+# Questions to address:
+# 1. How many Kafka partitions do you need for the queue?
+# 2. How many push dispatcher workers (APNs rate limit:
+#    ~50K/sec per connection)?
+# 3. What happens if SendGrid rate-limits your email sends?
+# 4. How do you ensure the notification arrives BEFORE 12:00 PM
+#    (not after the sale starts)?</code></pre>
+
+<p><strong>Tasks:</strong></p>
+<ul>
+  <li>Calculate the infrastructure needed: Kafka partitions, dispatcher workers, provider connections</li>
+  <li>Design the pre-warming strategy: prepare notification payloads in advance, send on trigger</li>
+  <li>How do you monitor delivery in real-time and detect if a channel is falling behind?</li>
+</ul>

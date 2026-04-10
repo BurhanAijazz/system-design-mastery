@@ -1,0 +1,70 @@
+<h2>Design: S3 Object Storage</h2>
+<p>Design a scalable object storage service similar to Amazon S3.</p>
+
+<h3>Requirements</h3>
+<ul>
+  <li>PUT/GET/DELETE objects up to 5TB in size</li>
+  <li>Multipart upload for large objects</li>
+  <li>11 nines (99.999999999%) durability via redundancy</li>
+  <li>Object versioning and lifecycle policies</li>
+  <li>Bucket-level access control and pre-signed URLs</li>
+</ul>
+
+<h3>High-Level Architecture</h3>
+<ul>
+  <li><strong>API Gateway</strong> &mdash; REST API: PUT /bucket/key, GET /bucket/key</li>
+  <li><strong>Metadata Service</strong> &mdash; Stores object metadata (key, size, version, location pointers)</li>
+  <li><strong>Placement Service</strong> &mdash; Decides which data nodes store each object's chunks</li>
+  <li><strong>Data Nodes</strong> &mdash; Store raw data blocks on local disks</li>
+  <li><strong>Erasure Coding</strong> &mdash; Split data into k data + m parity shards (e.g., 8+4)</li>
+</ul>
+
+<h3>Key Components</h3>
+<pre><code class="language-python">class MetadataService:
+    def __init__(self, db):
+        self.db = db
+
+    def put_object(self, bucket, key, size, locations, version=None):
+        obj = {"bucket": bucket, "key": key, "size": size,
+               "locations": locations,
+               "version": version or self._next_version(bucket, key)}
+        self.db.upsert(f"{bucket}/{key}", obj)
+
+    def get_object(self, bucket, key, version=None):
+        return self.db.get(f"{bucket}/{key}", version=version)
+
+class ErasureCoder:
+    def encode(self, data, k=8, m=4):
+        """Split data into k data shards + m parity shards."""
+        shard_size = len(data) // k
+        data_shards = [data[i*shard_size:(i+1)*shard_size] for i in range(k)]
+        parity_shards = self._compute_parity(data_shards, m)
+        return data_shards + parity_shards  # 12 total shards
+
+    def decode(self, shards, k=8, m=4):
+        """Reconstruct original data from any k of k+m shards."""
+        available = [s for s in shards if s is not None]
+        if len(available) < k:
+            raise DataLossError("Not enough shards to reconstruct")
+        return self._reconstruct(available, k)
+
+class MultipartUpload:
+    """Large objects uploaded in parts, then assembled."""
+    def __init__(self):
+        self.parts = {}  # part_number -> (etag, location)
+
+    def upload_part(self, part_num, data):
+        self.parts[part_num] = (md5(data), placement.store(data))
+
+    def complete(self, bucket, key):
+        locs = [self.parts[i][1] for i in sorted(self.parts)]
+        return metadata.put_object(bucket, key, locations=locs)
+</code></pre>
+
+<h3>Scaling Considerations</h3>
+<ul>
+  <li>Erasure coding (8+4) uses 1.5x storage vs 3x for triple replication</li>
+  <li>Metadata DB sharded by bucket+key hash; data nodes added linearly</li>
+  <li>Background integrity checker scans and repairs degraded shards</li>
+  <li>Lifecycle policies auto-transition objects to cold storage tiers</li>
+</ul>

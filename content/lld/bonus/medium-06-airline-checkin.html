@@ -1,0 +1,76 @@
+<h2>Design: Airline Check-in</h2>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Passengers transition through states: <strong>NotCheckedIn -> CheckedIn -> Boarded</strong></li>
+  <li>Seat assignment via a configurable <strong>Strategy</strong> (window-first, random, zone-based)</li>
+  <li>Boarding pass generation upon successful check-in</li>
+  <li>Prevent invalid transitions (e.g., board before check-in)</li>
+</ul>
+
+<h3>Approach</h3>
+<ul>
+  <li><strong>State pattern</strong>: each state class defines allowed transitions and actions</li>
+  <li><strong>Strategy pattern</strong>: seat assignment algorithm is injected at runtime</li>
+  <li>Flight maintains available seats; check-in assigns and removes from pool</li>
+  <li>State objects enforce business rules without if/else chains</li>
+</ul>
+
+<h3>Key Code</h3>
+<pre><code class="language-python">from abc import ABC, abstractmethod
+
+class SeatStrategy(ABC):
+    @abstractmethod
+    def assign(self, available: list[str]) -> str: ...
+
+class WindowFirstStrategy(SeatStrategy):
+    def assign(self, available):
+        for s in available:
+            if s.endswith(("A", "F")):
+                return s
+        return available[0]
+
+class PassengerState(ABC):
+    @abstractmethod
+    def check_in(self, ctx): ...
+    @abstractmethod
+    def board(self, ctx): ...
+
+class NotCheckedIn(PassengerState):
+    def check_in(self, ctx):
+        seat = ctx.strategy.assign(ctx.flight.available_seats)
+        ctx.flight.available_seats.remove(seat)
+        ctx.seat = seat
+        ctx.state = CheckedIn()
+    def board(self, ctx):
+        raise RuntimeError("Must check in first")
+
+class CheckedIn(PassengerState):
+    def check_in(self, ctx):
+        raise RuntimeError("Already checked in")
+    def board(self, ctx):
+        ctx.state = Boarded()
+
+class Boarded(PassengerState):
+    def check_in(self, ctx): raise RuntimeError("Already boarded")
+    def board(self, ctx): raise RuntimeError("Already boarded")
+
+class Passenger:
+    def __init__(self, name, flight, strategy: SeatStrategy):
+        self.name = name
+        self.flight = flight
+        self.strategy = strategy
+        self.seat = None
+        self.state: PassengerState = NotCheckedIn()
+
+    def check_in(self): self.state.check_in(self)
+    def board(self):    self.state.board(self)
+</code></pre>
+
+<h3>Takeaways</h3>
+<ul>
+  <li>State pattern eliminates fragile status-flag conditionals</li>
+  <li>Strategy pattern makes seat-assignment rules hot-swappable</li>
+  <li>Each state class is small, testable, and follows single-responsibility</li>
+  <li>Extend with Observer to notify gate agents on boarding events</li>
+</ul>

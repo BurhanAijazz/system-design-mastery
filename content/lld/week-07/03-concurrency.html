@@ -1,0 +1,128 @@
+<h2>Concurrency in Booking Systems</h2>
+
+<p>When multiple users try to book the same resource simultaneously, race conditions can occur. This lesson covers conceptual approaches and practical Python implementations for handling concurrency in booking systems.</p>
+
+<h3>The Race Condition Problem</h3>
+
+<pre><code>Scenario: 1 parking spot left, 2 drivers try to park simultaneously.
+
+Without concurrency control:
+  Thread A: check available? YES (1 spot)
+  Thread B: check available? YES (1 spot)  &lt;-- stale data!
+  Thread A: reserve spot -> success
+  Thread B: reserve spot -> success  &lt;-- DOUBLE BOOKING!
+
+The window between "check" and "reserve" is the race condition.
+Solution: make check-and-reserve atomic.
+</code></pre>
+
+<h3>Approach 1: Pessimistic Locking</h3>
+
+<p>Lock the resource BEFORE checking availability. No one else can read or modify it while you hold the lock.</p>
+
+<pre><code class="language-python">import threading
+
+class PessimisticParkingSpot:
+    """Parking spot with pessimistic locking."""
+
+    def __init__(self, spot_id: str):
+        self.spot_id = spot_id
+        self._occupied = False
+        self._lock = threading.Lock()
+
+    def try_park(self, vehicle_id: str) -> bool:
+        with self._lock:  # blocks until lock is acquired
+            if self._occupied:
+                print(f"{vehicle_id}: Spot {self.spot_id} is taken")
+                return False
+            self._occupied = True
+            print(f"{vehicle_id}: Parked in {self.spot_id}")
+            return True
+
+    def leave(self) -> None:
+        with self._lock:
+            self._occupied = False
+</code></pre>
+
+<p><strong>Pros</strong>: Simple, no conflicts. <strong>Cons</strong>: Blocks other threads, reduced throughput, potential deadlocks. <strong>Use when</strong>: conflicts are frequent (parking lot near full).</p>
+
+<h3>Approach 2: Optimistic Locking</h3>
+
+<p>Do not lock while reading. Instead, check a version number when writing. If someone else modified the resource, retry.</p>
+
+<pre><code class="language-python">class OptimisticParkingSpot:
+    """Parking spot with optimistic locking via version number."""
+
+    def __init__(self, spot_id: str):
+        self.spot_id = spot_id
+        self._occupied = False
+        self._version = 0
+        self._lock = threading.Lock()
+
+    def try_park(self, vehicle_id: str) -> bool:
+        # Step 1: Read state (no lock)
+        current_version = self._version
+        if self._occupied:
+            return False
+
+        # Step 2: Attempt update with version check (lock only for write)
+        with self._lock:
+            if self._version != current_version:
+                print(f"{vehicle_id}: Version conflict, retrying...")
+                return False  # someone else modified it
+            self._occupied = True
+            self._version += 1
+            print(f"{vehicle_id}: Parked in {self.spot_id}")
+            return True
+</code></pre>
+
+<p><strong>Pros</strong>: Higher throughput, no blocking on reads. <strong>Cons</strong>: Must handle retries. <strong>Use when</strong>: conflicts are rare (large parking lot).</p>
+
+<h3>Approach 3: Queue-Based Processing</h3>
+
+<p>Instead of letting multiple threads compete, funnel all requests through a single queue. A dedicated worker processes them sequentially.</p>
+
+<pre><code class="language-python">import queue
+
+class QueueBasedBooking:
+    """Process all booking requests through a single queue for fairness."""
+
+    def __init__(self, capacity: int):
+        self._capacity = capacity
+        self._booked = 0
+        self._queue: queue.Queue = queue.Queue()
+        self._results: dict = {}
+
+    def submit_request(self, request_id: str) -> None:
+        self._queue.put(request_id)
+
+    def process_all(self) -> None:
+        while not self._queue.empty():
+            req = self._queue.get()
+            if self._booked < self._capacity:
+                self._booked += 1
+                self._results[req] = "confirmed"
+                print(f"{req}: Booking confirmed ({self._booked}/{self._capacity})")
+            else:
+                self._results[req] = "rejected"
+                print(f"{req}: Booking rejected (full)")
+</code></pre>
+
+<p><strong>Pros</strong>: No race conditions, FIFO fairness. <strong>Cons</strong>: Sequential processing, higher latency. <strong>Use when</strong>: fairness matters (ticket sales, limited inventory).</p>
+
+<h3>Choosing an Approach</h3>
+
+<ul>
+    <li><strong>Pessimistic locking</strong>: high contention (few resources, many users)</li>
+    <li><strong>Optimistic locking</strong>: low contention (many resources, few conflicts)</li>
+    <li><strong>Queue-based</strong>: when order/fairness matters most</li>
+</ul>
+
+<h3>LLD Interview Tips</h3>
+
+<ul>
+    <li>Always mention concurrency when designing booking systems</li>
+    <li>Use <code>threading.Lock</code> in Python for simple pessimistic locking</li>
+    <li>Explain the trade-off between throughput and safety</li>
+    <li>In interviews, it is usually enough to mention the approach without implementing full thread safety</li>
+</ul>

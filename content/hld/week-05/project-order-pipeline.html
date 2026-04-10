@@ -1,0 +1,112 @@
+<h2>Project: Event-Driven Order Pipeline</h2>
+
+<p>Simulate a complete order processing pipeline with events, retry logic, dead letter queue, and idempotency protection. This project builds intuition about event-driven systems and their failure modes.</p>
+
+<h3>Pipeline Architecture</h3>
+<p>Full order flow: Order Created -> Payment Processing -> Inventory Reserved -> Notification Sent -> Completed. Each step can fail and trigger compensating actions.</p>
+
+<h3>Data Models</h3>
+<pre><code class="language-python">from dataclasses import dataclass, field
+from typing import List, Dict, Set
+from enum import Enum
+import hashlib
+import time
+
+class OrderStatus(Enum):
+    CREATED = "created"
+    PAYMENT_PROCESSING = "payment_processing"
+    PAYMENT_COMPLETED = "payment_completed"
+    PAYMENT_FAILED = "payment_failed"
+    INVENTORY_RESERVED = "inventory_reserved"
+    INVENTORY_FAILED = "inventory_failed"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    COMPENSATED = "compensated"
+
+@dataclass
+class Order:
+    id: str
+    user_id: str
+    items: List[str]
+    amount: float
+    status: OrderStatus = OrderStatus.CREATED
+    idempotency_key: str = ""
+    attempts: int = 0
+
+    def __post_init__(self):
+        if not self.idempotency_key:
+            self.idempotency_key = hashlib.md5(
+                f"{self.id}:{self.user_id}:{self.amount}".encode()
+            ).hexdigest()[:12]
+
+@dataclass
+class Event:
+    event_type: str
+    order_id: str
+    data: Dict
+    source: str
+    timestamp: float = 0.0
+</code></pre>
+
+<h3>Pipeline Features</h3>
+<ul>
+  <li><strong>Configurable failure rates</strong>: Set failure probability for each service (payment: 10%, inventory: 5%)</li>
+  <li><strong>Retry with exponential backoff</strong>: Failed steps are retried with increasing delays</li>
+  <li><strong>Dead letter queue</strong>: Messages that fail after max retries are moved to a DLQ for manual review</li>
+  <li><strong>Idempotency protection</strong>: Duplicate events are detected and ignored using idempotency keys</li>
+  <li><strong>Compensation on failure</strong>: If payment fails after inventory is reserved, inventory is released</li>
+  <li><strong>Event log and audit trail</strong>: Every event is logged for debugging and replay</li>
+</ul>
+
+<h3>Pipeline Processor Skeleton</h3>
+<pre><code class="language-python">class OrderPipeline:
+    """Event-driven order processing with retry and DLQ."""
+
+    def __init__(self, payment_failure_rate=0.1, inventory_failure_rate=0.05):
+        self.orders: Dict[str, Order] = {}
+        self.event_log: List[Event] = []
+        self.dead_letter_queue: List[Event] = []
+        self.processed_keys: Set[str] = set()
+        self.max_retries = 3
+
+    def process_order(self, order: Order):
+        """Run the order through the pipeline stages."""
+        # Stage 1: Process payment
+        if not self._process_payment(order):
+            self._compensate(order)
+            return
+
+        # Stage 2: Reserve inventory
+        if not self._reserve_inventory(order):
+            self._refund_payment(order)
+            self._compensate(order)
+            return
+
+        # Stage 3: Send notification
+        self._send_notification(order)
+        order.status = OrderStatus.COMPLETED
+
+    def _compensate(self, order: Order):
+        """Run compensating transactions in reverse order."""
+        order.status = OrderStatus.COMPENSATED
+        self.event_log.append(Event(
+            "OrderCompensated", order.id,
+            {"reason": order.status.value}, "pipeline"
+        ))
+</code></pre>
+
+<h3>Metrics to Track</h3>
+<ul>
+  <li><strong>Success rate</strong>: Percentage of orders that complete successfully</li>
+  <li><strong>Average retries</strong>: How many retries per order on average</li>
+  <li><strong>DLQ depth</strong>: Number of messages stuck in the dead letter queue</li>
+  <li><strong>Compensation count</strong>: How often compensating transactions are triggered</li>
+  <li><strong>End-to-end latency</strong>: Time from order creation to completion</li>
+</ul>
+
+<h3>Experiments</h3>
+<ul>
+  <li>Run 1,000 orders with 10% payment failure rate. Observe retry behavior and DLQ depth</li>
+  <li>Increase failure rate to 50%. How does the pipeline behave under stress?</li>
+  <li>Send duplicate orders with the same idempotency key. Verify they are processed only once</li>
+</ul>

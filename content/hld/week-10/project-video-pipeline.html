@@ -1,0 +1,101 @@
+<h2>Project: Video Upload Pipeline Simulator</h2>
+
+<p>This project simulates the full video upload and transcoding pipeline: chunked resumable uploads, parallel transcoding to multiple resolutions, HLS manifest generation, CDN caching, adaptive bitrate streaming, and view counting.</p>
+
+<h3>Core Data Structures</h3>
+
+<pre><code class="language-python">from dataclasses import dataclass, field
+from typing import Dict, List
+
+@dataclass
+class VideoChunk:
+    chunk_id: int
+    offset_bytes: int
+    size_bytes: int
+    uploaded: bool = False
+    upload_time_ms: float = 0.0
+
+@dataclass
+class TranscodeJob:
+    job_id: int
+    video_id: str
+    resolution: str
+    status: str = "queued"  # queued, processing, completed, failed
+    progress_pct: float = 0.0
+    output_size_mb: float = 0.0
+    worker_id: int = -1
+
+@dataclass
+class Video:
+    video_id: str
+    title: str
+    duration_sec: float
+    raw_size_mb: float
+    status: str = "uploading"  # uploading, transcoding, ready
+    chunks: List[VideoChunk] = field(default_factory=list)
+    transcode_jobs: List[TranscodeJob] = field(default_factory=list)
+    resolutions_ready: Dict[str, float] = field(default_factory=dict)
+    view_count: int = 0</code></pre>
+
+<h3>Resolution Configuration</h3>
+
+<pre><code class="language-python"># name -> (width, height, bitrate_mbps, transcode_speed_ratio)
+RESOLUTIONS = {
+    "240p":  (426,  240,  0.4, 0.3),
+    "360p":  (640,  360,  0.8, 0.6),
+    "480p":  (854,  480,  1.5, 1.0),
+    "720p":  (1280, 720,  2.5, 2.0),
+    "1080p": (1920, 1080, 5.0, 4.0),
+    "4K":    (3840, 2160, 15.0, 10.0),
+}
+# speed_ratio: seconds of processing per second of video
+# A 10-min video at 4K takes 100 min to transcode</code></pre>
+
+<h3>Upload Service</h3>
+
+<p>The upload service handles chunked, resumable uploads. Large files are split into 5 MB chunks, allowing the client to resume from where it left off after a network failure.</p>
+
+<pre><code class="language-python">class UploadService:
+    CHUNK_SIZE_MB = 5  # 5 MB per chunk
+
+    def start_upload(self, video_id, title, raw_size_mb, duration_sec):
+        num_chunks = math.ceil(raw_size_mb / self.CHUNK_SIZE_MB)
+        chunks = [VideoChunk(i, i * self.CHUNK_SIZE_MB * 1e6,
+                             self.CHUNK_SIZE_MB * 1e6)
+                  for i in range(num_chunks)]
+        video = Video(video_id, title, duration_sec,
+                      raw_size_mb, chunks=chunks)
+        return video
+
+    def upload_chunk(self, video, chunk_id):
+        chunk = video.chunks[chunk_id]
+        chunk.uploaded = True
+        # Check if all chunks complete
+        if all(c.uploaded for c in video.chunks):
+            video.status = "transcoding"</code></pre>
+
+<h3>Transcoding Pipeline</h3>
+
+<ul>
+  <li>Once upload completes, transcoding jobs are created for each target resolution</li>
+  <li>Jobs run in parallel across a pool of workers</li>
+  <li>Lower resolutions complete first, enabling early playback</li>
+  <li>Each completed resolution generates HLS segments and updates the manifest</li>
+</ul>
+
+<h3>Adaptive Bitrate Streaming</h3>
+
+<ul>
+  <li>Client measures available bandwidth and requests the appropriate resolution</li>
+  <li>If bandwidth drops mid-playback, client seamlessly switches to a lower resolution</li>
+  <li>CDN caches popular segments at edge locations for low-latency delivery</li>
+</ul>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>Chunked upload with resumability is essential for large files over unreliable networks</li>
+  <li>Parallel transcoding to multiple resolutions enables progressive availability</li>
+  <li>HLS manifests are the glue between transcoded segments and the adaptive streaming client</li>
+  <li>View counting uses batch aggregation to avoid hot partition problems on viral videos</li>
+</ul>

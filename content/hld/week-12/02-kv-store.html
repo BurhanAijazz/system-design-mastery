@@ -1,0 +1,94 @@
+<h2>Distributed Key-Value Store Design</h2>
+
+<p>Designing a distributed KV store (like DynamoDB or Cassandra) is the "meta" system design question -- you are designing the infrastructure that other systems are built on. Key challenges include consistent hashing for partitioning, tunable consistency, replication, and conflict resolution.</p>
+
+<h3>Define: Requirements</h3>
+
+<ul>
+  <li><strong>Functional:</strong> put(key, value), get(key), delete(key), automatic data partitioning, tunable consistency (strong to eventual)</li>
+  <li><strong>Non-Functional:</strong> High availability (always writable), low latency (single-digit ms), scalable to petabytes, durable (never lose committed data), partition tolerant</li>
+</ul>
+
+<h3>Estimate</h3>
+
+<pre><code class="language-python"># 100M DAU, 10:1 read:write ratio
+# 500K writes/sec peak, 5M reads/sec peak
+# Average key: 64 bytes, average value: 1 KB
+# 100 TB total data, growing 10 TB/year
+
+# Storage per Node:
+#   Target 2 TB per node (SSD)
+#   100 TB / 2 TB = 50 data nodes minimum
+#   With replication factor 3: 150 nodes -> ~200 total
+
+# Latency Budget:
+#   Client -> Coordinator: 1 ms
+#   Coordinator -> Replica: 1 ms
+#   Disk write (SSD): 0.1 ms
+#   Total write: ~3-5 ms (quorum of 3, wait for 2)
+
+# Memory per Node:
+#   Bloom filter: 10 bits per key -> 1 GB for 1B keys
+#   Key index in memory: 64B * 30M keys/node = 2 GB</code></pre>
+
+<h3>Consistent Hashing</h3>
+
+<pre><code class="language-python"># Why consistent hashing?
+# Regular hash (key % N nodes) requires remapping ALL keys
+# when adding/removing nodes.
+#
+# Consistent hashing: arrange nodes on a ring (0 to 2^128)
+# Each key hashes to a point on the ring -> assigned to the
+# next node clockwise.
+#
+# Adding a node: only ~1/N keys need to move (not all keys)
+# Virtual nodes: each physical node maps to 100+ points on
+# the ring for even distribution
+
+import hashlib
+
+class ConsistentHashRing:
+    def __init__(self, nodes, vnodes=150):
+        self.ring = {}
+        self.sorted_keys = []
+        for node in nodes:
+            for i in range(vnodes):
+                key = f"{node}:vn{i}"
+                h = int(hashlib.md5(key.encode()).hexdigest(), 16)
+                self.ring[h] = node
+                self.sorted_keys.append(h)
+        self.sorted_keys.sort()</code></pre>
+
+<h3>Replication and Quorum</h3>
+
+<ul>
+  <li><strong>Replication factor (N):</strong> Each key stored on N nodes (typically 3)</li>
+  <li><strong>Write quorum (W):</strong> Number of replicas that must acknowledge a write</li>
+  <li><strong>Read quorum (R):</strong> Number of replicas that must respond to a read</li>
+  <li><strong>Strong consistency:</strong> W + R > N (e.g., W=2, R=2, N=3)</li>
+  <li><strong>Eventual consistency:</strong> W=1, R=1 (fast but may read stale data)</li>
+</ul>
+
+<h3>Conflict Resolution</h3>
+
+<ul>
+  <li><strong>Last-write-wins (LWW):</strong> Use timestamps; latest write wins. Simple but can lose data.</li>
+  <li><strong>Vector clocks:</strong> Track causal ordering across replicas. Detect true conflicts (concurrent writes).</li>
+  <li><strong>Application-level resolution:</strong> Return all conflicting versions to the client; let the application merge.</li>
+</ul>
+
+<h3>Storage Engine</h3>
+
+<ul>
+  <li><strong>LSM Tree (Log-Structured Merge Tree):</strong> Optimized for writes. Writes go to memtable (in-memory), periodically flushed to sorted SSTables on disk. Compaction merges SSTables.</li>
+  <li><strong>Bloom filters:</strong> Per-SSTable Bloom filter to quickly determine if a key might be in that SSTable, avoiding unnecessary disk reads.</li>
+</ul>
+
+<h3>Key Design Decisions</h3>
+
+<ul>
+  <li><strong>CAP theorem:</strong> This system chooses AP (availability + partition tolerance) by default, with tunable consistency via quorum settings</li>
+  <li><strong>Anti-entropy:</strong> Merkle trees detect and repair inconsistencies between replicas in the background</li>
+  <li><strong>Hinted handoff:</strong> If a replica is down during a write, a neighbor temporarily stores the data and forwards it when the replica recovers</li>
+  <li><strong>Gossip protocol:</strong> Nodes share cluster membership and health information via peer-to-peer gossip</li>
+</ul>

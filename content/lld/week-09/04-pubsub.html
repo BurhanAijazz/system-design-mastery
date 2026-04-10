@@ -1,0 +1,93 @@
+<h2>Pub/Sub and Message Queue Patterns</h2>
+
+<p>Publish-Subscribe and message queue architectures decouple producers from consumers. This lesson covers topic-based pub/sub, message queues, delivery guarantees, dead letter queues, fan-out, and acknowledgment with retry.</p>
+
+<h3>Message Model</h3>
+
+<p>A Message carries data between publisher and subscriber, with metadata for routing and reliability:</p>
+
+<pre><code class="language-python">class MessageStatus(Enum):
+    PENDING = "pending"
+    DELIVERED = "delivered"
+    ACKNOWLEDGED = "acknowledged"
+    FAILED = "failed"
+    DEAD = "dead"  # moved to dead letter queue
+
+
+class Priority(Enum):
+    LOW = 0
+    NORMAL = 1
+    HIGH = 2
+    CRITICAL = 3
+
+
+@dataclass
+class Message:
+    message_id: str
+    topic: str
+    payload: Any
+    priority: Priority = Priority.NORMAL
+    status: MessageStatus = MessageStatus.PENDING
+    created_at: datetime = field(default_factory=datetime.now)
+    retry_count: int = 0
+    max_retries: int = 3</code></pre>
+
+<h3>Subscriber Interface</h3>
+
+<p>Subscribers receive messages from topics they subscribe to. Two delivery styles exist:</p>
+<ul>
+  <li><strong>Push-based</strong> -- the broker calls the subscriber's <code>on_message()</code> method (Observer pattern)</li>
+  <li><strong>Pull-based</strong> -- the subscriber calls the broker's <code>poll()</code> method</li>
+</ul>
+
+<pre><code class="language-python">class Subscriber(ABC):
+    def __init__(self, subscriber_id: str):
+        self.subscriber_id = subscriber_id
+
+    @abstractmethod
+    def on_message(self, message: Message) -> bool:
+        """Process message. Return True if handled successfully."""
+        pass
+
+
+class PrintSubscriber(Subscriber):
+    def on_message(self, message):
+        print(f"[{self.subscriber_id}] Received: {message.payload}")
+        return True</code></pre>
+
+<h3>Topic and Broker</h3>
+
+<p>A Topic manages a set of subscribers and a message queue. The MessageBroker manages multiple topics and routes messages:</p>
+<ul>
+  <li><strong>publish(topic, payload)</strong> -- create a message and deliver to all subscribers of that topic</li>
+  <li><strong>subscribe(topic, subscriber)</strong> -- register a subscriber for a topic</li>
+  <li><strong>unsubscribe(topic, subscriber)</strong> -- remove a subscriber</li>
+</ul>
+
+<h3>Delivery Guarantees</h3>
+<ul>
+  <li><strong>At-most-once</strong> -- fire and forget, fastest but messages can be lost</li>
+  <li><strong>At-least-once</strong> -- retry until acknowledged, messages may be delivered multiple times</li>
+  <li><strong>Exactly-once</strong> -- hardest to achieve, requires idempotency or deduplication</li>
+</ul>
+
+<h3>Dead Letter Queue</h3>
+
+<p>When a message fails delivery after max retries, it moves to the dead letter queue (DLQ) instead of being lost. This allows operators to inspect failed messages and replay them after fixing the issue.</p>
+
+<h3>Fan-Out Pattern</h3>
+
+<p>A single published message is delivered to all subscribers of a topic. This is the core of pub/sub -- one publisher, many consumers, fully decoupled.</p>
+
+<h3>Acknowledgment and Retry</h3>
+
+<p>For at-least-once delivery, the subscriber must acknowledge each message. If acknowledgment fails or times out, the broker retries delivery up to max_retries. After exhausting retries, the message goes to the DLQ.</p>
+
+<h3>Key Design Takeaways</h3>
+<ul>
+  <li>Pub/Sub decouples publishers from subscribers -- neither knows about the other</li>
+  <li>Observer pattern at scale: pub/sub is the distributed version of Observer</li>
+  <li>Choose delivery guarantees based on the domain: notifications can be at-most-once, payments need at-least-once</li>
+  <li>Dead letter queues prevent message loss during failures</li>
+  <li>Priority queues ensure critical messages are processed first</li>
+</ul>

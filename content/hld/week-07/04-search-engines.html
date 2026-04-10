@@ -1,0 +1,88 @@
+<h2>Search Engines and Elasticsearch</h2>
+
+<p>Why SQL <code>LIKE '%query%'</code> doesn't scale, and how inverted indexes work. The core of Google, Elasticsearch, and every search bar you've ever used.</p>
+
+<h3>The Problem: LIKE '%query%' Fails</h3>
+<ul>
+  <li>Full table scan: reads every row, no index can help with leading wildcards</li>
+  <li>"wireless mouse" won't match "mouse wireless" (word order)</li>
+  <li>"running shoes" won't match "runners shoe" (no stemming)</li>
+  <li>No relevance ranking, no typo tolerance, no synonyms</li>
+</ul>
+
+<h3>Inverted Index: The Core Data Structure</h3>
+<p>A forward index maps documents to words. An inverted index maps words to documents.</p>
+
+<pre><code class="language-python">from collections import defaultdict
+from typing import Dict, List, Set
+import re
+import math
+
+class InvertedIndex:
+    """Simplified search engine with inverted index."""
+
+    def __init__(self):
+        self.index: Dict[str, Set[int]] = defaultdict(set)
+        self.documents: Dict[int, str] = {}
+        self.doc_count = 0
+
+    def _tokenize(self, text: str) -> List[str]:
+        """Split text into searchable terms."""
+        text = text.lower()
+        text = re.sub(r'[^\w\s]', '', text)  # Remove punctuation
+        tokens = text.split()
+        # Remove stop words
+        stop_words = {"the", "a", "an", "is", "and", "or", "in", "to"}
+        return [t for t in tokens if t not in stop_words]
+
+    def add_document(self, doc_id: int, text: str):
+        """Index a document."""
+        self.documents[doc_id] = text
+        self.doc_count += 1
+        for term in self._tokenize(text):
+            self.index[term].add(doc_id)
+
+    def search(self, query: str) -> List[int]:
+        """Search: find documents containing ALL query terms."""
+        terms = self._tokenize(query)
+        if not terms:
+            return []
+        result = self.index.get(terms[0], set()).copy()
+        for term in terms[1:]:
+            result &= self.index.get(term, set())
+        return sorted(result)
+</code></pre>
+
+<h3>Building an Inverted Index</h3>
+<ul>
+  <li><strong>Tokenize</strong>: Split text into terms ("Hello World!" -> ["hello", "world"])</li>
+  <li><strong>Normalize</strong>: Lowercase, remove punctuation</li>
+  <li><strong>Stem</strong>: Reduce to root form ("running" -> "run", "mice" -> "mouse")</li>
+  <li><strong>Remove stop words</strong>: Drop "the", "a", "is", "and" (optional)</li>
+  <li><strong>Build</strong>: For each term, record which documents contain it</li>
+</ul>
+
+<h3>TF-IDF Relevance Scoring</h3>
+<p>Not all matches are equal. TF-IDF ranks results by relevance:</p>
+<ul>
+  <li><strong>Term Frequency (TF)</strong>: How often the term appears in this document</li>
+  <li><strong>Inverse Document Frequency (IDF)</strong>: How rare the term is across all documents. Rare terms are more important</li>
+  <li><strong>Score</strong> = TF * IDF. Documents with rare, frequently-occurring query terms rank higher</li>
+</ul>
+
+<h3>Elasticsearch Architecture</h3>
+<ul>
+  <li><strong>Index</strong>: Like a database table. Contains documents of a similar type</li>
+  <li><strong>Shards</strong>: Each index is split into shards for distributed storage and parallel queries</li>
+  <li><strong>Replicas</strong>: Each shard has replicas for fault tolerance and read scaling</li>
+  <li><strong>Analyzers</strong>: Configurable text processing pipelines (tokenization, stemming, synonyms)</li>
+</ul>
+
+<h3>When to Use a Search Engine</h3>
+<ul>
+  <li>Full-text search with relevance ranking</li>
+  <li>Autocomplete and suggestions</li>
+  <li>Faceted search (filter by category, price range, brand)</li>
+  <li>Log analysis and aggregation (ELK stack: Elasticsearch + Logstash + Kibana)</li>
+  <li>Do NOT use as a primary database -- use it as a secondary index synced from your source of truth</li>
+</ul>

@@ -1,0 +1,306 @@
+<h2>DNS and CDN Deep Dive</h2>
+
+<p>
+  DNS (Domain Name System) and CDN (Content Delivery Network) are foundational
+  infrastructure components that every internet-scale system relies on. Understanding
+  how they work is essential for designing systems with low latency and high availability.
+</p>
+
+<h3>DNS: The Internet's Phone Book</h3>
+
+<p>
+  DNS translates human-readable domain names (like <code>api.example.com</code>) into
+  IP addresses (like <code>93.184.216.34</code>). Every web request starts with a
+  DNS lookup.
+</p>
+
+<h3>DNS Resolution Process</h3>
+
+<pre><code class="language-python"># DNS resolution for "api.example.com"
+#
+# Step 1: Browser checks local cache
+#   Browser cache -> OS cache -> Router cache
+#   If found: return immediately (~1ms)
+#
+# Step 2: Query recursive resolver (ISP's DNS server)
+#   Client -> Recursive Resolver
+#   If cached: return (~10-50ms)
+#
+# Step 3: Query root nameserver
+#   Recursive Resolver -> Root NS (one of 13 root servers)
+#   Root NS says: ".com is handled by these TLD servers"
+#
+# Step 4: Query TLD nameserver
+#   Recursive Resolver -> .com TLD NS
+#   TLD NS says: "example.com is handled by these authoritative NSes"
+#
+# Step 5: Query authoritative nameserver
+#   Recursive Resolver -> Authoritative NS for example.com
+#   Authoritative NS says: "api.example.com = 93.184.216.34"
+#
+# Step 6: Cache and return
+#   Each level caches the result based on TTL (Time To Live)
+#   Total time for uncached lookup: ~100-200ms
+</code></pre>
+
+<h3>DNS Record Types</h3>
+
+<pre><code class="language-python"># Key DNS record types for system design:
+
+dns_records = {
+    "A": {
+        "purpose": "Maps domain to IPv4 address",
+        "example": "api.example.com -> 93.184.216.34",
+        "use_case": "Direct server addressing",
+    },
+    "AAAA": {
+        "purpose": "Maps domain to IPv6 address",
+        "example": "api.example.com -> 2001:db8::1",
+        "use_case": "IPv6 addressing",
+    },
+    "CNAME": {
+        "purpose": "Alias one domain to another",
+        "example": "www.example.com -> example.com",
+        "use_case": "CDN integration, domain aliases",
+    },
+    "NS": {
+        "purpose": "Delegates a zone to authoritative nameservers",
+        "example": "example.com NS ns1.dnshost.com",
+        "use_case": "DNS delegation",
+    },
+    "MX": {
+        "purpose": "Mail exchange servers for the domain",
+        "example": "example.com MX mail.example.com",
+        "use_case": "Email routing",
+    },
+    "TXT": {
+        "purpose": "Arbitrary text data",
+        "example": "SPF records, domain verification",
+        "use_case": "Email authentication, SSL validation",
+    },
+    "SRV": {
+        "purpose": "Service location (host + port)",
+        "example": "_sip._tcp.example.com -> sipserver.example.com:5060",
+        "use_case": "Service discovery",
+    },
+}
+</code></pre>
+
+<h3>DNS-Based Load Balancing</h3>
+
+<pre><code class="language-python"># DNS can distribute traffic across multiple servers:
+#
+# Round-Robin DNS:
+#   api.example.com -> 10.0.1.1 (TTL: 60)
+#   api.example.com -> 10.0.1.2 (TTL: 60)
+#   api.example.com -> 10.0.1.3 (TTL: 60)
+#
+# Each query returns a different IP in rotation.
+# Simple but no health checking.
+#
+# Geo-DNS (latency-based routing):
+#   Query from USA  -> api.example.com -> us-east.server.com
+#   Query from EU   -> api.example.com -> eu-west.server.com
+#   Query from Asia -> api.example.com -> ap-east.server.com
+#
+# Used by AWS Route 53, Cloudflare, etc.
+#
+# Weighted DNS:
+#   api.example.com -> 10.0.1.1 (weight: 70)
+#   api.example.com -> 10.0.1.2 (weight: 30)
+#
+# 70% of traffic goes to server 1, 30% to server 2.
+# Useful for gradual deployments (canary releases).
+
+class GeoDNSResolver:
+    """Simulated geo-aware DNS resolution."""
+
+    def __init__(self):
+        self._regions = {
+            "us-east": ["10.0.1.1", "10.0.1.2"],
+            "eu-west": ["10.0.2.1", "10.0.2.2"],
+            "ap-east": ["10.0.3.1", "10.0.3.2"],
+        }
+
+    def resolve(self, domain: str, client_region: str) -> str:
+        """Return the IP closest to the client's region."""
+        servers = self._regions.get(client_region, self._regions["us-east"])
+        # Round-robin within the region
+        import random
+        return random.choice(servers)
+</code></pre>
+
+<h3>CDN: Content Delivery Network</h3>
+
+<p>
+  A CDN is a globally distributed network of servers (called edge servers or PoPs -
+  Points of Presence) that cache content close to end users. Instead of every user
+  hitting your origin server, most requests are served from a nearby edge.
+</p>
+
+<h3>How a CDN Works</h3>
+
+<pre><code class="language-python"># CDN request flow for static content (images, CSS, JS):
+#
+# 1. User requests https://cdn.example.com/image.jpg
+#
+# 2. DNS resolves cdn.example.com to nearest edge server
+#    (using GeoDNS/Anycast)
+#
+# 3. Edge server checks its cache:
+#    a. CACHE HIT: Return content immediately (~10-50ms)
+#    b. CACHE MISS: Fetch from origin server, cache it, then return
+#
+#    [User in NYC]
+#         |
+#    [CDN Edge - NYC]  -- cache hit --> [Response in 20ms]
+#         |
+#    (cache miss)
+#         |
+#    [CDN Edge - NYC] --> [Origin Server in Oregon]
+#         |                      |
+#    [Cache + Return]      [Respond: 150ms]
+#         |
+#    [Future requests from NYC: 20ms]
+
+class CDNEdgeServer:
+    """Simulated CDN edge server with caching."""
+
+    def __init__(self, location: str, origin_url: str):
+        self.location = location
+        self._origin = origin_url
+        self._cache: dict[str, tuple[bytes, float]] = {}  # path -> (content, expiry)
+        self._hits = 0
+        self._misses = 0
+
+    def handle_request(self, path: str) -> tuple[bytes, str]:
+        import time
+
+        # Check cache
+        if path in self._cache:
+            content, expiry = self._cache[path]
+            if time.time() < expiry:
+                self._hits += 1
+                return content, "HIT"
+
+        # Cache miss: fetch from origin
+        self._misses += 1
+        content = self._fetch_from_origin(path)
+        self._cache[path] = (content, time.time() + 3600)  # 1 hour TTL
+        return content, "MISS"
+
+    def _fetch_from_origin(self, path: str) -> bytes:
+        # Simulated origin fetch
+        import time
+        time.sleep(0.1)  # 100ms origin latency
+        return b"content"
+
+    @property
+    def hit_rate(self) -> float:
+        total = self._hits + self._misses
+        return self._hits / total if total > 0 else 0.0
+</code></pre>
+
+<h3>CDN Caching Strategies</h3>
+
+<pre><code class="language-python"># What to cache on the CDN:
+#
+# ALWAYS CACHE (static, rarely changes):
+#   - Images, videos, audio files
+#   - CSS and JavaScript bundles (with content hash in filename)
+#   - Fonts and icon files
+#   - Downloaded files (PDFs, installers)
+#
+# CACHE WITH SHORT TTL (changes periodically):
+#   - API responses for public data (product listings: 5-60 min)
+#   - User profile pages (5-15 min)
+#   - Search results (1-5 min)
+#
+# DO NOT CACHE:
+#   - Authenticated/personalized responses
+#   - Real-time data (stock prices, live scores)
+#   - POST/PUT/DELETE requests
+#   - Responses with Set-Cookie headers
+
+cdn_config = {
+    "static_assets": {
+        "ttl": "1 year",
+        "cache_control": "public, max-age=31536000, immutable",
+        "note": "Use content hashing in filenames for cache busting",
+    },
+    "api_responses": {
+        "ttl": "5 minutes",
+        "cache_control": "public, max-age=300, s-maxage=300",
+        "note": "Vary by Accept-Language for internationalization",
+    },
+    "html_pages": {
+        "ttl": "0 (revalidate)",
+        "cache_control": "public, max-age=0, must-revalidate",
+        "note": "Always check with origin but use ETag for 304 responses",
+    },
+}
+</code></pre>
+
+<h3>CDN Invalidation</h3>
+
+<pre><code class="language-python"># When content changes, you need to invalidate the CDN cache.
+# Three strategies:
+#
+# 1. TTL-based expiration (simplest)
+#    Content expires after a fixed time. New content appears after TTL.
+#    Downside: stale content served until TTL expires.
+#
+# 2. Cache busting with versioned URLs (most reliable)
+#    /static/app-v2.1.0.js  -> change version on deploy
+#    /static/app.abc123.js  -> content hash in filename
+#    Old URL still cached, new URL fetched fresh.
+#
+# 3. Purge API (fastest, most expensive)
+#    Call CDN API to purge specific URLs or patterns.
+#    Cloudflare: cf.purge_cache(files=["https://example.com/image.jpg"])
+#    Takes 2-5 seconds to propagate globally.
+
+class CDNManager:
+    def __init__(self, cdn_provider):
+        self._cdn = cdn_provider
+
+    def deploy_static_assets(self, assets: dict[str, bytes], version: str):
+        """Deploy with cache-busting filenames."""
+        for name, content in assets.items():
+            import hashlib
+            content_hash = hashlib.md5(content).hexdigest()[:8]
+            # app.js -> app.a1b2c3d4.js
+            base, ext = name.rsplit(".", 1)
+            versioned_name = f"{base}.{content_hash}.{ext}"
+            self._cdn.upload(versioned_name, content)
+
+    def purge_api_cache(self, paths: list[str]):
+        """Purge specific API response caches."""
+        self._cdn.purge(paths)
+</code></pre>
+
+<h3>DNS + CDN Working Together</h3>
+
+<pre><code class="language-python"># Typical production setup:
+#
+# 1. User types "www.example.com"
+# 2. DNS (CNAME) redirects to CDN: www.example.com -> d1234.cloudfront.net
+# 3. CDN DNS (Anycast/GeoDNS) resolves to nearest edge: 52.84.XXX.XXX
+# 4. Edge serves cached content or fetches from origin
+#
+# DNS configuration:
+#   www.example.com   CNAME  d1234.cloudfront.net
+#   api.example.com   A      load-balancer-ip (direct to LB, no CDN)
+#   static.example.com CNAME d5678.cloudfront.net (separate CDN distribution)
+</code></pre>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>DNS resolution adds latency to every first request. Keep TTLs appropriate (not too short, not too long).</li>
+  <li>GeoDNS routes users to the nearest server, reducing latency by 50-200ms.</li>
+  <li>CDNs reduce origin server load by 80-95% for static content.</li>
+  <li>Use content-hashed filenames for static assets (best cache busting strategy).</li>
+  <li>CDNs can also accelerate dynamic content through edge computing and connection pooling.</li>
+  <li>In system design interviews, always mention CDN for any media-heavy system.</li>
+</ul>

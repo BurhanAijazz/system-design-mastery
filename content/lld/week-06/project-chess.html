@@ -1,0 +1,232 @@
+<h2>Project: Chess Game (Simplified)</h2>
+
+<p>A simplified Chess implementation focusing on core movement, capture, check detection, and turn management. This project demonstrates the Piece hierarchy, move validation, and game state management patterns.</p>
+
+<h3>Patterns Used</h3>
+
+<ul>
+    <li><strong>State</strong> -- Game status (InProgress, Check, Checkmate)</li>
+    <li><strong>Strategy</strong> -- Piece movement rules (each piece defines its own moves)</li>
+    <li><strong>Command</strong> -- Moves with undo (move piece, capture)</li>
+    <li><strong>Observer</strong> -- Check/checkmate notifications</li>
+</ul>
+
+<h3>Requirements</h3>
+
+<pre><code>Functional:
+  1. Standard 8x8 chess board with all pieces
+  2. Two players (White and Black) take turns
+  3. Each piece type has its own movement rules
+  4. Pieces can capture opponent's pieces
+  5. Detect check (king under attack)
+  6. Detect checkmate (king can't escape check)
+  7. Move history with undo support
+
+Out of scope:
+  - Castling, en passant, pawn promotion
+  - Stalemate detection
+  - Draw by repetition or 50-move rule
+</code></pre>
+
+<h3>Core Entities</h3>
+
+<pre><code class="language-python">from enum import Enum
+from dataclasses import dataclass
+from typing import List, Optional
+
+class Color(Enum):
+    WHITE = "white"
+    BLACK = "black"
+
+    @property
+    def opposite(self) -> "Color":
+        return Color.BLACK if self == Color.WHITE else Color.WHITE
+
+class PieceType(Enum):
+    KING = "K"
+    QUEEN = "Q"
+    ROOK = "R"
+    BISHOP = "B"
+    KNIGHT = "N"
+    PAWN = "P"
+
+class GameStatus(Enum):
+    IN_PROGRESS = "in_progress"
+    CHECK = "check"
+    CHECKMATE = "checkmate"
+
+@dataclass(frozen=True)
+class Position:
+    row: int
+    col: int
+
+    def is_valid(self) -> bool:
+        return 0 <= self.row < 8 and 0 <= self.col < 8
+</code></pre>
+
+<h3>Piece Hierarchy</h3>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+
+class Piece(ABC):
+    def __init__(self, color: Color, piece_type: PieceType):
+        self.color = color
+        self.piece_type = piece_type
+
+    @abstractmethod
+    def get_possible_moves(self, pos: Position, board: "Board") -> List[Position]:
+        """Return all positions this piece can move to."""
+        pass
+
+    def symbol(self) -> str:
+        s = self.piece_type.value
+        return s if self.color == Color.WHITE else s.lower()
+
+
+class King(Piece):
+    def __init__(self, color: Color):
+        super().__init__(color, PieceType.KING)
+
+    def get_possible_moves(self, pos, board):
+        moves = []
+        for dr in [-1, 0, 1]:
+            for dc in [-1, 0, 1]:
+                if dr == 0 and dc == 0:
+                    continue
+                target = Position(pos.row + dr, pos.col + dc)
+                if target.is_valid():
+                    cell = board.get(target)
+                    if cell is None or cell.color != self.color:
+                        moves.append(target)
+        return moves
+
+
+class Rook(Piece):
+    def __init__(self, color: Color):
+        super().__init__(color, PieceType.ROOK)
+
+    def get_possible_moves(self, pos, board):
+        return self._slide(pos, board, [(0,1), (0,-1), (1,0), (-1,0)])
+
+    def _slide(self, pos, board, directions):
+        moves = []
+        for dr, dc in directions:
+            r, c = pos.row + dr, pos.col + dc
+            while 0 <= r < 8 and 0 <= c < 8:
+                target = Position(r, c)
+                cell = board.get(target)
+                if cell is None:
+                    moves.append(target)
+                elif cell.color != self.color:
+                    moves.append(target)  # capture
+                    break
+                else:
+                    break  # blocked by own piece
+                r, c = r + dr, c + dc
+        return moves
+
+
+class Knight(Piece):
+    def __init__(self, color: Color):
+        super().__init__(color, PieceType.KNIGHT)
+
+    def get_possible_moves(self, pos, board):
+        moves = []
+        offsets = [(-2,-1), (-2,1), (-1,-2), (-1,2),
+                   (1,-2), (1,2), (2,-1), (2,1)]
+        for dr, dc in offsets:
+            target = Position(pos.row + dr, pos.col + dc)
+            if target.is_valid():
+                cell = board.get(target)
+                if cell is None or cell.color != self.color:
+                    moves.append(target)
+        return moves
+
+
+class Pawn(Piece):
+    def __init__(self, color: Color):
+        super().__init__(color, PieceType.PAWN)
+
+    def get_possible_moves(self, pos, board):
+        moves = []
+        direction = -1 if self.color == Color.WHITE else 1
+        start_row = 6 if self.color == Color.WHITE else 1
+
+        # Forward one
+        fwd = Position(pos.row + direction, pos.col)
+        if fwd.is_valid() and board.get(fwd) is None:
+            moves.append(fwd)
+            # Forward two from start
+            if pos.row == start_row:
+                fwd2 = Position(pos.row + 2 * direction, pos.col)
+                if fwd2.is_valid() and board.get(fwd2) is None:
+                    moves.append(fwd2)
+
+        # Diagonal captures
+        for dc in [-1, 1]:
+            diag = Position(pos.row + direction, pos.col + dc)
+            if diag.is_valid():
+                cell = board.get(diag)
+                if cell and cell.color != self.color:
+                    moves.append(diag)
+
+        return moves
+</code></pre>
+
+<h3>Board</h3>
+
+<pre><code class="language-python">class Board:
+    def __init__(self):
+        self._grid: List[List[Optional[Piece]]] = [
+            [None] * 8 for _ in range(8)
+        ]
+
+    def get(self, pos: Position) -> Optional[Piece]:
+        return self._grid[pos.row][pos.col]
+
+    def place(self, pos: Position, piece: Piece) -> None:
+        self._grid[pos.row][pos.col] = piece
+
+    def remove(self, pos: Position) -> Optional[Piece]:
+        piece = self._grid[pos.row][pos.col]
+        self._grid[pos.row][pos.col] = None
+        return piece
+
+    def move(self, from_pos: Position, to_pos: Position) -> Optional[Piece]:
+        """Move piece, returning any captured piece."""
+        captured = self.remove(to_pos)
+        piece = self.remove(from_pos)
+        self.place(to_pos, piece)
+        return captured
+
+    def find_king(self, color: Color) -> Optional[Position]:
+        for r in range(8):
+            for c in range(8):
+                piece = self._grid[r][c]
+                if piece and piece.piece_type == PieceType.KING and piece.color == color:
+                    return Position(r, c)
+        return None
+</code></pre>
+
+<h3>Check Detection</h3>
+
+<pre><code class="language-python">def is_in_check(board: Board, color: Color) -> bool:
+    """Is the given color's king under attack?"""
+    king_pos = board.find_king(color)
+    if not king_pos:
+        return False
+
+    # Check if any opponent piece can reach the king
+    for r in range(8):
+        for c in range(8):
+            piece = board.get(Position(r, c))
+            if piece and piece.color == color.opposite:
+                moves = piece.get_possible_moves(Position(r, c), board)
+                if king_pos in moves:
+                    return True
+    return False
+</code></pre>
+
+<h3>Architecture Summary</h3>
+
+<p>Chess demonstrates the power of the Piece hierarchy: each piece type encapsulates its own movement rules via the Strategy pattern. The Board provides a clean API for placing, moving, and querying pieces. Check detection scans all opponent pieces to see if any can reach the king.</p>

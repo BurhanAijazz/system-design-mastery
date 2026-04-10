@@ -1,0 +1,151 @@
+<h2>UML to Code Translation</h2>
+
+<p>Translating between UML diagrams and Python code is a core LLD interview skill. This lesson walks through both directions: reading a UML diagram and writing code, and reading code and producing a diagram.</p>
+
+<h3>Translation Process</h3>
+
+<ol>
+    <li><strong>Step 1:</strong> Create class stubs (empty classes)</li>
+    <li><strong>Step 2:</strong> Add attributes</li>
+    <li><strong>Step 3:</strong> Add methods</li>
+    <li><strong>Step 4:</strong> Implement relationships</li>
+    <li><strong>Step 5:</strong> Add business logic</li>
+</ol>
+
+<h3>Example: University System UML</h3>
+
+<pre><code>+------------------+  1      1..*  +------------------+
+|   University     | ◆-----------> |   Department     |
++------------------+               +------------------+
+| - name: str      |               | - name: str      |
+| - founded: int   |               | - budget: float  |
++------------------+               +------------------+
+| + add_dept()     |               | + hire(prof)     |
+| + get_dept()     |               | + get_staff()    |
++------------------+               +------------------+
+                                        ◇
+                                        | 0..*
+                                        v
++------------------+  0..*   0..* +------------------+
+|   Student        | &lt;---------> |   Course         |
++------------------+             +------------------+
+| - student_id: str|             | - code: str      |
+| - name: str      |             | - name: str      |
+| - gpa: float     |             | - credits: int   |
++------------------+             +------------------+
+| + enroll(course) |             | + get_enrolled() |
++------------------+             +------------------+
+                                        ^
+                                        | teaches 1
+                                  +------------------+
+                                  |   Professor      |
+                                  +------------------+
+                                  | - name: str      |
+                                  | - specialty: str |
+                                  +------------------+
+                                  | + assign_course()|
+                                  +------------------+
+
+Relationships:
+  University ◆--> Department  (composition, 1 to 1..*)
+  Department ◇--> Professor   (aggregation, 0..*)
+  Student &lt;---> Course        (association, many-to-many)
+  Professor --> Course        (association, teaches)
+</code></pre>
+
+<h3>Step-by-Step Translation</h3>
+
+<pre><code class="language-python">from dataclasses import dataclass, field
+from typing import List, Optional
+
+@dataclass
+class Course:
+    code: str
+    name: str
+    credits: int
+    _enrolled_students: List["Student"] = field(default_factory=list, repr=False)
+    _professor: Optional["Professor"] = field(default=None, repr=False)
+
+    def get_enrolled(self) -> List["Student"]:
+        return list(self._enrolled_students)
+
+    def _add_student(self, student: "Student") -> None:
+        if student not in self._enrolled_students:
+            self._enrolled_students.append(student)
+
+
+@dataclass
+class Professor:
+    name: str
+    specialty: str
+    _courses: List[Course] = field(default_factory=list, repr=False)
+
+    def assign_course(self, course: Course) -> None:
+        self._courses.append(course)
+        course._professor = self
+
+
+@dataclass
+class Student:
+    student_id: str
+    name: str
+    gpa: float = 0.0
+    _courses: List[Course] = field(default_factory=list, repr=False)
+
+    def enroll(self, course: Course) -> None:
+        self._courses.append(course)
+        course._add_student(self)
+
+
+class Department:
+    def __init__(self, name: str, budget: float):
+        self.name = name
+        self.budget = budget
+        self._staff: List[Professor] = []
+
+    def hire(self, prof: Professor) -> None:
+        self._staff.append(prof)
+
+    def get_staff(self) -> List[Professor]:
+        return list(self._staff)
+
+
+class University:
+    def __init__(self, name: str, founded: int):
+        self.name = name
+        self.founded = founded
+        self._departments: List[Department] = []  # composition
+
+    def add_dept(self, name: str, budget: float) -> Department:
+        dept = Department(name, budget)  # University creates departments
+        self._departments.append(dept)
+        return dept
+
+    def get_dept(self, name: str) -> Optional[Department]:
+        for dept in self._departments:
+            if dept.name == name:
+                return dept
+        return None
+</code></pre>
+
+<h3>Key Translation Rules</h3>
+
+<ul>
+    <li><strong>Composition</strong> (filled diamond): parent creates children in its constructor or factory methods</li>
+    <li><strong>Aggregation</strong> (hollow diamond): parent receives children via method parameters</li>
+    <li><strong>Many-to-many association</strong>: both sides hold lists of the other</li>
+    <li><strong>Multiplicity <code>1..*</code></strong>: use a List that must not be empty</li>
+    <li><strong>Multiplicity <code>0..1</code></strong>: use <code>Optional</code> type</li>
+</ul>
+
+<h3>Reverse: Code to UML</h3>
+
+<p>When reading code and producing a UML diagram:</p>
+
+<ol>
+    <li>Identify classes (every <code>class</code> keyword)</li>
+    <li>List attributes (look in <code>__init__</code> or dataclass fields)</li>
+    <li>List public methods (no underscore prefix)</li>
+    <li>Identify relationships by examining attribute types (List, Optional) and method parameters</li>
+    <li>Determine if relationships are dependency, association, aggregation, or composition</li>
+</ol>

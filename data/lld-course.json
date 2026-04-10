@@ -1,0 +1,199 @@
+{
+  "id": "lld",
+  "title": "Low-Level Design Course",
+  "description": "Master OOP, design patterns, UML, and LLD interview problems",
+  "framework": {
+    "name": "6-Step LLD Framework",
+    "steps": ["Clarify Requirements", "Identify Entities", "Define APIs", "Class Hierarchy", "Implement Core Logic", "Trade-offs"]
+  },
+  "weeks": [
+    {
+      "id": "week-01", "number": 1, "title": "SOLID Principles",
+      "description": "Single Responsibility through Dependency Inversion — the foundation of clean OOP",
+      "sections": {
+        "concepts": [
+          { "id": "01-single-responsibility", "title": "Single Responsibility Principle", "file": "content/lld/week-01/01-single-responsibility.html", "duration": 40, "keywords": ["SRP", "cohesion", "separation"], "patterns": ["SRP"] },
+          { "id": "02-open-closed", "title": "Open/Closed Principle", "file": "content/lld/week-01/02-open-closed.html", "duration": 40, "keywords": ["OCP", "extension", "polymorphism"], "patterns": ["OCP"] },
+          { "id": "03-liskov-substitution", "title": "Liskov Substitution Principle", "file": "content/lld/week-01/03-liskov-substitution.html", "duration": 35, "keywords": ["LSP", "substitutability", "contracts"], "patterns": ["LSP"] },
+          { "id": "04-interface-segregation", "title": "Interface Segregation Principle", "file": "content/lld/week-01/04-interface-segregation.html", "duration": 35, "keywords": ["ISP", "thin interfaces", "Protocol"], "patterns": ["ISP"] },
+          { "id": "05-dependency-inversion", "title": "Dependency Inversion Principle", "file": "content/lld/week-01/05-dependency-inversion.html", "duration": 40, "keywords": ["DIP", "abstractions", "injection"], "patterns": ["DIP"] },
+          { "id": "06-solid-combined", "title": "SOLID Combined Refactoring", "file": "content/lld/week-01/06-solid-combined.html", "duration": 45, "keywords": ["refactoring", "clean code"], "patterns": ["SRP", "OCP", "LSP", "ISP", "DIP"] }
+        ],
+        "practice": [{ "id": "exercises", "title": "Week 1 Exercises", "file": "content/lld/week-01/exercises.html", "questionCount": 12 }],
+        "projects": [{ "id": "project-employee-mgmt", "title": "Employee Management Refactor", "file": "content/lld/week-01/project-employee-mgmt.html", "patterns": ["SRP", "OCP", "DIP"] }]
+      }
+    },
+    {
+      "id": "week-02", "number": 2, "title": "Structural Patterns",
+      "description": "Adapter, Facade, Proxy, Composite, and Flyweight — structuring objects and classes",
+      "sections": {
+        "concepts": [
+          { "id": "01-adapter-pattern", "title": "Adapter Pattern", "file": "content/lld/week-02/01-adapter-pattern.html", "duration": 35, "keywords": ["adapter", "interface conversion", "wrapper"], "patterns": ["Adapter"] },
+          { "id": "02-facade-pattern", "title": "Facade Pattern", "file": "content/lld/week-02/02-facade-pattern.html", "duration": 30, "keywords": ["facade", "simplification", "subsystem"], "patterns": ["Facade"] },
+          { "id": "03-proxy-pattern", "title": "Proxy Pattern", "file": "content/lld/week-02/03-proxy-pattern.html", "duration": 35, "keywords": ["proxy", "virtual", "protection", "caching"], "patterns": ["Proxy"] },
+          { "id": "04-composite-pattern", "title": "Composite Pattern", "file": "content/lld/week-02/04-composite-pattern.html", "duration": 35, "keywords": ["composite", "tree", "file system"], "patterns": ["Composite"] },
+          { "id": "05-flyweight-pattern", "title": "Flyweight Pattern", "file": "content/lld/week-02/05-flyweight-pattern.html", "duration": 30, "keywords": ["flyweight", "memory", "shared state"], "patterns": ["Flyweight"] }
+        ],
+        "practice": [{ "id": "exercises", "title": "Week 2 Exercises", "file": "content/lld/week-02/exercises.html", "questionCount": 12 }],
+        "projects": [{ "id": "project-smart-home", "title": "Smart Home System", "file": "content/lld/week-02/project-smart-home.html", "patterns": ["Facade", "Composite", "Adapter", "Proxy"] }]
+      }
+    },
+    {
+      "id": "week-03", "number": 3, "title": "Behavioral Patterns Part 1",
+      "description": "State, Command, Chain of Responsibility, Template Method, and Mediator",
+      "sections": {
+        "concepts": [
+          { "id": "01-state-pattern", "title": "State Pattern", "file": "content/lld/week-03/01-state-pattern.html", "duration": 40, "keywords": ["state", "state machine", "transitions"], "patterns": ["State"] },
+          { "id": "02-command-pattern", "title": "Command Pattern", "file": "content/lld/week-03/02-command-pattern.html", "duration": 40, "keywords": ["command", "undo", "redo", "encapsulation"], "patterns": ["Command"] },
+          { "id": "03-chain-of-responsibility", "title": "Chain of Responsibility", "file": "content/lld/week-03/03-chain-of-responsibility.html", "duration": 35, "keywords": ["chain", "handler", "middleware", "pipeline"], "patterns": ["Chain of Responsibility"] },
+          { "id": "04-template-method", "title": "Template Method Pattern", "file": "content/lld/week-03/04-template-method.html", "duration": 30, "keywords": ["template", "algorithm skeleton", "hooks"], "patterns": ["Template Method"] },
+          { "id": "05-mediator-pattern", "title": "Mediator Pattern", "file": "content/lld/week-03/05-mediator-pattern.html", "duration": 30, "keywords": ["mediator", "decoupling", "communication hub"], "patterns": ["Mediator"] }
+        ],
+        "practice": [{ "id": "exercises", "title": "Week 3 Exercises", "file": "content/lld/week-03/exercises.html", "questionCount": 13 }],
+        "projects": [{ "id": "project-workflow-engine", "title": "Document Workflow Engine", "file": "content/lld/week-03/project-workflow-engine.html", "patterns": ["State", "Command", "Chain of Responsibility", "Template Method", "Mediator"] }]
+      }
+    },
+    {
+      "id": "week-04", "number": 4, "title": "Behavioral Patterns Part 2",
+      "description": "Iterator, Null Object, Memento, Visitor, and combining behavioral patterns",
+      "sections": {
+        "concepts": [
+          { "id": "01-iterator-pattern", "title": "Iterator Pattern (Custom)", "file": "content/lld/week-04/01-iterator-pattern.html", "duration": 35, "keywords": ["iterator", "traversal", "DFS", "BFS"], "patterns": ["Iterator"] },
+          { "id": "02-null-object-pattern", "title": "Null Object Pattern", "file": "content/lld/week-04/02-null-object-pattern.html", "duration": 25, "keywords": ["null object", "no-op", "null checks"], "patterns": ["Null Object"] },
+          { "id": "03-memento-pattern", "title": "Memento Pattern", "file": "content/lld/week-04/03-memento-pattern.html", "duration": 30, "keywords": ["memento", "snapshot", "state restoration"], "patterns": ["Memento"] },
+          { "id": "04-visitor-pattern", "title": "Visitor Pattern", "file": "content/lld/week-04/04-visitor-pattern.html", "duration": 35, "keywords": ["visitor", "double dispatch", "operations"], "patterns": ["Visitor"] },
+          { "id": "05-combining-patterns", "title": "Combining Behavioral Patterns", "file": "content/lld/week-04/05-combining-patterns.html", "duration": 40, "keywords": ["composition", "task management", "multi-pattern"], "patterns": ["State", "Command", "Iterator", "Observer"] }
+        ],
+        "practice": [{ "id": "exercises", "title": "Week 4 Exercises", "file": "content/lld/week-04/exercises.html", "questionCount": 12 }],
+        "projects": [{ "id": "project-text-editor", "title": "Undo/Redo Text Editor", "file": "content/lld/week-04/project-text-editor.html", "patterns": ["Command", "Memento", "Iterator", "Null Object", "Visitor"] }]
+      }
+    },
+    {
+      "id": "week-05", "number": 5, "title": "UML & LLD Methodology",
+      "description": "UML class diagrams, relationships, the 6-step LLD interview framework",
+      "sections": {
+        "concepts": [
+          { "id": "01-uml-basics", "title": "UML Class Diagram Basics", "file": "content/lld/week-05/01-uml-basics.html", "duration": 30, "keywords": ["UML", "class diagram", "notation"], "patterns": [] },
+          { "id": "02-relationships", "title": "Association, Aggregation, Composition", "file": "content/lld/week-05/02-relationships.html", "duration": 35, "keywords": ["association", "aggregation", "composition", "dependency"], "patterns": [] },
+          { "id": "03-uml-to-code", "title": "UML to Code Translation", "file": "content/lld/week-05/03-uml-to-code.html", "duration": 30, "keywords": ["translation", "code generation", "stubs"], "patterns": [] },
+          { "id": "04-lld-framework", "title": "LLD Interview Framework (6-Step)", "file": "content/lld/week-05/04-lld-framework.html", "duration": 35, "keywords": ["framework", "interview", "methodology", "6-step"], "patterns": [] },
+          { "id": "05-requirement-gathering", "title": "Requirement Gathering & API Design", "file": "content/lld/week-05/05-requirement-gathering.html", "duration": 30, "keywords": ["requirements", "API", "functional", "non-functional"], "patterns": [] },
+          { "id": "06-library-system", "title": "Worked Example: Library System", "file": "content/lld/week-05/06-library-system.html", "duration": 40, "keywords": ["library", "walkthrough", "end-to-end"], "patterns": [] }
+        ],
+        "practice": [{ "id": "exercises", "title": "Week 5 Exercises", "file": "content/lld/week-05/exercises.html", "questionCount": 14 }],
+        "projects": [{ "id": "project-url-shortener", "title": "URL Shortener Design", "file": "content/lld/week-05/project-url-shortener.html", "patterns": [] }]
+      }
+    },
+    {
+      "id": "week-06", "number": 6, "title": "Game & Board Problems",
+      "description": "Game design patterns, state machines, turn-based architecture, board games",
+      "sections": {
+        "concepts": [
+          { "id": "01-game-design-patterns", "title": "Game Design Patterns", "file": "content/lld/week-06/01-game-design-patterns.html", "duration": 35, "keywords": ["game", "player", "rules engine"], "patterns": ["State", "Strategy", "Observer"] },
+          { "id": "02-state-machines-games", "title": "State Machines in Games", "file": "content/lld/week-06/02-state-machines-games.html", "duration": 30, "keywords": ["game state", "lifecycle", "transitions"], "patterns": ["State"] },
+          { "id": "03-turn-based", "title": "Turn-Based Architecture", "file": "content/lld/week-06/03-turn-based.html", "duration": 30, "keywords": ["turns", "move history", "undo"], "patterns": ["Command"] },
+          { "id": "04-board-representation", "title": "Board Representation Strategies", "file": "content/lld/week-06/04-board-representation.html", "duration": 30, "keywords": ["grid", "board", "pieces", "cells"], "patterns": ["Composite"] }
+        ],
+        "practice": [{ "id": "exercises", "title": "Week 6 Exercises", "file": "content/lld/week-06/exercises.html", "questionCount": 12 }],
+        "projects": [
+          { "id": "project-tic-tac-toe", "title": "Tic-Tac-Toe", "file": "content/lld/week-06/project-tic-tac-toe.html", "patterns": ["State", "Strategy"] },
+          { "id": "project-snake-ladder", "title": "Snake & Ladder", "file": "content/lld/week-06/project-snake-ladder.html", "patterns": ["State", "Observer"] },
+          { "id": "project-chess", "title": "Chess Game", "file": "content/lld/week-06/project-chess.html", "patterns": ["State", "Strategy", "Command"] }
+        ]
+      }
+    },
+    {
+      "id": "week-07", "number": 7, "title": "Real-World Systems",
+      "description": "Reservation booking, payment models, concurrency, inventory management",
+      "sections": {
+        "concepts": [
+          { "id": "01-reservation-booking", "title": "Reservation & Booking Architecture", "file": "content/lld/week-07/01-reservation-booking.html", "duration": 35, "keywords": ["reservation", "booking", "slots"], "patterns": ["State"] },
+          { "id": "02-payment-pricing", "title": "Payment & Pricing Models", "file": "content/lld/week-07/02-payment-pricing.html", "duration": 30, "keywords": ["payment", "pricing", "strategy"], "patterns": ["Strategy"] },
+          { "id": "03-concurrency", "title": "Concurrency in Booking Systems", "file": "content/lld/week-07/03-concurrency.html", "duration": 35, "keywords": ["threading", "locks", "race conditions"], "patterns": [] },
+          { "id": "04-inventory", "title": "Inventory & Slot Management", "file": "content/lld/week-07/04-inventory.html", "duration": 30, "keywords": ["inventory", "allocation", "availability"], "patterns": [] }
+        ],
+        "practice": [{ "id": "exercises", "title": "Week 7 Exercises", "file": "content/lld/week-07/exercises.html", "questionCount": 14 }],
+        "projects": [
+          { "id": "project-parking-lot", "title": "Parking Lot", "file": "content/lld/week-07/project-parking-lot.html", "patterns": ["State", "Strategy", "Factory"] },
+          { "id": "project-elevator", "title": "Elevator System", "file": "content/lld/week-07/project-elevator.html", "patterns": ["State", "Strategy", "Observer"] },
+          { "id": "project-vending-machine", "title": "Vending Machine", "file": "content/lld/week-07/project-vending-machine.html", "patterns": ["State"] }
+        ]
+      }
+    },
+    {
+      "id": "week-08", "number": 8, "title": "Platform Systems",
+      "description": "User management, search/catalog, notifications, transaction ledgers",
+      "sections": {
+        "concepts": [
+          { "id": "01-user-role-mgmt", "title": "User & Role Management", "file": "content/lld/week-08/01-user-role-mgmt.html", "duration": 30, "keywords": ["RBAC", "users", "roles", "permissions"], "patterns": [] },
+          { "id": "02-search-catalog", "title": "Search & Catalog Design", "file": "content/lld/week-08/02-search-catalog.html", "duration": 35, "keywords": ["search", "filtering", "sorting", "pagination"], "patterns": ["Strategy"] },
+          { "id": "03-notification-dispatch", "title": "Notification Dispatch Patterns", "file": "content/lld/week-08/03-notification-dispatch.html", "duration": 30, "keywords": ["email", "SMS", "push", "notification"], "patterns": ["Observer", "Strategy"] },
+          { "id": "04-transaction-ledger", "title": "Transaction & Ledger Patterns", "file": "content/lld/week-08/04-transaction-ledger.html", "duration": 35, "keywords": ["ledger", "balance", "double-entry"], "patterns": [] }
+        ],
+        "practice": [{ "id": "exercises", "title": "Week 8 Exercises", "file": "content/lld/week-08/exercises.html", "questionCount": 15 }],
+        "projects": [
+          { "id": "project-splitwise", "title": "Splitwise", "file": "content/lld/week-08/project-splitwise.html", "patterns": ["Observer", "Strategy"] },
+          { "id": "project-bookmyshow", "title": "BookMyShow", "file": "content/lld/week-08/project-bookmyshow.html", "patterns": ["State", "Strategy"] },
+          { "id": "project-hotel-booking", "title": "Hotel Booking", "file": "content/lld/week-08/project-hotel-booking.html", "patterns": ["State", "Strategy"] }
+        ]
+      }
+    },
+    {
+      "id": "week-09", "number": 9, "title": "Infrastructure Systems",
+      "description": "LRU/LFU cache, rate limiter, logging framework, pub/sub, file system",
+      "sections": {
+        "concepts": [
+          { "id": "01-cache-design", "title": "Cache Design: LRU & LFU", "file": "content/lld/week-09/01-cache-design.html", "duration": 40, "keywords": ["LRU", "LFU", "cache", "eviction"], "patterns": [] },
+          { "id": "02-rate-limiter", "title": "Rate Limiter Algorithms", "file": "content/lld/week-09/02-rate-limiter.html", "duration": 35, "keywords": ["rate limiter", "token bucket", "sliding window"], "patterns": ["Strategy"] },
+          { "id": "03-logging-framework", "title": "Logging Framework Design", "file": "content/lld/week-09/03-logging-framework.html", "duration": 30, "keywords": ["logging", "handlers", "formatters", "filters"], "patterns": ["Chain of Responsibility", "Observer"] },
+          { "id": "04-pubsub", "title": "Pub/Sub Message Queue", "file": "content/lld/week-09/04-pubsub.html", "duration": 35, "keywords": ["pub/sub", "topics", "subscribers", "messaging"], "patterns": ["Observer"] },
+          { "id": "05-file-system", "title": "File System Design", "file": "content/lld/week-09/05-file-system.html", "duration": 30, "keywords": ["file system", "directories", "paths"], "patterns": ["Composite"] }
+        ],
+        "practice": [{ "id": "exercises", "title": "Week 9 Exercises", "file": "content/lld/week-09/exercises.html", "questionCount": 14 }],
+        "projects": [
+          { "id": "project-logging", "title": "Logging Framework", "file": "content/lld/week-09/project-logging.html", "patterns": ["Chain of Responsibility", "Observer", "Builder"] },
+          { "id": "project-notification", "title": "Notification System", "file": "content/lld/week-09/project-notification.html", "patterns": ["Observer", "Strategy"] },
+          { "id": "project-rate-limiter", "title": "Rate Limiter", "file": "content/lld/week-09/project-rate-limiter.html", "patterns": ["Strategy"] }
+        ]
+      }
+    },
+    {
+      "id": "week-10", "number": 10, "title": "Advanced & Mock Interviews",
+      "description": "Full walkthrough designs, anti-patterns, interview time management",
+      "sections": {
+        "concepts": [
+          { "id": "01-food-delivery", "title": "Food Delivery System Walkthrough", "file": "content/lld/week-10/01-food-delivery.html", "duration": 45, "keywords": ["food delivery", "Swiggy", "Zomato", "walkthrough"], "patterns": ["State", "Strategy", "Observer"] },
+          { "id": "02-atm-machine", "title": "ATM Machine Walkthrough", "file": "content/lld/week-10/02-atm-machine.html", "duration": 40, "keywords": ["ATM", "state machine", "transactions"], "patterns": ["State", "Chain of Responsibility"] },
+          { "id": "03-traffic-signal", "title": "Traffic Signal Walkthrough", "file": "content/lld/week-10/03-traffic-signal.html", "duration": 35, "keywords": ["traffic", "signal", "intersection", "coordination"], "patterns": ["State", "Observer"] },
+          { "id": "04-anti-patterns", "title": "Interview Anti-Patterns & Tips", "file": "content/lld/week-10/04-anti-patterns.html", "duration": 25, "keywords": ["anti-patterns", "mistakes", "tips"], "patterns": [] },
+          { "id": "05-time-management", "title": "Time Management & Communication", "file": "content/lld/week-10/05-time-management.html", "duration": 20, "keywords": ["timing", "communication", "interview strategy"], "patterns": [] }
+        ],
+        "practice": [{ "id": "exercises", "title": "Week 10 Exercises", "file": "content/lld/week-10/exercises.html", "questionCount": 10 }],
+        "projects": [
+          { "id": "project-food-delivery", "title": "Food Delivery System", "file": "content/lld/week-10/project-food-delivery.html", "patterns": ["State", "Strategy", "Observer"] },
+          { "id": "project-atm", "title": "ATM Machine", "file": "content/lld/week-10/project-atm.html", "patterns": ["State", "Chain of Responsibility"] }
+        ]
+      }
+    }
+  ],
+  "bonus": [
+    { "id": "easy-01", "title": "Stack with Min", "difficulty": "easy", "file": "content/lld/bonus/01-stack-with-min.html", "duration": 25, "patterns": ["Stack"] },
+    { "id": "easy-02", "title": "Logger Rate Limiter", "difficulty": "easy", "file": "content/lld/bonus/02-logger-rate-limiter.html", "duration": 20, "patterns": ["HashMap"] },
+    { "id": "easy-03", "title": "Hit Counter", "difficulty": "easy", "file": "content/lld/bonus/03-hit-counter.html", "duration": 25, "patterns": ["Sliding Window"] },
+    { "id": "easy-04", "title": "Design HashMap", "difficulty": "easy", "file": "content/lld/bonus/04-design-hashmap.html", "duration": 30, "patterns": ["Hashing"] },
+    { "id": "easy-05", "title": "Design HashSet", "difficulty": "easy", "file": "content/lld/bonus/05-design-hashset.html", "duration": 25, "patterns": ["Hashing"] },
+    { "id": "medium-01", "title": "LRU Cache", "difficulty": "medium", "file": "content/lld/bonus/03-lru-cache.html", "duration": 35, "patterns": ["LinkedList", "HashMap"] },
+    { "id": "medium-02", "title": "LFU Cache", "difficulty": "medium", "file": "content/lld/bonus/medium-02-lfu-cache.html", "duration": 40, "patterns": ["Frequency Buckets"] },
+    { "id": "medium-03", "title": "Task Scheduler", "difficulty": "medium", "file": "content/lld/bonus/medium-03-task-scheduler.html", "duration": 35, "patterns": ["Strategy", "Observer", "State"] },
+    { "id": "medium-04", "title": "In-Memory File System", "difficulty": "medium", "file": "content/lld/bonus/medium-04-file-system.html", "duration": 35, "patterns": ["Composite", "Facade"] },
+    { "id": "medium-05", "title": "Twitter Feed", "difficulty": "medium", "file": "content/lld/bonus/medium-05-twitter-feed.html", "duration": 40, "patterns": ["Observer", "Strategy"] },
+    { "id": "medium-06", "title": "Airline Check-in", "difficulty": "medium", "file": "content/lld/bonus/medium-06-airline-checkin.html", "duration": 35, "patterns": ["State", "Strategy"] },
+    { "id": "medium-07", "title": "Online Stock Span", "difficulty": "medium", "file": "content/lld/bonus/medium-07-stock-span.html", "duration": 30, "patterns": ["Stack"] },
+    { "id": "medium-08", "title": "Movie Rental", "difficulty": "medium", "file": "content/lld/bonus/medium-08-movie-rental.html", "duration": 35, "patterns": ["State", "Strategy"] },
+    { "id": "hard-01", "title": "Ride Sharing Service", "difficulty": "hard", "file": "content/lld/bonus/04-ride-sharing.html", "duration": 50, "patterns": ["State", "Strategy", "Observer", "Command"] },
+    { "id": "hard-02", "title": "Distributed Key-Value Store", "difficulty": "hard", "file": "content/lld/bonus/hard-02-kv-store.html", "duration": 55, "patterns": ["Proxy", "Observer"] },
+    { "id": "hard-03", "title": "Calendar Booking System", "difficulty": "hard", "file": "content/lld/bonus/hard-03-calendar.html", "duration": 50, "patterns": ["State", "Observer"] },
+    { "id": "hard-04", "title": "Auction System", "difficulty": "hard", "file": "content/lld/bonus/hard-04-auction.html", "duration": 50, "patterns": ["State", "Observer", "Strategy"] },
+    { "id": "hard-05", "title": "Multi-Level Cache", "difficulty": "hard", "file": "content/lld/bonus/hard-05-multi-cache.html", "duration": 45, "patterns": ["Chain of Responsibility"] }
+  ]
+}

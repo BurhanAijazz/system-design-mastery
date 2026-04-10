@@ -1,0 +1,254 @@
+<h2>Week 3 Exercises: Behavioral Patterns Part 1</h2>
+
+<p>These exercises test your understanding of the State, Command, Chain of Responsibility, Template Method, and Mediator patterns. Try to solve each one before revealing the answer.</p>
+
+<h3>Exercise 1: Order Processing with State Pattern</h3>
+
+<p>Design an order processing system using the State pattern. An order goes through these states: <code>Pending</code>, <code>Paid</code>, <code>Shipped</code>, <code>Delivered</code>, <code>Cancelled</code>. Implement the following rules:</p>
+
+<ul>
+    <li>A <code>Pending</code> order can be paid or cancelled</li>
+    <li>A <code>Paid</code> order can be shipped or cancelled (with refund)</li>
+    <li>A <code>Shipped</code> order can be delivered but not cancelled</li>
+    <li>A <code>Delivered</code> or <code>Cancelled</code> order is a terminal state</li>
+</ul>
+
+<p>Create an abstract <code>OrderState</code> class and concrete states for each. The <code>Order</code> context class should delegate <code>pay()</code>, <code>ship()</code>, <code>deliver()</code>, and <code>cancel()</code> to the current state.</p>
+
+<details>
+    <summary>Reveal Answer</summary>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+
+class OrderState(ABC):
+    @abstractmethod
+    def pay(self, order: "Order") -> str: pass
+    @abstractmethod
+    def ship(self, order: "Order") -> str: pass
+    @abstractmethod
+    def deliver(self, order: "Order") -> str: pass
+    @abstractmethod
+    def cancel(self, order: "Order") -> str: pass
+
+
+class PendingState(OrderState):
+    def pay(self, order):
+        order.set_state(PaidState())
+        return "Payment received. Order is now Paid."
+    def ship(self, order):
+        return "Cannot ship -- order not yet paid."
+    def deliver(self, order):
+        return "Cannot deliver -- order not yet shipped."
+    def cancel(self, order):
+        order.set_state(CancelledState())
+        return "Order cancelled."
+
+
+class PaidState(OrderState):
+    def pay(self, order):
+        return "Already paid."
+    def ship(self, order):
+        order.set_state(ShippedState())
+        return "Order shipped!"
+    def deliver(self, order):
+        return "Cannot deliver -- order not yet shipped."
+    def cancel(self, order):
+        order.set_state(CancelledState())
+        return "Order cancelled. Refund issued."
+
+
+class ShippedState(OrderState):
+    def pay(self, order):
+        return "Already paid."
+    def ship(self, order):
+        return "Already shipped."
+    def deliver(self, order):
+        order.set_state(DeliveredState())
+        return "Order delivered!"
+    def cancel(self, order):
+        return "Cannot cancel -- already shipped."
+
+
+class DeliveredState(OrderState):
+    def pay(self, order): return "Order already delivered."
+    def ship(self, order): return "Order already delivered."
+    def deliver(self, order): return "Order already delivered."
+    def cancel(self, order): return "Cannot cancel -- already delivered."
+
+
+class CancelledState(OrderState):
+    def pay(self, order): return "Order is cancelled."
+    def ship(self, order): return "Order is cancelled."
+    def deliver(self, order): return "Order is cancelled."
+    def cancel(self, order): return "Already cancelled."
+
+
+class Order:
+    def __init__(self, order_id: str):
+        self.order_id = order_id
+        self._state: OrderState = PendingState()
+
+    def set_state(self, state: OrderState):
+        self._state = state
+
+    def pay(self): return self._state.pay(self)
+    def ship(self): return self._state.ship(self)
+    def deliver(self): return self._state.deliver(self)
+    def cancel(self): return self._state.cancel(self)
+</code></pre>
+</details>
+
+<h3>Exercise 2: Logging Chain of Responsibility</h3>
+
+<p>Build a logging system using Chain of Responsibility. Create handlers for three log levels:</p>
+
+<ul>
+    <li><code>InfoHandler</code> -- logs INFO messages to the console</li>
+    <li><code>WarningHandler</code> -- logs WARNING messages to a file</li>
+    <li><code>ErrorHandler</code> -- logs ERROR messages and sends an alert email</li>
+</ul>
+
+<p>Each handler should process messages at its level and pass all messages to the next handler (so ERROR messages are logged at all three levels). Use a <code>LogMessage</code> dataclass with <code>level</code> and <code>message</code> fields.</p>
+
+<details>
+    <summary>Reveal Answer</summary>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Optional
+
+@dataclass
+class LogMessage:
+    level: str    # "INFO", "WARNING", "ERROR"
+    message: str
+
+class LogHandler(ABC):
+    def __init__(self):
+        self._next: Optional[LogHandler] = None
+
+    def set_next(self, handler: "LogHandler") -> "LogHandler":
+        self._next = handler
+        return handler
+
+    def handle(self, log: LogMessage) -> None:
+        if self.should_handle(log):
+            self.process(log)
+        if self._next:
+            self._next.handle(log)
+
+    @abstractmethod
+    def should_handle(self, log: LogMessage) -> bool: pass
+
+    @abstractmethod
+    def process(self, log: LogMessage) -> None: pass
+
+
+class InfoHandler(LogHandler):
+    def should_handle(self, log):
+        return log.level in ("INFO", "WARNING", "ERROR")
+    def process(self, log):
+        print(f"[Console] {log.level}: {log.message}")
+
+
+class WarningHandler(LogHandler):
+    def should_handle(self, log):
+        return log.level in ("WARNING", "ERROR")
+    def process(self, log):
+        print(f"[File] {log.level}: {log.message}")
+
+
+class ErrorHandler(LogHandler):
+    def should_handle(self, log):
+        return log.level == "ERROR"
+    def process(self, log):
+        print(f"[Alert Email] {log.level}: {log.message}")
+
+
+# Usage
+chain = InfoHandler()
+chain.set_next(WarningHandler()).set_next(ErrorHandler())
+chain.handle(LogMessage("ERROR", "Server crash"))
+# All three handlers process it
+</code></pre>
+</details>
+
+<h3>Exercise 3: Report Generator with Template Method</h3>
+
+<p>Create a report generation framework using the Template Method pattern. The base <code>ReportGenerator</code> class should define this algorithm:</p>
+
+<ol>
+    <li><code>gather_data()</code> -- abstract, subclasses fetch from different sources</li>
+    <li><code>filter_data()</code> -- concrete, removes null entries (shared logic)</li>
+    <li><code>format_report()</code> -- abstract, subclasses format as HTML, PDF, or CSV</li>
+    <li><code>add_header()</code> -- hook, optionally adds a header</li>
+    <li><code>deliver()</code> -- abstract, subclasses email or save to disk</li>
+</ol>
+
+<p>Implement <code>HTMLReportGenerator</code> and <code>CSVReportGenerator</code> subclasses.</p>
+
+<details>
+    <summary>Reveal Answer</summary>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+from typing import List, Dict
+
+class ReportGenerator(ABC):
+    """Template method defines the report generation algorithm."""
+
+    def generate(self, source: str) -> str:
+        data = self.gather_data(source)
+        data = self.filter_data(data)
+        report = self.format_report(data)
+        report = self.add_header() + report
+        self.deliver(report)
+        return report
+
+    @abstractmethod
+    def gather_data(self, source: str) -> List[Dict]: pass
+
+    def filter_data(self, data: List[Dict]) -> List[Dict]:
+        """Shared logic: remove entries with None values."""
+        return [d for d in data if None not in d.values()]
+
+    @abstractmethod
+    def format_report(self, data: List[Dict]) -> str: pass
+
+    def add_header(self) -> str:
+        """Hook -- empty by default."""
+        return ""
+
+    @abstractmethod
+    def deliver(self, report: str) -> None: pass
+
+
+class HTMLReportGenerator(ReportGenerator):
+    def gather_data(self, source):
+        return [{"name": "Alice", "score": 95}, {"name": "Bob", "score": 87}]
+
+    def format_report(self, data):
+        rows = "".join(
+            f"&lt;tr&gt;&lt;td&gt;{d['name']}&lt;/td&gt;&lt;td&gt;{d['score']}&lt;/td&gt;&lt;/tr&gt;"
+            for d in data
+        )
+        return f"&lt;table&gt;{rows}&lt;/table&gt;"
+
+    def add_header(self):
+        return "&lt;h1&gt;Score Report&lt;/h1&gt;"
+
+    def deliver(self, report):
+        print(f"Emailing HTML report ({len(report)} chars)")
+
+
+class CSVReportGenerator(ReportGenerator):
+    def gather_data(self, source):
+        return [{"name": "Alice", "score": 95}, {"name": "Bob", "score": 87}]
+
+    def format_report(self, data):
+        lines = ["name,score"]
+        lines.extend(f"{d['name']},{d['score']}" for d in data)
+        return "\n".join(lines)
+
+    def deliver(self, report):
+        print(f"Saved CSV report to disk ({len(report)} chars)")
+</code></pre>
+</details>

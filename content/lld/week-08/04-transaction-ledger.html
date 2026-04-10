@@ -1,0 +1,98 @@
+<h2>Transaction and Ledger Patterns</h2>
+
+<p>Splitwise, payment systems, and booking platforms all need to track financial transactions. This lesson covers transaction modeling, the append-only ledger pattern, split algorithms (equal, exact, percentage), balance calculation from transaction history, and debt simplification.</p>
+
+<h3>Transaction Model</h3>
+
+<p>A transaction records a financial event: who paid, how much, who owes what, when, and the current status:</p>
+
+<pre><code class="language-python">class TransactionStatus(Enum):
+    PENDING = "pending"
+    SETTLED = "settled"
+    CANCELLED = "cancelled"
+
+
+@dataclass
+class Split:
+    """How much a single user owes in an expense."""
+    user_id: str
+    amount: float
+
+
+@dataclass
+class Transaction:
+    transaction_id: str
+    description: str
+    payer_id: str
+    total_amount: float
+    splits: List[Split]
+    status: TransactionStatus = TransactionStatus.PENDING
+    created_at: datetime = field(default_factory=datetime.now)
+    group_id: Optional[str] = None
+
+    def settle(self) -> None:
+        self.status = TransactionStatus.SETTLED
+
+    def cancel(self) -> None:
+        self.status = TransactionStatus.CANCELLED</code></pre>
+
+<h3>Split Strategies</h3>
+
+<p>Different ways to split an expense, each implemented as a Strategy:</p>
+<ul>
+  <li><strong>Equal</strong> -- divide evenly among all participants, handle rounding remainder</li>
+  <li><strong>Exact</strong> -- each person's share is specified explicitly</li>
+  <li><strong>Percentage</strong> -- each person pays a percentage of the total</li>
+  <li><strong>Share-based</strong> -- proportional to shares (e.g., 2:1:1)</li>
+</ul>
+
+<pre><code class="language-python">class SplitStrategy(ABC):
+    @abstractmethod
+    def calculate(self, total: float, participants: List[str],
+                  **kwargs) -> List[Split]:
+        pass
+
+
+class EqualSplit(SplitStrategy):
+    def calculate(self, total, participants, **kwargs):
+        share = round(total / len(participants), 2)
+        splits = [Split(uid, share) for uid in participants]
+        # Handle rounding: give remainder to first participant
+        diff = round(total - share * len(participants), 2)
+        if diff != 0:
+            splits[0].amount += diff
+        return splits
+
+
+class PercentageSplit(SplitStrategy):
+    def calculate(self, total, participants, **kwargs):
+        percentages = kwargs.get("percentages", {})
+        return [
+            Split(uid, round(total * percentages[uid] / 100, 2))
+            for uid in participants
+        ]</code></pre>
+
+<h3>Append-Only Ledger</h3>
+
+<p>The ledger pattern records every financial event as an immutable entry. You never update or delete entries -- only append new ones. To reverse a transaction, you add a compensating entry. This gives you a complete audit trail and makes balance calculation deterministic.</p>
+
+<h3>Balance Calculation</h3>
+
+<p>Balances are computed by scanning the ledger. For each transaction, the payer is owed money by each participant (excluding themselves). Net balances determine who owes whom:</p>
+<ul>
+  <li>Positive balance: others owe you money</li>
+  <li>Negative balance: you owe money to others</li>
+</ul>
+
+<h3>Debt Simplification</h3>
+
+<p>With N users, there can be up to N*(N-1)/2 debts. Simplification reduces the number of transactions needed to settle all debts by computing net balances and matching creditors with debtors. This is a greedy algorithm: sort creditors and debtors, then match the largest creditor with the largest debtor.</p>
+
+<h3>Key Design Takeaways</h3>
+<ul>
+  <li>Use Strategy pattern for split calculation -- new split types require only a new strategy</li>
+  <li>Append-only ledgers provide complete audit trails and simplify debugging</li>
+  <li>Handle rounding carefully -- floating point errors accumulate in financial code</li>
+  <li>Debt simplification is a graph problem: compute net flows to minimize settlements</li>
+  <li>Track transaction status (PENDING, SETTLED, CANCELLED) as explicit state</li>
+</ul>

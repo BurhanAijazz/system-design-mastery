@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>System Design Mastery</title>
+  <link rel="stylesheet" href="css/variables.css">
+  <link rel="stylesheet" href="css/reset.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/pages.css">
+  <link rel="stylesheet" href="css/code.css">
+  <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">
+          <div class="logo-icon">SD</div>
+          <span>SDM</span>
+        </div>
+      </div>
+      <nav class="sidebar-nav" id="sidebar-nav"></nav>
+    </aside>
+
+    <div class="sidebar-overlay"></div>
+
+    <!-- Main -->
+    <div class="main-content">
+      <!-- Top Nav -->
+      <header class="topnav">
+        <div class="topnav-left">
+          <button class="hamburger" id="hamburger">&#9776;</button>
+          <form class="search-bar" id="search-form">
+            <span class="search-icon">&#128269;</span>
+            <input type="text" id="search-input" placeholder="Search lessons...">
+          </form>
+        </div>
+        <div class="topnav-right">
+          <button class="topnav-btn search-toggle-mobile" id="search-toggle-mobile">&#128269;</button>
+          
+          <button class="topnav-btn" id="theme-toggle" onclick="App.toggleTheme()">&#9790;</button>
+          <a href="settings.html" class="topnav-btn">&#9881;</a>
+        </div>
+      </header>
+
+      <!-- Page Content -->
+      <div class="page-container" id="page-content">
+        <!-- Hero -->
+        <div class="hero">
+          <h1 class="hero-title">System Design Mastery</h1>
+          <p class="hero-subtitle">
+            Master Low-Level Design and High-Level Design with structured courses,
+            quizzes, exams, and interview preparation — all in one place.
+          </p>
+          <div class="hero-actions">
+            <a href="dashboard.html" class="btn btn-primary btn-lg">Go to Dashboard</a>
+            <a href="course.html?course=lld" class="btn btn-secondary btn-lg">Start LLD Course</a>
+            <a href="course.html?course=hld" class="btn btn-secondary btn-lg">Start HLD Course</a>
+          </div>
+        </div>
+
+        <!-- Course Cards -->
+        <div class="course-cards">
+          <div class="card course-card card-clickable" onclick="location.href='course.html?course=lld'">
+            <span class="course-label lld">LLD Course</span>
+            <h3>Low-Level Design</h3>
+            <p>SOLID principles, design patterns, UML, and 20+ interview problems including Parking Lot, Chess, Splitwise, and more.</p>
+            <div class="course-stats">
+              <span>10 Weeks</span>
+              <span>50+ Lessons</span>
+              <span>18 Bonus Problems</span>
+            </div>
+          </div>
+          <div class="card course-card card-clickable" onclick="location.href='course.html?course=hld'">
+            <span class="course-label hld">HLD Course</span>
+            <h3>High-Level Design</h3>
+            <p>Distributed systems, databases, caching, message queues, and 30+ system designs including Twitter, Netflix, Uber, and more.</p>
+            <div class="course-stats">
+              <span>12 Weeks</span>
+              <span>60+ Lessons</span>
+              <span>18 Bonus Problems</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Features -->
+        <h2 style="text-align:center;margin-bottom:var(--space-lg)">Platform Features</h2>
+        <div class="feature-grid">
+          <div class="card feature-card">
+            <div class="feature-icon">&#128218;</div>
+            <h3>Structured Learning</h3>
+            <p>Week-by-week curriculum with Concepts, Practice, and Projects for each topic.</p>
+          </div>
+          <div class="card feature-card">
+            <div class="feature-icon">&#10004;</div>
+            <h3>Quizzes & Exams</h3>
+            <p>Test your knowledge with per-week quizzes, timed exams, and random question drills.</p>
+          </div>
+          <div class="card feature-card">
+            <div class="feature-icon">&#128200;</div>
+            <h3>Progress Tracking</h3>
+            <p>Track lessons, streaks, study time, and course completion with visual dashboards.</p>
+          </div>
+          <div class="card feature-card">
+            <div class="feature-icon">&#9733;</div>
+            <h3>Interview Prep</h3>
+            <p>DERSC and 6-Step frameworks, checklists, cheat sheets, and anti-patterns.</p>
+          </div>
+          <div class="card feature-card">
+            <div class="feature-icon">&#9998;</div>
+            <h3>Notes System</h3>
+            <p>Take notes per lesson, search, edit, and export — all stored locally.</p>
+          </div>
+          <div class="card feature-card">
+            <div class="feature-icon">&#8635;</div>
+            <h3>Smart Revision</h3>
+            <p>Auto-generated revision list from bookmarks, difficult flags, and failed quizzes.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/utils/dom.js"></script>
+  <script src="js/utils/time.js"></script>
+  <script src="js/utils/code-highlight.js"></script>
+  <script src="js/utils/export.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/router.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

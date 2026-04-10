@@ -1,0 +1,80 @@
+<h2>Week 5 Exercises: Message Queues and Async Processing</h2>
+
+<p>These exercises test your understanding of synchronous vs asynchronous communication, message queue selection, and idempotency patterns.</p>
+
+<h3>Exercise 1: Sync vs Async Decision</h3>
+<p>For each operation in an e-commerce checkout flow, decide whether it should be synchronous or asynchronous. Justify your choice.</p>
+<ul>
+  <li>Validate the user's shipping address</li>
+  <li>Check inventory availability for all items in the cart</li>
+  <li>Charge the user's credit card</li>
+  <li>Send an order confirmation email</li>
+  <li>Update the recommendation engine with purchase data</li>
+  <li>Generate a shipping label</li>
+  <li>Notify the warehouse to start picking</li>
+</ul>
+
+<pre><code class="language-python"># Classify each operation:
+checkout_operations = {
+    "validate_address":   "sync / async?  -- why?",
+    "check_inventory":    "sync / async?  -- why?",
+    "charge_card":        "sync / async?  -- why?",
+    "send_email":         "sync / async?  -- why?",
+    "update_reco_engine": "sync / async?  -- why?",
+    "generate_label":     "sync / async?  -- why?",
+    "notify_warehouse":   "sync / async?  -- why?",
+}
+# Hint: ask "does the user need to see the result RIGHT NOW?"
+</code></pre>
+
+<h3>Exercise 2: Message Queue Selection</h3>
+<p>Choose between Kafka, RabbitMQ, and SQS for each scenario. Explain your reasoning.</p>
+<ul>
+  <li><strong>Scenario A</strong>: You need to distribute image resize jobs across 50 worker processes. Jobs should be picked up by exactly one worker. You need priority queues (premium users get processed first)</li>
+  <li><strong>Scenario B</strong>: You're building a real-time analytics pipeline. Click events from 100,000 concurrent users need to be processed by three independent consumer groups: real-time dashboard, fraud detection, and data warehouse loader</li>
+  <li><strong>Scenario C</strong>: You're running on AWS and need a simple queue to decouple your API from a background job processor. You want zero operational overhead</li>
+</ul>
+
+<pre><code class="language-python"># Decision matrix:
+# Feature           | RabbitMQ     | Kafka         | SQS
+# ─────────────────┼──────────────┼───────────────┼───────────
+# Routing           | Complex      | Partition key | Simple
+# Consumer groups   | No           | Yes           | No
+# Message replay    | No           | Yes           | No
+# Priority queues   | Yes          | No            | No (sort of)
+# Ops overhead      | Medium       | High          | Zero
+# Throughput        | ~50K msg/s   | ~1M msg/s     | ~3K FIFO
+</code></pre>
+
+<h3>Exercise 3: Making Operations Idempotent</h3>
+<p>The following operations are NOT idempotent. Redesign each one so that processing the same message twice produces the same result.</p>
+<ul>
+  <li><code>balance += 100</code> (crediting a user's account)</li>
+  <li><code>INSERT INTO orders (user_id, amount, created_at) VALUES (...)</code></li>
+  <li>Sending a welcome email to a new user</li>
+</ul>
+
+<pre><code class="language-python"># Example fix for balance credit:
+def credit_account_idempotent(user_id, amount, transaction_id, db):
+    """Idempotent credit using transaction_id as dedup key."""
+    # Check if already processed
+    existing = db.query(
+        "SELECT 1 FROM transactions WHERE id = %s", transaction_id
+    )
+    if existing:
+        return  # Already processed, skip
+
+    # Process within a transaction
+    db.execute("BEGIN")
+    db.execute(
+        "INSERT INTO transactions (id, user_id, amount) VALUES (%s, %s, %s)",
+        transaction_id, user_id, amount
+    )
+    db.execute(
+        "UPDATE accounts SET balance = balance + %s WHERE user_id = %s",
+        amount, user_id
+    )
+    db.execute("COMMIT")
+
+# Now design similar fixes for the other two operations.
+</code></pre>

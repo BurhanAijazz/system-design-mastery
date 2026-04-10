@@ -1,0 +1,67 @@
+<h2>Design: HashMap</h2>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Support <code>put(key, value)</code>, <code>get(key)</code>, <code>remove(key)</code></li>
+  <li>Handle collisions gracefully</li>
+  <li>Amortized O(1) for all operations</li>
+  <li>Rehash when load factor exceeds threshold</li>
+</ul>
+
+<h3>Approach</h3>
+<ul>
+  <li>Array of buckets, each bucket is a linked list (chaining)</li>
+  <li>Hash function: <code>hash(key) % capacity</code></li>
+  <li>Load factor threshold (e.g., 0.75) triggers <strong>rehash</strong> to double capacity</li>
+  <li>Rehash iterates all entries and re-inserts into the new array</li>
+</ul>
+
+<h3>Key Code</h3>
+<pre><code class="language-python">class MyHashMap:
+    def __init__(self, capacity=16, load_factor=0.75):
+        self._cap = capacity
+        self._lf = load_factor
+        self._size = 0
+        self._buckets = [[] for _ in range(self._cap)]
+
+    def _hash(self, key):
+        return hash(key) % self._cap
+
+    def put(self, key, value):
+        idx = self._hash(key)
+        for i, (k, v) in enumerate(self._buckets[idx]):
+            if k == key:
+                self._buckets[idx][i] = (key, value)
+                return
+        self._buckets[idx].append((key, value))
+        self._size += 1
+        if self._size / self._cap > self._lf:
+            self._rehash()
+
+    def get(self, key, default=-1):
+        for k, v in self._buckets[self._hash(key)]:
+            if k == key:
+                return v
+        return default
+
+    def remove(self, key):
+        idx = self._hash(key)
+        self._buckets[idx] = [(k, v) for k, v in self._buckets[idx] if k != key]
+
+    def _rehash(self):
+        old = self._buckets
+        self._cap *= 2
+        self._buckets = [[] for _ in range(self._cap)]
+        self._size = 0
+        for bucket in old:
+            for k, v in bucket:
+                self.put(k, v)
+</code></pre>
+
+<h3>Takeaways</h3>
+<ul>
+  <li>Chaining is simplest collision strategy; open addressing is the alternative</li>
+  <li>Rehashing is O(n) but amortized across insertions</li>
+  <li>Good hash distribution minimizes chain length</li>
+  <li>Real-world maps add tree-ification for long chains (Java 8+)</li>
+</ul>

@@ -1,0 +1,87 @@
+<h2>Distributed Cache: Redis and Memcached</h2>
+
+<p>Redis and Memcached are the two dominant caching technologies. Understanding their differences is essential for system design interviews.</p>
+
+<h3>Redis: The Swiss Army Knife</h3>
+<p>Redis is a remote in-memory data structure store -- not just a key-value cache. It supports rich data structures that enable powerful patterns.</p>
+
+<pre><code class="language-python"># Redis data structures and use cases:
+
+# 1. STRINGS: caching fundamentals
+#    SET user:123 '{"name": "Alice"}' EX 300    (set with 5min TTL)
+#    GET user:123                                 (retrieve)
+#    INCR counter:page_views                      (atomic increment)
+
+# 2. LISTS: ordered, duplicate-allowed
+#    LPUSH notifications:user:123 "new_message"
+#    LRANGE notifications:user:123 0 9           (latest 10)
+#    Use case: recent activity feed, message queues
+
+# 3. SETS: unique, unordered
+#    SADD online_users "user:123"
+#    SINTER friends:alice friends:bob            (mutual friends)
+#    Use case: unique visitors, tags, mutual connections
+
+# 4. SORTED SETS: unique with scores
+#    ZADD leaderboard 9500 "player:alice"
+#    ZREVRANGE leaderboard 0 9 WITHSCORES        (top 10)
+#    Use case: leaderboards, priority queues, rate limiters
+
+# 5. HASHES: field-value pairs (mini documents)
+#    HSET user:123 name "Alice" age 30 city "NYC"
+#    HGETALL user:123
+#    Use case: user sessions, object caching
+
+# 6. STREAMS: append-only log (Kafka lite)
+#    XADD events * type "purchase" amount "99.99"
+#    Use case: event sourcing, activity logs
+</code></pre>
+
+<h3>Redis Simulation</h3>
+<pre><code class="language-python">from collections import defaultdict
+from typing import Dict, List, Tuple
+
+class SimulatedRedis:
+    """Simplified Redis with key data structures."""
+    def __init__(self):
+        self.strings: Dict[str, str] = {}
+        self.sorted_sets: Dict[str, List[Tuple[float, str]]] = defaultdict(list)
+        self.hashes: Dict[str, Dict[str, str]] = defaultdict(dict)
+        self.sets: Dict[str, set] = defaultdict(set)
+
+    def set(self, key: str, value: str):
+        self.strings[key] = value
+
+    def zadd(self, key: str, score: float, member: str):
+        self.sorted_sets[key].append((score, member))
+        self.sorted_sets[key].sort(reverse=True)
+
+    def zrevrange(self, key: str, start: int, stop: int):
+        return self.sorted_sets[key][start:stop + 1]
+</code></pre>
+
+<h3>Memcached: Simple and Fast</h3>
+<ul>
+  <li>Strings only -- no data structures</li>
+  <li>Multi-threaded (better CPU utilization on one node)</li>
+  <li>No persistence, no replication</li>
+  <li>Best for: simple caching where you just need get/set</li>
+</ul>
+
+<h3>Redis vs Memcached</h3>
+<ul>
+  <li><strong>Data structures</strong>: Redis has rich types; Memcached has strings only</li>
+  <li><strong>Persistence</strong>: Redis supports RDB snapshots and AOF; Memcached is pure memory</li>
+  <li><strong>Replication</strong>: Redis supports leader-follower; Memcached does not</li>
+  <li><strong>Threading</strong>: Memcached is multi-threaded; Redis is single-threaded (uses I/O multiplexing)</li>
+  <li><strong>Use Redis when</strong>: you need data structures, persistence, pub/sub, or Lua scripting</li>
+  <li><strong>Use Memcached when</strong>: you need simple caching with maximum throughput per node</li>
+</ul>
+
+<h3>Redis Cluster Architecture</h3>
+<ul>
+  <li>Data is split across nodes using <strong>hash slots</strong> (16,384 slots)</li>
+  <li>Each key hashes to a slot: <code>CRC16(key) % 16384</code></li>
+  <li>Each node owns a range of slots</li>
+  <li>Client libraries handle routing -- they learn the slot-to-node mapping</li>
+</ul>

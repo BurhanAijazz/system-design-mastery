@@ -1,0 +1,156 @@
+<h2>Reservation and Booking Architecture</h2>
+
+<p>Many real-world systems involve reserving or booking a resource: parking spots, hotel rooms, movie seats, restaurant tables. This lesson covers the common architecture that underlies all of them.</p>
+
+<h3>Reservation Lifecycle</h3>
+
+<p>Every reservation system follows this lifecycle:</p>
+
+<pre><code>PENDING --> CONFIRMED --> ACTIVE --> COMPLETED
+   |            |           |
+   v            v           v
+EXPIRED     CANCELLED    CANCELLED
+
+States:
+  PENDING:    Created but not yet confirmed (may require payment)
+  CONFIRMED:  Payment received, resource reserved
+  ACTIVE:     Currently in use (car parked, guest checked in)
+  COMPLETED:  Finished (car left, guest checked out)
+  CANCELLED:  User or system cancelled the reservation
+  EXPIRED:    Pending reservation timed out (not confirmed in time)
+</code></pre>
+
+<h3>Valid Transitions</h3>
+
+<pre><code class="language-python">from enum import Enum
+from typing import Dict, List, Optional
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+
+class ReservationStatus(Enum):
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    EXPIRED = "expired"
+
+VALID_TRANSITIONS: Dict[ReservationStatus, List[ReservationStatus]] = {
+    ReservationStatus.PENDING: [
+        ReservationStatus.CONFIRMED,
+        ReservationStatus.CANCELLED,
+        ReservationStatus.EXPIRED,
+    ],
+    ReservationStatus.CONFIRMED: [
+        ReservationStatus.ACTIVE,
+        ReservationStatus.CANCELLED,
+    ],
+    ReservationStatus.ACTIVE: [
+        ReservationStatus.COMPLETED,
+        ReservationStatus.CANCELLED,
+    ],
+    ReservationStatus.COMPLETED: [],   # terminal
+    ReservationStatus.CANCELLED: [],   # terminal
+    ReservationStatus.EXPIRED: [],     # terminal
+}
+</code></pre>
+
+<h3>Generic Reservation</h3>
+
+<pre><code class="language-python">@dataclass
+class Reservation:
+    """A generic reservation for any bookable resource."""
+    reservation_id: str
+    resource_id: str
+    user_id: str
+    status: ReservationStatus = ReservationStatus.PENDING
+    created_at: datetime = field(default_factory=datetime.now)
+    confirmed_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+
+    def transition_to(self, new_status: ReservationStatus) -> bool:
+        if new_status in VALID_TRANSITIONS.get(self.status, []):
+            old = self.status
+            self.status = new_status
+            if new_status == ReservationStatus.CONFIRMED:
+                self.confirmed_at = datetime.now()
+            print(f"Reservation {self.reservation_id}: {old.value} -> {new_status.value}")
+            return True
+        print(f"Invalid transition: {self.status.value} -> {new_status.value}")
+        return False
+
+    def is_expired(self) -> bool:
+        if self.expires_at and self.status == ReservationStatus.PENDING:
+            return datetime.now() > self.expires_at
+        return False
+</code></pre>
+
+<h3>Resource Manager</h3>
+
+<pre><code class="language-python">class ResourceManager:
+    """Manages availability and reservations for a set of resources."""
+
+    def __init__(self, resource_ids: List[str]):
+        self._available = set(resource_ids)
+        self._reservations: Dict[str, Reservation] = {}
+
+    def reserve(self, user_id: str, hold_minutes: int = 10) -> Optional[Reservation]:
+        if not self._available:
+            return None
+
+        resource_id = self._available.pop()
+        reservation = Reservation(
+            reservation_id=f"RES-{len(self._reservations) + 1}",
+            resource_id=resource_id,
+            user_id=user_id,
+            expires_at=datetime.now() + timedelta(minutes=hold_minutes),
+        )
+        self._reservations[reservation.reservation_id] = reservation
+        return reservation
+
+    def confirm(self, reservation_id: str) -> bool:
+        res = self._reservations.get(reservation_id)
+        if not res:
+            return False
+        if res.is_expired():
+            res.transition_to(ReservationStatus.EXPIRED)
+            self._available.add(res.resource_id)
+            return False
+        return res.transition_to(ReservationStatus.CONFIRMED)
+
+    def cancel(self, reservation_id: str) -> bool:
+        res = self._reservations.get(reservation_id)
+        if not res:
+            return False
+        if res.transition_to(ReservationStatus.CANCELLED):
+            self._available.add(res.resource_id)
+            return True
+        return False
+
+    def cleanup_expired(self) -> int:
+        """Check and expire timed-out reservations."""
+        count = 0
+        for res in self._reservations.values():
+            if res.is_expired():
+                res.transition_to(ReservationStatus.EXPIRED)
+                self._available.add(res.resource_id)
+                count += 1
+        return count
+</code></pre>
+
+<h3>Overbooking vs Strict Availability</h3>
+
+<ul>
+    <li><strong>Strict</strong>: resource is marked unavailable immediately on reservation. Used for parking spots, movie seats.</li>
+    <li><strong>Overbooking</strong>: allow more reservations than capacity, betting on cancellations. Used by airlines, hotels.</li>
+</ul>
+
+<h3>Key Design Principles</h3>
+
+<ul>
+    <li>Use a state machine for reservation status transitions</li>
+    <li>Separate the reservation from the resource it reserves</li>
+    <li>Support expiration for pending reservations</li>
+    <li>Use a two-phase approach (hold then confirm) to prevent double-booking</li>
+    <li>Run periodic cleanup for expired reservations</li>
+</ul>

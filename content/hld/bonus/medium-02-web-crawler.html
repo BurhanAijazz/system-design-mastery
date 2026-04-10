@@ -1,0 +1,61 @@
+<h2>Design: Distributed Web Crawler</h2>
+<p>Design a web crawler that can index billions of pages across the internet.</p>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Crawl billions of pages with BFS or priority-based ordering</li>
+  <li>Respect robots.txt and politeness (delay between requests to same host)</li>
+  <li>Deduplicate URLs and content</li>
+  <li>Horizontally scalable with fault tolerance</li>
+</ul>
+
+<h3>High-Level Architecture</h3>
+<ul>
+  <li><strong>URL Frontier</strong> &mdash; Priority queue of URLs to crawl, partitioned by domain</li>
+  <li><strong>Fetcher Workers</strong> &mdash; Distributed pool that downloads pages via HTTP</li>
+  <li><strong>DNS Resolver Cache</strong> &mdash; Local cache to avoid repeated DNS lookups</li>
+  <li><strong>Content Parser</strong> &mdash; Extracts links, text, and metadata from HTML</li>
+  <li><strong>Dedup Service</strong> &mdash; Bloom filter for URL dedup, simhash for content dedup</li>
+  <li><strong>Storage</strong> &mdash; Raw HTML in blob store, parsed data in search index</li>
+</ul>
+
+<h3>Key Components</h3>
+<pre><code class="language-python">from collections import deque
+import hashlib, mmh3, bitarray
+
+class BloomFilter:
+    def __init__(self, size=10_000_000, num_hashes=7):
+        self.bits = bitarray.bitarray(size)
+        self.bits.setall(0)
+        self.size = size
+        self.num_hashes = num_hashes
+
+    def add(self, url):
+        for seed in range(self.num_hashes):
+            idx = mmh3.hash(url, seed) % self.size
+            self.bits[idx] = 1
+
+    def might_contain(self, url):
+        return all(
+            self.bits[mmh3.hash(url, seed) % self.size]
+            for seed in range(self.num_hashes)
+        )
+
+class URLFrontier:
+    def __init__(self):
+        self.queues = {}  # domain -> deque of URLs
+        self.bloom = BloomFilter()
+
+    def add_url(self, url, domain):
+        if not self.bloom.might_contain(url):
+            self.bloom.add(url)
+            self.queues.setdefault(domain, deque()).append(url)
+</code></pre>
+
+<h3>Scaling Considerations</h3>
+<ul>
+  <li>Partition frontier by domain hash so each worker owns a set of domains</li>
+  <li>Per-domain rate limiting ensures politeness (1-2 sec delay between requests)</li>
+  <li>Checkpoint frontier state to survive worker crashes</li>
+  <li>Use consistent hashing to rebalance domains when workers join/leave</li>
+</ul>

@@ -1,0 +1,68 @@
+<h2>CDN and Edge Caching</h2>
+
+<p>A request passes through multiple cache layers before hitting your database. Each layer catches traffic, reducing load on the next. Understanding this hierarchy is essential for designing performant systems.</p>
+
+<h3>Multi-Layer Caching Hierarchy</h3>
+<ul>
+  <li><strong>Layer 1 -- Browser Cache</strong>: Cached in user's browser. Zero network latency. Best for static assets (CSS, JS, images). Controlled by Cache-Control headers. ~60% hit rate</li>
+  <li><strong>Layer 2 -- CDN Edge</strong>: Cached at edge servers close to the user (~50ms instead of ~200ms). Hundreds of Points of Presence worldwide. Best for static assets, public API responses. ~25% of remaining traffic</li>
+  <li><strong>Layer 3 -- API Gateway Cache</strong>: Per-route caching with custom TTLs. Best for expensive API responses</li>
+  <li><strong>Layer 4 -- Application Cache (Redis)</strong>: Caches DB query results, session data, computed values</li>
+  <li><strong>Layer 5 -- Database Cache</strong>: Query cache, buffer pool, materialized views. Built into the DB engine</li>
+</ul>
+
+<pre><code class="language-python">from dataclasses import dataclass
+from typing import List
+
+@dataclass
+class CacheLayer:
+    name: str
+    hit_rate: float     # probability of cache hit
+    latency_ms: float   # latency if this layer serves the response
+    hits: int = 0
+    misses: int = 0
+
+def simulate_multi_layer(num_requests=100_000) -> List[CacheLayer]:
+    layers = [
+        CacheLayer("Browser Cache", hit_rate=0.55, latency_ms=0),
+        CacheLayer("CDN Edge",      hit_rate=0.70, latency_ms=20),
+        CacheLayer("API Gateway",   hit_rate=0.40, latency_ms=5),
+        CacheLayer("Redis Cache",   hit_rate=0.90, latency_ms=2),
+        CacheLayer("Database",      hit_rate=1.00, latency_ms=50),
+    ]
+    # Each request falls through layers until one hits
+    # ~2% of original traffic actually reaches the database
+    return layers
+</code></pre>
+
+<h3>Cache-Control Headers</h3>
+<p>HTTP headers that control browser and CDN caching behavior:</p>
+<ul>
+  <li><code>Cache-Control: public, max-age=31536000</code> -- CDN and browser cache for 1 year (static assets)</li>
+  <li><code>Cache-Control: private, max-age=300</code> -- browser only, 5 minutes (user-specific data)</li>
+  <li><code>Cache-Control: no-cache</code> -- always revalidate with origin (not "no caching")</li>
+  <li><code>Cache-Control: no-store</code> -- truly do not cache (sensitive data)</li>
+  <li><code>ETag</code> and <code>If-None-Match</code> -- conditional requests, return 304 Not Modified if unchanged</li>
+</ul>
+
+<h3>CDN Architecture</h3>
+<ul>
+  <li><strong>Pull CDN</strong>: CDN fetches from origin on first request, caches the response. Simple but first request is slow</li>
+  <li><strong>Push CDN</strong>: You upload content to the CDN proactively. More control, better for large files</li>
+  <li>Major providers: Cloudflare, AWS CloudFront, Akamai, Fastly</li>
+</ul>
+
+<h3>CDN Invalidation Strategies</h3>
+<ul>
+  <li><strong>TTL-based</strong>: Set expiration, accept staleness window</li>
+  <li><strong>Versioned URLs</strong>: <code>style.v2.css</code> -- new URL = new cache entry. The safest approach</li>
+  <li><strong>Purge API</strong>: Explicitly invalidate specific URLs. Use sparingly -- propagation takes time</li>
+</ul>
+
+<h3>When to Use a CDN</h3>
+<ul>
+  <li>Static assets (images, CSS, JS, fonts) -- always use a CDN</li>
+  <li>Public API responses that don't change frequently</li>
+  <li>Video and media streaming</li>
+  <li>Do NOT use for: user-specific data, real-time data, authenticated endpoints</li>
+</ul>

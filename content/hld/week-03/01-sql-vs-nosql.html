@@ -1,0 +1,76 @@
+<h2>SQL vs NoSQL: When to Use Which</h2>
+
+<p>The database is the most critical building block in your system. The wrong choice can mean rewriting your entire data layer. The right choice depends on your <strong>access patterns</strong>, not on hype.</p>
+
+<p>Most production systems use <strong>multiple databases</strong> (polyglot persistence). The real question is: which database for which part of your system?</p>
+
+<h3>Relational Databases (SQL) -- The Default Choice</h3>
+<p>Examples: PostgreSQL, MySQL, Oracle, SQL Server. Data is stored in tables with rows and columns, strict schemas, and relationships via foreign keys.</p>
+
+<pre><code class="language-python"># Relational model: tables with relationships
+users = {
+    1: {"name": "Alice", "email": "alice@example.com"},
+    2: {"name": "Bob",   "email": "bob@example.com"},
+}
+orders = {
+    1: {"user_id": 1, "amount": 50.00},
+    2: {"user_id": 1, "amount": 30.00},
+    3: {"user_id": 2, "amount": 100.00},
+}
+
+# SQL JOIN equivalent
+# SELECT u.name, o.amount FROM users u
+#   JOIN orders o ON u.id = o.user_id
+for oid, order in orders.items():
+    user = users[order["user_id"]]
+    print(f"{user['name']} -> ${order['amount']}")
+</code></pre>
+
+<h3>Strengths and Weaknesses of SQL</h3>
+<ul>
+  <li><strong>ACID transactions</strong> -- atomicity, consistency, isolation, durability</li>
+  <li><strong>Complex queries</strong> -- JOINs, aggregations, subqueries</li>
+  <li><strong>Schema enforcement</strong> -- data integrity, can't insert garbage</li>
+  <li><strong>Mature ecosystem</strong> -- decades of optimization and tooling</li>
+  <li><em>Weakness:</em> Vertical scaling ceiling (single node for writes)</li>
+  <li><em>Weakness:</em> Schema changes can be painful at scale</li>
+  <li><em>Weakness:</em> Not great for hierarchical or graph-like data</li>
+</ul>
+
+<h3>Key-Value Stores -- The Fastest Option</h3>
+<p>Examples: Redis, DynamoDB, Memcached. Simple key-to-value mapping with O(1) lookups. Best for caching, sessions, and real-time counters.</p>
+
+<pre><code class="language-python"># Key-Value store: simple get/set
+cache = {}
+cache["user:123"] = '{"name": "Alice", "email": "alice@example.com"}'
+cache["session:abc"] = '{"user_id": 123, "expires": 1700000000}'
+
+# O(1) lookup -- no scanning, no indexes needed
+user_data = cache.get("user:123")
+</code></pre>
+
+<h3>Document Stores</h3>
+<p>Examples: MongoDB, Couchbase. Store self-contained JSON documents. Ideal when entities are mostly read/written as a whole and don't need complex JOINs.</p>
+
+<h3>Wide-Column and Graph Databases</h3>
+<ul>
+  <li><strong>Wide-Column</strong> (Cassandra, HBase): optimized for massive write throughput and time-series data</li>
+  <li><strong>Graph</strong> (Neo4j, Neptune): optimized for traversing relationships (social networks, fraud detection)</li>
+</ul>
+
+<h3>Decision Flowchart</h3>
+<ul>
+  <li>Need ACID transactions and complex JOINs? Use <strong>SQL</strong> (PostgreSQL, MySQL)</li>
+  <li>Need sub-millisecond lookups by key? Use <strong>Key-Value</strong> (Redis, DynamoDB)</li>
+  <li>Data is self-contained documents with variable schema? Use <strong>Document</strong> (MongoDB)</li>
+  <li>Need massive write throughput across regions? Use <strong>Wide-Column</strong> (Cassandra)</li>
+  <li>Need to traverse deep relationships? Use <strong>Graph</strong> (Neo4j)</li>
+  <li>Unsure? <strong>Start with PostgreSQL</strong> -- it handles most workloads well</li>
+</ul>
+
+<h3>Scale Limits (Approximate)</h3>
+<ul>
+  <li>Single PostgreSQL: ~10K-50K QPS, ~1TB comfortable</li>
+  <li>With read replicas: ~200K read QPS</li>
+  <li>Beyond that: need sharding or move writes to a specialized store</li>
+</ul>

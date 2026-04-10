@@ -1,0 +1,267 @@
+<h2>Interface Segregation Principle (ISP)</h2>
+
+<p>
+  The Interface Segregation Principle states that <strong>no client should be forced
+  to depend on methods it does not use</strong>. Instead of one large, monolithic interface,
+  you should create smaller, focused interfaces that each serve a specific client need.
+</p>
+
+<h3>Why Fat Interfaces Are Harmful</h3>
+
+<p>
+  When a class implements an interface with methods it does not need, several problems arise:
+</p>
+
+<ul>
+  <li>Implementors are forced to write dummy or no-op methods.</li>
+  <li>Changes to unused methods can trigger unnecessary recompilation and redeployment.</li>
+  <li>The interface becomes harder to understand because its responsibilities are unclear.</li>
+  <li>Testing becomes more difficult since mock objects must implement irrelevant methods.</li>
+</ul>
+
+<h3>Bad Example: Fat Worker Interface</h3>
+
+<p>
+  Consider a system that manages different types of workers. A single large interface
+  tries to cover all possible worker behaviors:
+</p>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+
+
+class Worker(ABC):
+    """Fat interface: not all workers need all these methods."""
+
+    @abstractmethod
+    def write_code(self):
+        pass
+
+    @abstractmethod
+    def review_code(self):
+        pass
+
+    @abstractmethod
+    def manage_team(self):
+        pass
+
+    @abstractmethod
+    def create_designs(self):
+        pass
+
+    @abstractmethod
+    def run_tests(self):
+        pass
+
+    @abstractmethod
+    def deploy_to_production(self):
+        pass
+
+
+class JuniorDeveloper(Worker):
+    def write_code(self):
+        print("Writing code...")
+
+    def review_code(self):
+        raise NotImplementedError("Juniors don't review code")
+
+    def manage_team(self):
+        raise NotImplementedError("Juniors don't manage teams")
+
+    def create_designs(self):
+        raise NotImplementedError("Juniors don't create designs")
+
+    def run_tests(self):
+        print("Running unit tests...")
+
+    def deploy_to_production(self):
+        raise NotImplementedError("Juniors can't deploy")
+
+
+class Designer(Worker):
+    def write_code(self):
+        raise NotImplementedError("Designers don't write code")
+
+    def review_code(self):
+        raise NotImplementedError("Designers don't review code")
+
+    def manage_team(self):
+        raise NotImplementedError("Designers don't manage")
+
+    def create_designs(self):
+        print("Creating UI designs...")
+
+    def run_tests(self):
+        raise NotImplementedError("Designers don't run tests")
+
+    def deploy_to_production(self):
+        raise NotImplementedError("Designers don't deploy")
+</code></pre>
+
+<p>
+  Both classes are littered with <code>NotImplementedError</code>. This is a clear
+  sign the interface is too broad. The <code>Designer</code> only uses one of six methods,
+  yet must provide stubs for the other five.
+</p>
+
+<h3>Good Example: Segregated Interfaces</h3>
+
+<p>
+  Split the fat interface into small, cohesive interfaces. Each class implements
+  only the interfaces relevant to its role:
+</p>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+
+
+class Coder(ABC):
+    @abstractmethod
+    def write_code(self):
+        pass
+
+
+class CodeReviewer(ABC):
+    @abstractmethod
+    def review_code(self):
+        pass
+
+
+class TeamManager(ABC):
+    @abstractmethod
+    def manage_team(self):
+        pass
+
+
+class DesignCreator(ABC):
+    @abstractmethod
+    def create_designs(self):
+        pass
+
+
+class Tester(ABC):
+    @abstractmethod
+    def run_tests(self):
+        pass
+
+
+class Deployer(ABC):
+    @abstractmethod
+    def deploy_to_production(self):
+        pass
+</code></pre>
+
+<p>
+  Now each worker class picks only the interfaces it genuinely implements:
+</p>
+
+<pre><code class="language-python">class JuniorDeveloper(Coder, Tester):
+    def write_code(self):
+        print("Writing code with guidance...")
+
+    def run_tests(self):
+        print("Running unit tests...")
+
+
+class SeniorDeveloper(Coder, CodeReviewer, Tester, Deployer):
+    def write_code(self):
+        print("Writing production code...")
+
+    def review_code(self):
+        print("Reviewing pull requests...")
+
+    def run_tests(self):
+        print("Running integration tests...")
+
+    def deploy_to_production(self):
+        print("Deploying via CI/CD pipeline...")
+
+
+class Designer(DesignCreator):
+    def create_designs(self):
+        print("Creating UI mockups in Figma...")
+
+
+class TechLead(Coder, CodeReviewer, TeamManager, Deployer):
+    def write_code(self):
+        print("Writing architectural code...")
+
+    def review_code(self):
+        print("Reviewing critical changes...")
+
+    def manage_team(self):
+        print("Running sprint planning...")
+
+    def deploy_to_production(self):
+        print("Approving production deployments...")
+</code></pre>
+
+<h3>Using Segregated Interfaces in Client Code</h3>
+
+<p>
+  The real benefit appears in client code. Functions only depend on the interface they need:
+</p>
+
+<pre><code class="language-python">def assign_coding_task(coder: Coder, task: str):
+    """Only requires a Coder - works with Junior, Senior, or TechLead."""
+    print(f"Assigning task: {task}")
+    coder.write_code()
+
+
+def request_deployment(deployer: Deployer, version: str):
+    """Only requires a Deployer - won't accept Junior or Designer."""
+    print(f"Deploying version {version}")
+    deployer.deploy_to_production()
+
+
+def run_code_review(reviewer: CodeReviewer, pr_number: int):
+    """Only requires a CodeReviewer."""
+    print(f"Reviewing PR #{pr_number}")
+    reviewer.review_code()
+
+
+# Type-safe usage
+junior = JuniorDeveloper()
+senior = SeniorDeveloper()
+designer = Designer()
+
+assign_coding_task(junior, "Fix login bug")       # works
+assign_coding_task(senior, "Build API endpoint")   # works
+# assign_coding_task(designer, "Fix bug")          # type error - Designer is not a Coder
+
+request_deployment(senior, "v2.1.0")               # works
+# request_deployment(junior, "v2.1.0")             # type error - Junior is not a Deployer
+</code></pre>
+
+<h3>Python Protocols as an Alternative</h3>
+
+<p>
+  Python 3.8+ offers <code>Protocol</code> for structural subtyping (duck typing with
+  type safety). This achieves ISP without explicit inheritance:
+</p>
+
+<pre><code class="language-python">from typing import Protocol
+
+
+class Codeable(Protocol):
+    def write_code(self) -> None: ...
+
+
+class Deployable(Protocol):
+    def deploy_to_production(self) -> None: ...
+
+
+def assign_task(worker: Codeable):
+    worker.write_code()
+
+# Any object with a write_code() method satisfies Codeable
+# No inheritance required
+</code></pre>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>If you see <code>NotImplementedError</code> or empty stub methods, the interface is too fat.</li>
+  <li>Split large interfaces into small, role-specific ones.</li>
+  <li>Python supports multiple inheritance, making ISP straightforward with multiple ABCs.</li>
+  <li>Protocols offer an alternative that does not require explicit inheritance.</li>
+  <li>Client code benefits the most: functions declare minimal dependencies, improving testability and clarity.</li>
+</ul>

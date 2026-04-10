@@ -1,0 +1,74 @@
+<h2>Design: Calendar Booking System</h2>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Book events with start/end times; detect <strong>conflicts</strong></li>
+  <li>Support <strong>recurring events</strong> (daily, weekly, monthly)</li>
+  <li>Handle <strong>timezone</strong> conversions for multi-region users</li>
+  <li>Efficient overlap queries via <strong>interval tree</strong></li>
+</ul>
+
+<h3>Approach</h3>
+<ul>
+  <li>Store events in a balanced BST (interval tree) keyed by start time</li>
+  <li>Conflict detection: query all intervals overlapping <code>[new_start, new_end)</code></li>
+  <li>Recurring events expanded on-read within a query window (virtual instances)</li>
+  <li>All times stored in UTC; convert to user timezone at the API layer</li>
+</ul>
+
+<h3>Key Code</h3>
+<pre><code class="language-python">from datetime import datetime, timedelta
+from sortedcontainers import SortedList
+
+class Event:
+    def __init__(self, start: datetime, end: datetime, title: str):
+        self.start = start
+        self.end = end
+        self.title = title
+
+class Calendar:
+    def __init__(self):
+        self._events = SortedList(key=lambda e: e.start)
+
+    def has_conflict(self, start: datetime, end: datetime) -> bool:
+        for ev in self._events:
+            if ev.start >= end:
+                break
+            if ev.end > start:
+                return True
+        return False
+
+    def book(self, start: datetime, end: datetime, title: str) -> Event:
+        if self.has_conflict(start, end):
+            raise ValueError("Conflicting event exists")
+        ev = Event(start, end, title)
+        self._events.add(ev)
+        return ev
+
+    def events_in_range(self, start: datetime, end: datetime) -> list[Event]:
+        return [e for e in self._events if e.end > start and e.start < end]
+
+class RecurringEvent:
+    def __init__(self, base: Event, freq: timedelta, until: datetime):
+        self.base = base
+        self.freq = freq
+        self.until = until
+
+    def expand(self, window_start: datetime, window_end: datetime):
+        instances, current = [], self.base.start
+        duration = self.base.end - self.base.start
+        while current <= self.until and current < window_end:
+            inst_end = current + duration
+            if inst_end > window_start:
+                instances.append(Event(current, inst_end, self.base.title))
+            current += self.freq
+        return instances
+</code></pre>
+
+<h3>Takeaways</h3>
+<ul>
+  <li>Sorted containers give O(log n) insertion and efficient range queries</li>
+  <li>Expanding recurring events lazily avoids storing infinite instances</li>
+  <li>UTC storage + display-layer conversion prevents timezone bugs</li>
+  <li>Double-booking variants (allow K overlaps) reuse the same conflict-check pattern</li>
+</ul>

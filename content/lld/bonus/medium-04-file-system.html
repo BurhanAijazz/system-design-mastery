@@ -1,0 +1,76 @@
+<h2>Design: In-Memory File System</h2>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Support <code>mkdir</code>, <code>ls</code>, <code>add_content_to_file</code>, <code>read_content_from_file</code></li>
+  <li>Paths are Unix-style: <code>/a/b/c</code></li>
+  <li>Apply <strong>Composite pattern</strong>: directories contain files or other directories</li>
+  <li><code>ls</code> on a file returns its name; on a directory returns sorted children</li>
+</ul>
+
+<h3>Approach</h3>
+<ul>
+  <li>A <code>Node</code> base with <code>Directory</code> and <code>File</code> subclasses (Composite)</li>
+  <li>Traverse the trie of directories by splitting the path on <code>/</code></li>
+  <li><code>mkdir -p</code> semantics: create intermediate directories automatically</li>
+  <li>Files store appended string content</li>
+</ul>
+
+<h3>Key Code</h3>
+<pre><code class="language-python">from collections import defaultdict
+
+class Node:
+    pass
+
+class File(Node):
+    def __init__(self):
+        self.content = ""
+
+class Directory(Node):
+    def __init__(self):
+        self.children: dict[str, Node] = {}
+
+class FileSystem:
+    def __init__(self):
+        self.root = Directory()
+
+    def _traverse(self, path: str) -> Node:
+        node = self.root
+        for part in path.split("/")[1:]:
+            if part:
+                node = node.children[part]
+        return node
+
+    def mkdir(self, path: str):
+        node = self.root
+        for part in path.split("/")[1:]:
+            if part and part not in node.children:
+                node.children[part] = Directory()
+            node = node.children[part] if part else node
+
+    def ls(self, path: str) -> list[str]:
+        node = self._traverse(path)
+        if isinstance(node, File):
+            return [path.split("/")[-1]]
+        return sorted(node.children.keys())
+
+    def add_content(self, path: str, content: str):
+        parts = path.split("/")
+        self.mkdir("/".join(parts[:-1]))
+        parent = self._traverse("/".join(parts[:-1]))
+        name = parts[-1]
+        if name not in parent.children:
+            parent.children[name] = File()
+        parent.children[name].content += content
+
+    def read_content(self, path: str) -> str:
+        return self._traverse(path).content
+</code></pre>
+
+<h3>Takeaways</h3>
+<ul>
+  <li>Composite pattern lets files and directories share a uniform interface</li>
+  <li>Trie-like directory structure mirrors real filesystem internals</li>
+  <li>Append semantics on files simplify concurrent-write reasoning</li>
+  <li>Extend with permissions, symlinks, or Observer for watch notifications</li>
+</ul>

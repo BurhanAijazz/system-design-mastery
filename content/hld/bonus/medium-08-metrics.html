@@ -1,0 +1,69 @@
+<h2>Design: Metrics Monitoring</h2>
+<p>Design a metrics monitoring system that collects, stores, and alerts on time-series data.</p>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Collect metrics (CPU, memory, request latency, error rate) from thousands of hosts</li>
+  <li>Store time-series data with configurable retention and downsampling</li>
+  <li>Query and visualize metrics with flexible aggregation (avg, p99, sum)</li>
+  <li>Alerting rules that trigger notifications when thresholds are breached</li>
+</ul>
+
+<h3>High-Level Architecture</h3>
+<ul>
+  <li><strong>Collection Agent</strong> &mdash; Runs on each host; exposes /metrics endpoint (pull model)</li>
+  <li><strong>Scraper / Ingestion</strong> &mdash; Prometheus-like scraper pulls metrics at intervals</li>
+  <li><strong>Time-Series DB</strong> &mdash; Stores (metric_name, labels, timestamp, value) efficiently</li>
+  <li><strong>Query Engine</strong> &mdash; PromQL-like language for aggregation and filtering</li>
+  <li><strong>Alert Manager</strong> &mdash; Evaluates rules periodically, deduplicates, routes alerts</li>
+</ul>
+
+<h3>Key Components</h3>
+<pre><code class="language-python">import time
+from collections import defaultdict
+
+class TimeSeriesDB:
+    def __init__(self):
+        # metric_key -> list of (timestamp, value)
+        self.series = defaultdict(list)
+
+    def write(self, metric, labels, value):
+        key = f"{metric}|{sorted(labels.items())}"
+        self.series[key].append((time.time(), value))
+
+    def query(self, metric, labels, start, end, agg="avg"):
+        key = f"{metric}|{sorted(labels.items())}"
+        points = [
+            v for t, v in self.series[key]
+            if start <= t <= end
+        ]
+        if agg == "avg":
+            return sum(points) / len(points) if points else 0
+        if agg == "max":
+            return max(points) if points else 0
+        if agg == "p99":
+            points.sort()
+            idx = int(len(points) * 0.99)
+            return points[idx] if points else 0
+
+class AlertRule:
+    def __init__(self, name, query, threshold, operator="gt"):
+        self.name = name
+        self.query = query        # e.g., ("cpu_usage", {"host":"*"})
+        self.threshold = threshold
+        self.operator = operator   # "gt" or "lt"
+
+    def evaluate(self, tsdb):
+        value = tsdb.query(*self.query, time.time()-300, time.time())
+        if self.operator == "gt" and value > self.threshold:
+            return f"ALERT {self.name}: {value} > {self.threshold}"
+        return None
+</code></pre>
+
+<h3>Scaling Considerations</h3>
+<ul>
+  <li>Downsample old data (1s &rarr; 1m &rarr; 1h) to reduce storage</li>
+  <li>Shard time-series by metric name hash across TSDB nodes</li>
+  <li>Pull model (Prometheus) is simpler; push model (StatsD) suits short-lived jobs</li>
+  <li>Alert deduplication and grouping prevent notification storms</li>
+</ul>

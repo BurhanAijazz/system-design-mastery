@@ -1,0 +1,48 @@
+<h2>Design: Hit Counter</h2>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Record a hit at a given timestamp</li>
+  <li>Return total hits in the last 300 seconds (5 minutes)</li>
+  <li>Timestamps arrive in non-decreasing order</li>
+  <li>Support high-throughput concurrent hits</li>
+</ul>
+
+<h3>Approach</h3>
+<ul>
+  <li><strong>Sliding window</strong> via a circular buffer of size 300</li>
+  <li>Each slot stores a <code>(timestamp, count)</code> pair</li>
+  <li>On <code>hit(t)</code>: map <code>t % 300</code> to a slot; reset if stale, else increment</li>
+  <li>On <code>getHits(t)</code>: sum all slots whose timestamp is within <code>[t-299, t]</code></li>
+  <li>O(1) hit, O(300)=O(1) getHits, O(300) space</li>
+</ul>
+
+<h3>Key Code</h3>
+<pre><code class="language-python">class HitCounter:
+    def __init__(self):
+        self._times = [0] * 300
+        self._hits  = [0] * 300
+
+    def hit(self, timestamp: int) -> None:
+        idx = timestamp % 300
+        if self._times[idx] != timestamp:
+            self._times[idx] = timestamp
+            self._hits[idx] = 1
+        else:
+            self._hits[idx] += 1
+
+    def get_hits(self, timestamp: int) -> int:
+        total = 0
+        for i in range(300):
+            if timestamp - self._times[i] < 300:
+                total += self._hits[i]
+        return total
+</code></pre>
+
+<h3>Takeaways</h3>
+<ul>
+  <li>Circular buffers give constant-space sliding windows</li>
+  <li>Modular indexing eliminates the need to shift data</li>
+  <li>For thread safety, each slot can use an independent lock</li>
+  <li>Pattern extends to any fixed-window counting problem</li>
+</ul>

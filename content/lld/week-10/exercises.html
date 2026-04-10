@@ -1,0 +1,74 @@
+<h2>Week 10 Exercises: Advanced Problems and Mock Interviews</h2>
+
+<p>These exercises simulate real LLD interview scenarios. For each exercise, follow the 5-5-5-25-5 framework: clarify requirements, identify entities, define interfaces and patterns, implement core logic, and discuss trade-offs. Time yourself to build interview stamina.</p>
+
+<h3>Exercise 1: Ride-Sharing System (45 minutes)</h3>
+
+<p>Design a ride-sharing system (like Uber/Lyft). Practice the full 6-step framework:</p>
+<ul>
+  <li><strong>Requirements:</strong> Riders request rides, drivers accept. System matches rider to nearest available driver. Ride goes through lifecycle: Requested -> Matched -> InProgress -> Completed. Track fare based on distance and time</li>
+  <li><strong>Entities to identify:</strong> Rider, Driver, Ride, Location, FareCalculator, RideStatus</li>
+  <li><strong>Patterns to consider:</strong> State (ride lifecycle), Strategy (matching algorithm and fare calculation), Observer (ride status updates)</li>
+</ul>
+
+<p><strong>Focus area:</strong> State pattern for ride lifecycle and Strategy for driver matching. Write the state machine first, then implement the matching strategy.</p>
+
+<pre><code class="language-python"># Starter hint:
+class RideStatus(Enum):
+    REQUESTED = "requested"
+    MATCHED = "matched"
+    DRIVER_EN_ROUTE = "driver_en_route"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+# Define valid transitions, implement State pattern,
+# then build MatchingStrategy (Nearest, HighestRated)</code></pre>
+
+<h3>Exercise 2: Vending Machine (30 minutes)</h3>
+
+<p>Design a vending machine -- a classic State pattern problem. Practice completing a simpler design in 30 minutes:</p>
+<ul>
+  <li><strong>Requirements:</strong> Select product, insert money, dispense product and change. Handle: insufficient funds, out of stock, exact change only mode</li>
+  <li><strong>States:</strong> Idle -> ProductSelected -> MoneyInserted -> Dispensing -> Idle</li>
+  <li><strong>Patterns:</strong> State (machine lifecycle), Strategy (change calculation -- greedy denomination), Chain of Responsibility (validation: product exists? in stock? enough money?)</li>
+</ul>
+
+<p><strong>Focus area:</strong> Practice drawing the state machine diagram first (Phase 2), then implementing it cleanly. This should take less than 25 minutes of coding.</p>
+
+<pre><code class="language-python"># Starter hint:
+class VendingState(ABC):
+    @abstractmethod
+    def select_product(self, machine, product_id): pass
+    @abstractmethod
+    def insert_money(self, machine, amount): pass
+    @abstractmethod
+    def dispense(self, machine): pass
+    @abstractmethod
+    def cancel(self, machine): pass
+
+# Implement IdleState, ProductSelectedState,
+# MoneyInsertedState, DispensingState</code></pre>
+
+<h3>Exercise 3: Mock Interview Self-Review</h3>
+
+<p>Pick any problem from this course (Parking Lot, Elevator, Snake Game, etc.) and solve it under interview conditions:</p>
+<ul>
+  <li>Set a 45-minute timer</li>
+  <li>Follow the 5-5-5-25-5 framework strictly</li>
+  <li>Talk out loud as you design (practice verbal communication)</li>
+  <li>When done, review against the 10-point checklist</li>
+</ul>
+
+<p><strong>Self-review checklist:</strong></p>
+<ul>
+  <li>Did you spend at least 5 minutes on requirements before coding?</li>
+  <li>Did you identify all core entities (6-10)?</li>
+  <li>Did you use enums for status/type values (not raw strings)?</li>
+  <li>Did you justify each pattern choice with a reason and alternative?</li>
+  <li>Can you walk through a complete use case end-to-end?</li>
+  <li>Did you mention edge cases (even ones you did not implement)?</li>
+  <li>Did you finish within 45 minutes?</li>
+</ul>
+
+<p><strong>Tip:</strong> Record yourself (audio or video) and review. The biggest improvements come from hearing how you communicate your design decisions.</p>

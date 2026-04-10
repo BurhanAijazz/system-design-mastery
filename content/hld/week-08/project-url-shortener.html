@@ -1,0 +1,102 @@
+<h2>Project: URL Shortener Prototype</h2>
+
+<p>This project builds a working URL shortener with Base62 key generation, an LRU cache with hit rate tracking, redirect simulation, click analytics, URL expiration, and custom alias support.</p>
+
+<h3>Core Components</h3>
+
+<h3>Base62 Encoding</h3>
+
+<p>The key generation uses Base62 encoding to convert numeric IDs into short, URL-safe strings:</p>
+
+<pre><code class="language-python">import string
+from collections import OrderedDict
+from typing import Optional
+
+BASE62 = string.ascii_lowercase + string.ascii_uppercase + string.digits
+
+def base62_encode(num: int) -> str:
+    if num == 0:
+        return BASE62[0]
+    result = []
+    while num > 0:
+        result.append(BASE62[num % 62])
+        num //= 62
+    return ''.join(reversed(result))
+
+def base62_decode(s: str) -> int:
+    num = 0
+    for char in s:
+        num = num * 62 + BASE62.index(char)
+    return num</code></pre>
+
+<h3>LRU Cache with Hit Tracking</h3>
+
+<p>The cache uses Python's OrderedDict for O(1) get/put with LRU eviction and tracks hit/miss statistics:</p>
+
+<pre><code class="language-python">class LRUCache:
+    def __init__(self, capacity: int = 10000):
+        self.capacity = capacity
+        self.cache: OrderedDict = OrderedDict()
+        self.hits = 0
+        self.misses = 0
+
+    def get(self, key: str) -> Optional[str]:
+        if key in self.cache:
+            self.cache.move_to_end(key)
+            self.hits += 1
+            return self.cache[key]
+        self.misses += 1
+        return None
+
+    def put(self, key: str, value: str):
+        if key in self.cache:
+            self.cache.move_to_end(key)
+        self.cache[key] = value
+        if len(self.cache) > self.capacity:
+            self.cache.popitem(last=False)
+
+    @property
+    def hit_rate(self) -> float:
+        total = self.hits + self.misses
+        return self.hits / total * 100 if total > 0 else 0</code></pre>
+
+<h3>URL Record and Click Analytics</h3>
+
+<p>Each shortened URL stores metadata and an analytics trail:</p>
+
+<pre><code class="language-python">from dataclasses import dataclass, field
+
+@dataclass
+class ClickEvent:
+    timestamp: float
+    referrer: str
+    country: str
+    user_agent: str = ""
+
+@dataclass
+class URLRecord:
+    short_code: str
+    long_url: str
+    created_at: float
+    expires_at: Optional[float] = None
+    custom_alias: bool = False
+    creator_ip: str = ""
+    clicks: list = field(default_factory=list)</code></pre>
+
+<h3>How It Works</h3>
+
+<ul>
+  <li><strong>Create:</strong> Counter increments, encodes to Base62, stores URL record in the database and cache</li>
+  <li><strong>Redirect:</strong> Checks cache first (O(1)), falls back to database. Logs a ClickEvent with referrer and country.</li>
+  <li><strong>Custom Alias:</strong> Checks uniqueness before accepting. Stored alongside generated codes.</li>
+  <li><strong>Expiration:</strong> Background cleanup removes expired URLs and evicts them from cache</li>
+  <li><strong>Analytics:</strong> Each redirect appends a ClickEvent. Dashboards query aggregated click data by time, referrer, or country.</li>
+</ul>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>Base62 with 7 characters gives 3.5 trillion combinations -- more than enough for most use cases</li>
+  <li>LRU cache dramatically reduces database load for hot URLs (Pareto principle: 20% of URLs get 80% of traffic)</li>
+  <li>The prototype demonstrates the core read/write paths that would map directly to a production architecture with Redis and a real database</li>
+</ul>

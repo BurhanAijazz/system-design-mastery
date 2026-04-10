@@ -1,0 +1,59 @@
+<h2>Design: Ride Sharing Service (Uber/Lyft)</h2>
+<p>Design the core classes for a ride-sharing application.</p>
+
+<h3>Core Entities</h3>
+<pre><code class="language-python">from enum import Enum
+from dataclasses import dataclass
+
+class RideStatus(Enum):
+    REQUESTED = "requested"
+    DRIVER_ASSIGNED = "driver_assigned"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+@dataclass
+class Location:
+    latitude: float
+    longitude: float
+
+class Rider:
+    def __init__(self, rider_id, name):
+        self.rider_id = rider_id
+        self.name = name
+        self.location = None
+
+class Driver:
+    def __init__(self, driver_id, name):
+        self.driver_id = driver_id
+        self.name = name
+        self.location = None
+        self.available = True
+
+class Ride:
+    def __init__(self, rider, pickup, dropoff):
+        self.rider = rider
+        self.driver = None
+        self.pickup = pickup
+        self.dropoff = dropoff
+        self.status = RideStatus.REQUESTED
+
+    def assign_driver(self, driver):
+        self.driver = driver
+        driver.available = False
+        self.status = RideStatus.DRIVER_ASSIGNED
+
+    def start(self):
+        self.status = RideStatus.IN_PROGRESS
+
+    def complete(self):
+        self.status = RideStatus.COMPLETED
+        self.driver.available = True
+</code></pre>
+
+<h3>Patterns Used</h3>
+<ul>
+  <li><strong>State:</strong> Ride lifecycle (Requested -> Assigned -> InProgress -> Completed)</li>
+  <li><strong>Strategy:</strong> Different matching algorithms (nearest, best-rated)</li>
+  <li><strong>Observer:</strong> Notify rider of driver location updates</li>
+</ul>

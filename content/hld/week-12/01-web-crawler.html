@@ -1,0 +1,92 @@
+<h2>Google Search / Web Crawler Design</h2>
+
+<p>A web crawler discovers and indexes the internet by following links. The two core constraints are <strong>priority</strong> (crawl important pages first) and <strong>politeness</strong> (do not overload any single website). At Google scale, this means crawling billions of pages per day.</p>
+
+<h3>Define: Requirements</h3>
+
+<ul>
+  <li><strong>Functional:</strong> Crawl from seed URLs, extract and follow links, store content for indexing, respect robots.txt, handle deduplication (same page via different URLs), re-crawl for freshness</li>
+  <li><strong>Non-Functional:</strong> Crawl billions of pages, politeness (rate limit per domain), horizontally scalable, fault-tolerant (no lost progress), priority-based crawling</li>
+</ul>
+
+<h3>Estimate</h3>
+
+<pre><code class="language-python"># Target: 1B pages/day
+# 1B / 86400 = ~11,600 pages/sec
+# Avg page size: 100 KB -> 1.16 GB/sec = 100 TB/day
+# Links per page: ~50 -> 50B links discovered/day (mostly dupes)</code></pre>
+
+<h3>Architecture</h3>
+
+<pre><code class="language-python"># Crawler pipeline:
+# Seed URLs -> URL Frontier -> Fetcher (HTTP GET)
+#                  ^                    |
+#                  |              Parser (extract links + content)
+#             URL Dedup                 |
+#          (Bloom Filter)         Content Store (S3)
+#               ^                       |
+#               |                 Link Extractor
+#               +--- new URLs ----------+
+
+# URL Frontier has two layers:
+#   Front queues (PRIORITY): important pages first
+#   Back queues (POLITENESS): one queue per domain</code></pre>
+
+<h3>URL Frontier</h3>
+
+<p>The URL Frontier is the brain of the crawler with two key responsibilities:</p>
+
+<ul>
+  <li><strong>Priority:</strong> Crawl important pages first based on PageRank score, freshness needs, and link depth (prefer shallow pages)</li>
+  <li><strong>Politeness:</strong> Rate limit per domain (max 1 request/sec per domain), separate queue per domain, round-robin across domain queues</li>
+</ul>
+
+<h3>URL Deduplication</h3>
+
+<pre><code class="language-python"># Same page reachable via different URLs:
+# https://example.com/page
+# https://example.com/page?ref=twitter
+# https://example.com/Page (case difference)
+# http://example.com/page (http vs https)
+
+# Approach:
+# 1. URL normalization (lowercase, remove tracking params, etc.)
+# 2. Bloom filter for fast "probably seen" check (~10 bits per URL)
+#    50B URLs * 10 bits = 62.5 GB (fits in memory of a cluster)
+# 3. If Bloom filter says "maybe" -> exact check against URL DB</code></pre>
+
+<h3>Content Deduplication</h3>
+
+<ul>
+  <li>Many pages have the same content but different URLs (mirrors, syndication)</li>
+  <li>SimHash or MinHash to compute content fingerprint</li>
+  <li>Compare fingerprints to detect near-duplicate content</li>
+  <li>Skip re-indexing if content has not changed since last crawl</li>
+</ul>
+
+<h3>Robots.txt Compliance</h3>
+
+<ul>
+  <li>Fetch and cache robots.txt for each domain before crawling</li>
+  <li>Respect Disallow rules for specific paths</li>
+  <li>Honor Crawl-delay directive when specified</li>
+  <li>Cache robots.txt with a TTL (re-fetch daily)</li>
+</ul>
+
+<h3>Fault Tolerance</h3>
+
+<ul>
+  <li>URL Frontier backed by persistent queue (Kafka) so no URLs are lost on crash</li>
+  <li>Checkpoint crawl progress periodically</li>
+  <li>Idempotent fetching: re-crawling a URL is safe (just updates stored content)</li>
+  <li>Dead letter queue for permanently failing URLs (404, timeout after retries)</li>
+</ul>
+
+<h3>Key Design Decisions</h3>
+
+<ul>
+  <li><strong>Bloom filter for dedup:</strong> Trades small false positive rate for massive memory savings</li>
+  <li><strong>Per-domain queues:</strong> Essential for politeness without sacrificing overall throughput</li>
+  <li><strong>Prioritized re-crawling:</strong> News sites re-crawled hourly; static pages re-crawled monthly</li>
+  <li><strong>Horizontal scaling:</strong> Partition domains across crawler nodes using consistent hashing</li>
+</ul>

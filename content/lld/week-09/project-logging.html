@@ -1,0 +1,76 @@
+<h2>Project: Logging Framework</h2>
+
+<p>A full LLD implementation of a logging framework similar to Python's built-in logging module. This project combines six design patterns: Singleton for the logger registry, Strategy for formatters, Chain of Responsibility for filters, Observer for handlers, Builder for configuration, and Composite for handler groups.</p>
+
+<h3>Requirements</h3>
+
+<p><strong>Functional:</strong></p>
+<ul>
+  <li>Log messages at different levels (DEBUG, INFO, WARNING, ERROR, CRITICAL)</li>
+  <li>Route messages to multiple handlers (console, file, memory)</li>
+  <li>Format messages differently per handler (simple, JSON, detailed)</li>
+  <li>Filter messages via chain (level filter, keyword filter, rate limit filter)</li>
+  <li>Named loggers with hierarchy (app -> app.db propagation)</li>
+  <li>Global logger registry (singleton)</li>
+  <li>Builder pattern for easy configuration</li>
+  <li>Thread-safe logging</li>
+</ul>
+
+<p><strong>Out of scope:</strong> Actual file I/O (simulated), log rotation, remote logging.</p>
+
+<h3>Core Entities</h3>
+
+<pre><code class="language-python">class LogLevel(IntEnum):
+    DEBUG = 10
+    INFO = 20
+    WARNING = 30
+    ERROR = 40
+    CRITICAL = 50
+
+@dataclass
+class LogRecord:
+    level: LogLevel
+    message: str
+    logger_name: str
+    timestamp: datetime = field(default_factory=datetime.now)
+    extra: Dict = field(default_factory=dict)</code></pre>
+
+<h3>Design Patterns Used</h3>
+
+<ul>
+  <li><strong>Singleton</strong> -- LoggerRegistry ensures a single global registry. Calling <code>get_logger("app")</code> always returns the same Logger instance</li>
+  <li><strong>Strategy</strong> -- Formatters (SimpleFormatter, JSONFormatter, DetailedFormatter) convert LogRecords to strings. Each handler can use a different formatter</li>
+  <li><strong>Chain of Responsibility</strong> -- Filters form a chain: LevelFilter -> KeywordFilter -> RateFilter. A record must pass all filters to reach handlers</li>
+  <li><strong>Observer</strong> -- Handlers (ConsoleHandler, FileHandler, MemoryHandler) subscribe to a logger. When a record passes filters, all handlers are notified</li>
+  <li><strong>Builder</strong> -- LoggerBuilder provides a fluent API: <code>builder.name("app").level(INFO).add_handler(console).build()</code></li>
+  <li><strong>Composite</strong> -- Handler groups let you treat a collection of handlers as a single handler</li>
+</ul>
+
+<h3>Key Interfaces</h3>
+
+<pre><code class="language-python">class Formatter(ABC):
+    @abstractmethod
+    def format(self, record: LogRecord) -> str:
+        pass
+
+class Handler(ABC):
+    @abstractmethod
+    def emit(self, record: LogRecord) -> None:
+        pass
+
+class Filter(ABC):
+    @abstractmethod
+    def should_log(self, record: LogRecord) -> bool:
+        pass</code></pre>
+
+<h3>Implementation Steps</h3>
+<ul>
+  <li>Define LogLevel (IntEnum) and LogRecord (dataclass)</li>
+  <li>Implement three Formatters: Simple, JSON, Detailed</li>
+  <li>Implement three Handlers: Console, File, Memory</li>
+  <li>Implement three Filters: Level, Keyword, Rate</li>
+  <li>Build the Logger class that chains filters and dispatches to handlers</li>
+  <li>Create the LoggerRegistry singleton with get_logger()</li>
+  <li>Add the Builder for fluent configuration</li>
+  <li>Add thread safety with threading.Lock in handlers</li>
+</ul>

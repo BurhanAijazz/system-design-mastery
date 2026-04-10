@@ -1,0 +1,73 @@
+<h2>Project: Food Delivery System</h2>
+
+<p>A full LLD implementation of a food delivery platform (like Swiggy/Zomato). This project uses State for order lifecycle, Strategy for delivery agent assignment, Observer for real-time order tracking, Chain of Responsibility for order validation, Builder for order construction, and Command for order modifications.</p>
+
+<h3>Requirements</h3>
+
+<p><strong>Functional:</strong></p>
+<ul>
+  <li>Browse restaurants and menus</li>
+  <li>Add items to cart, place order</li>
+  <li>Order lifecycle with state transitions (Placed -> Confirmed -> Preparing -> ReadyForPickup -> OutForDelivery -> Delivered)</li>
+  <li>Assign delivery agent to order</li>
+  <li>Real-time order status tracking</li>
+  <li>Rate restaurant and agent</li>
+  <li>Order history</li>
+</ul>
+
+<p><strong>Out of scope:</strong> Payment gateway, coupons, surge pricing, route optimization.</p>
+
+<h3>Core Entities</h3>
+
+<pre><code class="language-python">class OrderStatus(Enum):
+    PLACED = "placed"
+    CONFIRMED = "confirmed"
+    PREPARING = "preparing"
+    READY_FOR_PICKUP = "ready_for_pickup"
+    OUT_FOR_DELIVERY = "out_for_delivery"
+    DELIVERED = "delivered"
+    CANCELLED = "cancelled"
+
+class AgentStatus(Enum):
+    AVAILABLE = "available"
+    BUSY = "busy"
+    OFFLINE = "offline"
+
+@dataclass
+class Location:
+    lat: float
+    lng: float
+
+    def distance_to(self, other: Location) -> float:
+        return math.sqrt((self.lat - other.lat)**2 +
+                         (self.lng - other.lng)**2)
+
+@dataclass
+class MenuItem:
+    item_id: str
+    name: str
+    price: float
+    category: str
+    available: bool = True</code></pre>
+
+<h3>Design Patterns Used</h3>
+
+<ul>
+  <li><strong>State</strong> -- Each order state is a separate class. PlacedState allows confirm/cancel; PreparingState allows markReady; OutForDeliveryState allows markDelivered. Invalid transitions raise errors instead of silently failing</li>
+  <li><strong>Strategy</strong> -- Agent assignment: NearestAgentStrategy finds the closest available agent by location distance; LeastBusyStrategy finds the agent with the fewest active orders. Both implement the same AssignmentStrategy interface</li>
+  <li><strong>Observer</strong> -- OrderTracker observes order state changes. When the order transitions, all registered observers (customer app, restaurant dashboard, agent app) receive the update</li>
+  <li><strong>Chain of Responsibility</strong> -- Order validation before placement: RestaurantOpenHandler -> ItemsAvailableHandler -> PaymentValidHandler. Each handler checks one condition and forwards if valid</li>
+  <li><strong>Builder</strong> -- OrderBuilder provides a fluent API to construct orders: <code>builder.customer(user).restaurant(r).add_item(item, qty).build()</code></li>
+  <li><strong>Command</strong> -- Order modifications (add item, remove item) are commands that support undo</li>
+</ul>
+
+<h3>Implementation Steps</h3>
+<ul>
+  <li>Define entities: User, Restaurant, Menu, MenuItem, Order, OrderItem, DeliveryAgent, Location</li>
+  <li>Implement the order state machine (State pattern) with all 7 states</li>
+  <li>Build agent assignment strategies (nearest, least busy)</li>
+  <li>Create the OrderService that orchestrates browsing, ordering, tracking</li>
+  <li>Add Observer for real-time order status notifications</li>
+  <li>Implement the validation chain for order placement</li>
+  <li>Wire everything together with a demo scenario</li>
+</ul>

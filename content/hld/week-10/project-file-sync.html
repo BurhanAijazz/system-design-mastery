@@ -1,0 +1,117 @@
+<h2>Project: File Sync Simulator</h2>
+
+<p>This project implements block-level file synchronization with content-defined chunking, block-level deduplication, delta sync (upload only changed blocks), version history with rollback, conflict detection and resolution, and multi-device sync simulation.</p>
+
+<h3>Core Data Structures</h3>
+
+<pre><code class="language-python">from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Set
+import hashlib
+
+@dataclass
+class Block:
+    block_hash: str
+    size_bytes: int
+    ref_count: int = 1  # reference counting for dedup
+
+@dataclass
+class FileVersion:
+    version_id: int
+    block_hashes: List[str]
+    total_size: int
+    timestamp: float
+    device_id: str = ""
+    change_type: str = ""  # create, edit, rename, delete
+
+@dataclass
+class SyncFile:
+    file_id: str
+    name: str
+    path: str
+    owner: str
+    current_version: int = 0
+    versions: List[FileVersion] = field(default_factory=list)
+    shared_with: Dict[str, str] = field(default_factory=dict)
+
+@dataclass
+class Device:
+    device_id: str
+    device_name: str
+    owner: str
+    is_online: bool = True
+    local_versions: Dict[str, int] = field(default_factory=dict)
+    bytes_uploaded: int = 0
+    bytes_downloaded: int = 0</code></pre>
+
+<h3>Block Store with Deduplication</h3>
+
+<pre><code class="language-python">class BlockStore:
+    """Content-addressable block storage with dedup."""
+    def __init__(self):
+        self.blocks: Dict[str, Block] = {}
+        self.total_unique_bytes = 0
+        self.total_logical_bytes = 0
+        self.dedup_savings_bytes = 0
+
+    def store(self, data: str) -> str:
+        block_hash = hashlib.sha256(data.encode()).hexdigest()[:16]
+        size = len(data.encode())
+        self.total_logical_bytes += size
+
+        if block_hash in self.blocks:
+            self.blocks[block_hash].ref_count += 1
+            self.dedup_savings_bytes += size
+            return block_hash  # already stored!
+
+        self.blocks[block_hash] = Block(block_hash, size)
+        self.total_unique_bytes += size
+        return block_hash</code></pre>
+
+<h3>Delta Sync Algorithm</h3>
+
+<p>The delta sync process works as follows:</p>
+
+<ul>
+  <li>File is split into fixed-size blocks (e.g., 4 MB each)</li>
+  <li>Each block is hashed with SHA-256</li>
+  <li>Client compares local block hashes with server-side hashes</li>
+  <li>Only blocks with different hashes are uploaded (the delta)</li>
+  <li>Server reassembles the new file version from old and new blocks</li>
+</ul>
+
+<h3>Version History and Rollback</h3>
+
+<ul>
+  <li>Each file edit creates a new FileVersion containing a list of block hashes</li>
+  <li>Rollback restores a previous version by pointing to its block list</li>
+  <li>Blocks are reference-counted: a block is only deleted when no version references it</li>
+  <li>Space-efficient: if only 1 block changed, the new version shares all other blocks with the old version</li>
+</ul>
+
+<h3>Conflict Detection</h3>
+
+<pre><code class="language-python"># Conflict scenario:
+# 1. Server has file at version 5
+# 2. Device A (offline) edits based on version 5 -> creates version 5a
+# 3. Device B (online) edits based on version 5 -> creates version 6
+# 4. Device A reconnects and tries to sync version 5a
+# 5. Server detects: base_version(5a) != current_version(6)
+#    -> CONFLICT!
+# Resolution: keep both, create conflict copy for manual merge</code></pre>
+
+<h3>Multi-Device Sync</h3>
+
+<ul>
+  <li>Sync events (created, modified, deleted) are pushed to all online devices via notification service</li>
+  <li>Offline devices accumulate pending events; on reconnect, they receive all missed events in order</li>
+  <li>Each device tracks its local version per file to detect what needs downloading</li>
+</ul>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>Content-addressable storage (hash as key) enables natural deduplication across users and versions</li>
+  <li>Delta sync reduces bandwidth by 80-96% for typical file edits</li>
+  <li>Reference counting ensures blocks are safely shared and only freed when no longer needed</li>
+  <li>Conflict detection based on version ancestry is simple and reliable</li>
+</ul>

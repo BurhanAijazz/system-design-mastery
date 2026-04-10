@@ -1,0 +1,69 @@
+<h2>Monolith vs Microservices</h2>
+
+<p>The most debated architectural decision in system design. The key insight: <strong>start with a monolith, split when you have a reason</strong>. Understanding the trade-offs is critical for both interviews and real-world systems.</p>
+
+<h3>Monolith Architecture</h3>
+<p>Everything in one application, one database, one deployment.</p>
+<ul>
+  <li><strong>Simple deployment</strong>: one binary, one server</li>
+  <li><strong>Easy debugging</strong>: one process, one stack trace</li>
+  <li><strong>No network overhead</strong>: modules communicate via function calls</li>
+  <li><strong>ACID transactions</strong>: one database covers all data</li>
+  <li><strong>Simple development</strong>: one repo, one build</li>
+</ul>
+<p>Downsides: scaling bottleneck (must scale everything together), team coupling, technology lock-in, deploy-everything, one bad module can crash the whole app.</p>
+
+<h3>Microservices Architecture</h3>
+<p>Each service owns its domain, its data, and its deployment.</p>
+
+<pre><code class="language-python"># Monolith: all modules share one process and database
+class Monolith:
+    def __init__(self):
+        self.db = SharedDatabase()
+        self.user_module = UserModule(self.db)
+        self.order_module = OrderModule(self.db)
+        self.payment_module = PaymentModule(self.db)
+
+# Microservices: each service has its own database
+class UserService:
+    def __init__(self):
+        self.db = UserDatabase()  # Own database
+
+class OrderService:
+    def __init__(self):
+        self.db = OrderDatabase()  # Own database
+
+class PaymentService:
+    def __init__(self):
+        self.db = PaymentDatabase()  # Own database
+</code></pre>
+
+<h3>Microservices Pros and Cons</h3>
+<ul>
+  <li><strong>Pro</strong>: Independent scaling (scale only what's bottlenecked)</li>
+  <li><strong>Pro</strong>: Independent deployment (deploy one service without touching others)</li>
+  <li><strong>Pro</strong>: Technology diversity (use the best language/DB per service)</li>
+  <li><strong>Pro</strong>: Team autonomy (each team owns a service end-to-end)</li>
+  <li><strong>Con</strong>: Network complexity (services talk over the network -- latency, failures)</li>
+  <li><strong>Con</strong>: Data consistency (no cross-service transactions, need sagas)</li>
+  <li><strong>Con</strong>: Operational overhead (need service discovery, monitoring, tracing)</li>
+  <li><strong>Con</strong>: Debugging is harder (distributed tracing needed)</li>
+</ul>
+
+<h3>When to Split the Monolith</h3>
+<ul>
+  <li><strong>Team scaling</strong>: More than ~8-10 developers working in the same codebase</li>
+  <li><strong>Different scaling needs</strong>: One module needs 100x more resources than others</li>
+  <li><strong>Independent release cycles</strong>: One team deploys daily, another deploys monthly</li>
+  <li><strong>Technology requirements</strong>: One module needs Python ML, another needs Go for performance</li>
+</ul>
+
+<h3>The Modular Monolith</h3>
+<p>A middle ground: keep one deployable unit but enforce strict module boundaries internally. Modules communicate through well-defined interfaces, not shared database tables. This gives you monolith simplicity with the option to extract services later.</p>
+
+<h3>Migration Strategy</h3>
+<ul>
+  <li><strong>Strangler Fig Pattern</strong>: Gradually route traffic from the monolith to new microservices. The monolith shrinks over time</li>
+  <li>Extract the service with the clearest boundary first (often notifications or analytics)</li>
+  <li>Never do a "big bang" rewrite</li>
+</ul>

@@ -1,0 +1,84 @@
+<h2>Time Management and Communication</h2>
+
+<p>How to structure your 45-minute LLD interview, present your design verbally, and handle curveball questions. Mastering this framework is as important as knowing design patterns.</p>
+
+<h3>The 5-5-5-25-5 Framework</h3>
+
+<p>Structure your 45-minute interview into five phases:</p>
+
+<ul>
+  <li><strong>Phase 1 (5 min) -- Requirements:</strong> Ask 5-8 clarifying questions, state assumptions explicitly, define scope (in/out), list functional requirements</li>
+  <li><strong>Phase 2 (5 min) -- Entities and Relationships:</strong> Identify 6-10 core entities, key attributes for each, relationships (1:1, 1:N, N:M), quick ASCII UML diagram</li>
+  <li><strong>Phase 3 (5 min) -- Interfaces and Patterns:</strong> Identify 3-5 key interfaces, select 2-4 patterns with justification, define API method signatures</li>
+  <li><strong>Phase 4 (25 min) -- Implementation:</strong> Core entity classes (5 min), pattern implementations (10 min), main service/controller (10 min). Skip getters/setters, full error handling, utility methods</li>
+  <li><strong>Phase 5 (5 min) -- Discussion:</strong> Walk through a use case, discuss trade-offs, mention what you would add with more time, brief scalability notes</li>
+</ul>
+
+<p><strong>Critical rule:</strong> If you are running out of time at 35 minutes, STOP implementing and move to discussion. A design that is 80% implemented but well-discussed beats 100% code with no context.</p>
+
+<h3>Verbal Presentation Templates</h3>
+
+<p>Use these phrases to communicate clearly at each phase:</p>
+
+<pre><code class="language-python"># OPENING (Phase 1):
+"Let me start by clarifying the requirements. I want to make
+ sure I'm solving the right problem."
+
+"Based on our discussion, here are my assumptions:
+ [list 3-4]. Does that sound right?"
+
+# ENTITIES (Phase 2):
+"The core entities I see are [list them]. Let me draw
+ a quick relationship diagram..."
+
+# PATTERNS (Phase 3):
+"For the [X] problem, I'm going to use the [Pattern]
+ pattern because [reason]. An alternative would be [Y],
+ but [trade-off]."
+
+# IMPLEMENTATION (Phase 4):
+"Let me start with the core entities, then build up
+ to the service layer. I'll focus on the happy path first."
+
+"I'm going to skip [X] for now and come back to it
+ if we have time."
+
+# DISCUSSION (Phase 5):
+"Let me walk through a typical use case: [describe flow]"
+"If I had more time, I would add [feature]."</code></pre>
+
+<h3>When to Ask vs When to Assume</h3>
+
+<p><strong>Always ask about:</strong></p>
+<ul>
+  <li>Scope (what is in, what is out)</li>
+  <li>Scale (single machine vs distributed)</li>
+  <li>Main actors/users</li>
+  <li>Core operations expected</li>
+  <li>Specific business rules</li>
+</ul>
+
+<p><strong>Safe to assume (state your assumption):</strong></p>
+<ul>
+  <li>Standard data types (string IDs, float amounts)</li>
+  <li>In-memory storage (unless told otherwise)</li>
+  <li>Single-threaded (unless concurrency is the focus)</li>
+</ul>
+
+<h3>Handling Mid-Implementation Questions</h3>
+
+<p>When the interviewer asks "What about X?" during coding, use one of three patterns:</p>
+<ul>
+  <li><strong>Quick acknowledge:</strong> "Great point. I'd handle that by [brief approach]. Let me note it and come back after the core flow."</li>
+  <li><strong>Pivot if important:</strong> "That's critical. Let me add an interface for it now." Spend 2 minutes, then continue.</li>
+  <li><strong>Defer gracefully:</strong> "That's out of the scope we discussed, but I'd approach it with [brief idea]. Should I focus on that or continue?"</li>
+</ul>
+
+<h3>Pre-Submission Checklist</h3>
+<ul>
+  <li>Are all core entities defined with key attributes?</li>
+  <li>Am I using enums for status, type, and category values (not raw strings)?</li>
+  <li>Are there clear interfaces/abstract classes for the key abstractions?</li>
+  <li>Did I justify each pattern choice with a reason and trade-off?</li>
+  <li>Can I walk through at least one complete use case end-to-end?</li>
+</ul>

@@ -1,0 +1,102 @@
+<h2>Payment System Design</h2>
+
+<p>A payment processing system handles the authorize -> capture -> settle flow. This is the most trust-critical system in tech -- a bug means lost money. The key principles are <strong>idempotency</strong> (no double charges), <strong>double-entry ledger</strong> (every cent is traceable), and <strong>reconciliation</strong> (verify everything balances).</p>
+
+<h3>Define: Requirements</h3>
+
+<ul>
+  <li><strong>Functional:</strong> Process payments (authorize -> capture -> settle), support refunds (partial and full), multiple payment methods (card, bank, wallet), idempotent processing, transaction history, fraud detection</li>
+  <li><strong>Non-Functional:</strong> 99.999% availability, strong consistency (money cannot be created or destroyed), exactly-once semantics, PCI DSS compliance, complete audit trail, multi-currency support</li>
+</ul>
+
+<h3>Estimate</h3>
+
+<pre><code class="language-python"># Stripe-scale:
+#   1M merchants, 500M transactions/year
+#   Peak (Black Friday): 5x normal -> ~8K TPS
+#   Average transaction: $50, Total: $25B/year
+
+# Storage:
+#   Transaction record: ~1 KB
+#   500M/year x 1 KB = 500 GB/year
+#   7-year retention (regulatory) = 3.5 TB
+#   With double-entry ledger: 7 TB, indexes: ~20 TB total
+
+# Latency Budget:
+#   Authorization < 1 second total:
+#     Our system: 50ms
+#     Card network (Visa/MC): 200-500ms
+#     Issuing bank: 200-500ms
+
+# Availability:
+#   99.999% = 5.26 minutes downtime/year
+#   Active-active multi-region mandatory</code></pre>
+
+<h3>Payment Flow</h3>
+
+<pre><code class="language-python"># Three-phase payment:
+#
+# 1. AUTHORIZE: "Can this card pay $50?"
+#    -> Our system -> Card network -> Issuing bank
+#    <- Auth code (approved) or decline reason
+#    Money is HELD on the card but not yet transferred
+#
+# 2. CAPTURE: "Actually charge the $50"
+#    -> Convert hold to actual charge
+#    -> Can be same day or up to 7 days later
+#    -> Partial capture allowed (charge $30 of $50 hold)
+#
+# 3. SETTLE: "Transfer the money"
+#    -> Batch process, typically T+1 to T+3 days
+#    -> Money moves: cardholder bank -> card network -> our bank
+#    -> We pay out to merchant minus our fee</code></pre>
+
+<h3>Idempotency</h3>
+
+<pre><code class="language-python"># The MOST important principle in payments.
+# Network is unreliable: what if authorize succeeds but
+# the response is lost? Client retries. Without idempotency,
+# customer gets charged TWICE.
+
+# Solution: Idempotency Key
+# Client sends: POST /payments { idempotency_key: "order-123-attempt-1" }
+# Server checks: have I seen this key before?
+#   Yes -> return the same response (no new charge)
+#   No  -> process payment, store result keyed by idempotency_key
+
+# Store idempotency keys for 24 hours minimum</code></pre>
+
+<h3>Double-Entry Ledger</h3>
+
+<ul>
+  <li>Every transaction creates TWO ledger entries: a debit and a credit of equal amount</li>
+  <li>Total debits always equals total credits (the fundamental accounting equation)</li>
+  <li>Makes it impossible to "lose" money in the system</li>
+  <li>Every entry is immutable and append-only (no updates, no deletes)</li>
+</ul>
+
+<h3>Reconciliation</h3>
+
+<ul>
+  <li><strong>Internal reconciliation:</strong> Verify ledger debits = credits (runs hourly)</li>
+  <li><strong>External reconciliation:</strong> Match our records against card network settlement files (daily)</li>
+  <li><strong>Discrepancy handling:</strong> Flag mismatches for manual review; never auto-correct payment records</li>
+</ul>
+
+<h3>Fraud Detection</h3>
+
+<ul>
+  <li>Real-time scoring on every authorization request</li>
+  <li>Features: transaction amount, merchant category, geographic location, device fingerprint, velocity (how many transactions in last hour)</li>
+  <li>High-risk transactions flagged for additional verification (3DS, OTP)</li>
+  <li>ML model trained on historical fraud patterns, updated continuously</li>
+</ul>
+
+<h3>Key Design Decisions</h3>
+
+<ul>
+  <li><strong>Idempotency everywhere:</strong> Every API endpoint must be safe to retry</li>
+  <li><strong>Append-only ledger:</strong> Never modify financial records; corrections are new entries</li>
+  <li><strong>Active-active multi-region:</strong> Payment availability is non-negotiable; every minute of downtime is lost revenue</li>
+  <li><strong>PCI DSS:</strong> Card numbers never stored in plaintext; tokenization replaces card data with opaque tokens</li>
+</ul>

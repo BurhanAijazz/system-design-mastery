@@ -1,0 +1,76 @@
+<h2>Design: Movie Rental System</h2>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Movies transition through states: <strong>Available -> Rented -> Overdue</strong></li>
+  <li>Pricing varies by strategy: new-release, regular, children's</li>
+  <li>Late fees calculated when returned after due date</li>
+  <li>Track rental history per customer</li>
+</ul>
+
+<h3>Approach</h3>
+<ul>
+  <li><strong>State pattern</strong> for movie lifecycle; each state defines allowed actions</li>
+  <li><strong>Strategy pattern</strong> for pricing: base rental cost + late-fee formula</li>
+  <li>Rental object links customer, movie, dates, and pricing strategy</li>
+  <li>Returning a movie triggers state transition and fee calculation</li>
+</ul>
+
+<h3>Key Code</h3>
+<pre><code class="language-python">from abc import ABC, abstractmethod
+from datetime import date
+
+class PricingStrategy(ABC):
+    @abstractmethod
+    def rental_cost(self, days: int) -> float: ...
+    @abstractmethod
+    def late_fee_per_day(self) -> float: ...
+
+class NewReleasePricing(PricingStrategy):
+    def rental_cost(self, days): return days * 3.0
+    def late_fee_per_day(self):  return 5.0
+
+class RegularPricing(PricingStrategy):
+    def rental_cost(self, days): return 2.0 + max(0, days - 2) * 1.5
+    def late_fee_per_day(self):  return 2.0
+
+class MovieState(ABC):
+    @abstractmethod
+    def rent(self, ctx): ...
+    @abstractmethod
+    def return_movie(self, ctx): ...
+
+class Available(MovieState):
+    def rent(self, ctx):
+        ctx.state = Rented()
+    def return_movie(self, ctx):
+        raise RuntimeError("Not currently rented")
+
+class Rented(MovieState):
+    def rent(self, ctx):
+        raise RuntimeError("Already rented")
+    def return_movie(self, ctx):
+        ctx.state = Available()
+
+class Rental:
+    def __init__(self, movie, customer, due: date, pricing: PricingStrategy):
+        self.movie = movie
+        self.customer = customer
+        self.due = due
+        self.pricing = pricing
+
+    def calculate_total(self, return_date: date, days_rented: int) -> float:
+        cost = self.pricing.rental_cost(days_rented)
+        overdue = (return_date - self.due).days
+        if overdue > 0:
+            cost += overdue * self.pricing.late_fee_per_day()
+        return cost
+</code></pre>
+
+<h3>Takeaways</h3>
+<ul>
+  <li>State pattern prevents invalid operations (e.g., renting an already-rented movie)</li>
+  <li>Strategy pattern lets pricing evolve independently of rental logic</li>
+  <li>Late-fee calculation is cleanly isolated in the pricing strategy</li>
+  <li>Extend with Observer to notify customers of upcoming due dates</li>
+</ul>

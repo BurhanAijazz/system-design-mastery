@@ -1,0 +1,65 @@
+<h2>Design: Stock Exchange</h2>
+<p>Design the core matching engine of a stock exchange that processes buy/sell orders.</p>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Accept limit and market orders for buy and sell</li>
+  <li>Match orders by price-time priority (best price first, FIFO within same price)</li>
+  <li>Extremely low latency (&lt;1ms per match)</li>
+  <li>Publish real-time trade executions and order book updates</li>
+</ul>
+
+<h3>High-Level Architecture</h3>
+<ul>
+  <li><strong>Gateway</strong> &mdash; Accepts orders via FIX protocol, validates, sequences</li>
+  <li><strong>Sequencer</strong> &mdash; Assigns a total order to all incoming events</li>
+  <li><strong>Matching Engine</strong> &mdash; Core order book with buy/sell heaps per symbol</li>
+  <li><strong>Market Data Publisher</strong> &mdash; Broadcasts trades, L2 order book to subscribers</li>
+  <li><strong>Clearing &amp; Settlement</strong> &mdash; Post-trade risk, netting, and settlement</li>
+</ul>
+
+<h3>Key Components</h3>
+<pre><code class="language-python">import heapq
+from collections import deque
+
+class OrderBook:
+    def __init__(self):
+        self.buys = {}   # price -> deque of orders (max-heap by price)
+        self.sells = {}  # price -> deque of orders (min-heap by price)
+        self.buy_prices = []   # max-heap (negate for heapq)
+        self.sell_prices = []  # min-heap
+
+    def add_order(self, order):
+        if order["side"] == "BUY":
+            self._try_match_buy(order)
+        else:
+            self._try_match_sell(order)
+
+    def _try_match_buy(self, buy):
+        while (buy["qty"] > 0 and self.sell_prices
+               and self.sell_prices[0] <= buy["price"]):
+            best_ask = self.sell_prices[0]
+            sell = self.sells[best_ask][0]
+            traded = min(buy["qty"], sell["qty"])
+            buy["qty"] -= traded
+            sell["qty"] -= traded
+            self._emit_trade(buy, sell, best_ask, traded)
+            if sell["qty"] == 0:
+                self.sells[best_ask].popleft()
+                if not self.sells[best_ask]:
+                    del self.sells[best_ask]
+                    heapq.heappop(self.sell_prices)
+        if buy["qty"] > 0:
+            self._rest_order(buy, self.buys, self.buy_prices, negate=True)
+
+    def _emit_trade(self, buy, sell, price, qty):
+        print(f"TRADE {qty}@{price}")
+</code></pre>
+
+<h3>Scaling Considerations</h3>
+<ul>
+  <li>Single-threaded matching engine per symbol avoids locking overhead</li>
+  <li>Partition symbols across matching engine instances (AAPL on engine-1, etc.)</li>
+  <li>Event sourcing: persist every order and trade for replay and audit</li>
+  <li>Hot standby with replicated event log for failover in microseconds</li>
+</ul>

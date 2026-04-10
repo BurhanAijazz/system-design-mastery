@@ -1,0 +1,145 @@
+<h2>Project: Log Aggregation Pipeline</h2>
+
+<p>Build a complete log aggregation system: generate realistic log data from multiple services, parse and index logs, search with filtering and relevance, and detect error patterns with real-time alerting.</p>
+
+<h3>Data Models</h3>
+<pre><code class="language-python">from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Set
+from enum import Enum
+from collections import defaultdict
+
+class LogLevel(Enum):
+    DEBUG = "DEBUG"
+    INFO = "INFO"
+    WARN = "WARN"
+    ERROR = "ERROR"
+    CRITICAL = "CRITICAL"
+
+    @property
+    def severity(self) -> int:
+        return {"DEBUG": 0, "INFO": 1, "WARN": 2,
+                "ERROR": 3, "CRITICAL": 4}[self.value]
+
+@dataclass
+class LogEntry:
+    timestamp: float
+    service: str
+    level: LogLevel
+    message: str
+    trace_id: str = ""
+    host: str = ""
+    metadata: Dict[str, str] = field(default_factory=dict)
+
+@dataclass
+class AlertRule:
+    name: str
+    service: Optional[str]     # None = all services
+    level: LogLevel
+    threshold: int             # count within window
+    window_seconds: float
+    message_pattern: Optional[str] = None
+
+@dataclass
+class Alert:
+    rule_name: str
+    service: str
+    count: int
+    window_start: float
+    window_end: float
+    sample_messages: List[str] = field(default_factory=list)
+</code></pre>
+
+<h3>Pipeline Components</h3>
+<ul>
+  <li><strong>Log Generator</strong>: Simulate logs from multiple services (API Gateway, UserService, OrderService, PaymentService) with realistic patterns including occasional error bursts</li>
+  <li><strong>Log Parser</strong>: Parse raw log lines into structured LogEntry objects. Handle malformed entries gracefully</li>
+  <li><strong>Inverted Index</strong>: Build a full-text search index on log messages for fast keyword search</li>
+  <li><strong>Search API</strong>: Filter by time range, service, log level, and free text. Return results ranked by relevance</li>
+  <li><strong>Alert Engine</strong>: Monitor error rates per service. Trigger alerts when error count exceeds threshold within a time window</li>
+</ul>
+
+<h3>Log Generator</h3>
+<pre><code class="language-python">import random
+
+def generate_logs(num_entries: int, services: List[str]) -> List[LogEntry]:
+    """Generate realistic log data with occasional error bursts."""
+    rng = random.Random(42)
+    logs = []
+    messages = {
+        LogLevel.INFO: [
+            "Request processed successfully",
+            "User logged in",
+            "Cache hit for key {}",
+            "Database query completed in {}ms",
+        ],
+        LogLevel.ERROR: [
+            "Connection timeout to database",
+            "Payment gateway returned 503",
+            "Failed to serialize response",
+            "Out of memory error in worker pool",
+        ],
+    }
+
+    for i in range(num_entries):
+        service = rng.choice(services)
+        # 90% INFO, 5% WARN, 4% ERROR, 1% CRITICAL
+        level_roll = rng.random()
+        if level_roll < 0.90:
+            level = LogLevel.INFO
+        elif level_roll < 0.95:
+            level = LogLevel.WARN
+        elif level_roll < 0.99:
+            level = LogLevel.ERROR
+        else:
+            level = LogLevel.CRITICAL
+
+        msg_templates = messages.get(level, messages[LogLevel.INFO])
+        message = rng.choice(msg_templates)
+
+        logs.append(LogEntry(
+            timestamp=i * 0.1,
+            service=service,
+            level=level,
+            message=message,
+            host=f"host-{rng.randint(1, 5)}",
+        ))
+    return logs
+</code></pre>
+
+<h3>Alert Engine</h3>
+<pre><code class="language-python">class AlertEngine:
+    """Monitor log streams and trigger alerts on error patterns."""
+
+    def __init__(self, rules: List[AlertRule]):
+        self.rules = rules
+        self.alerts: List[Alert] = []
+        self.windows: Dict[str, List[LogEntry]] = defaultdict(list)
+
+    def process(self, entry: LogEntry):
+        for rule in self.rules:
+            if entry.level.severity < rule.level.severity:
+                continue
+            if rule.service and entry.service != rule.service:
+                continue
+            key = f"{rule.name}:{entry.service}"
+            self.windows[key].append(entry)
+            # Check if threshold exceeded in window
+            recent = [e for e in self.windows[key]
+                      if entry.timestamp - e.timestamp <= rule.window_seconds]
+            self.windows[key] = recent
+            if len(recent) >= rule.threshold:
+                self.alerts.append(Alert(
+                    rule_name=rule.name,
+                    service=entry.service,
+                    count=len(recent),
+                    window_start=recent[0].timestamp,
+                    window_end=entry.timestamp,
+                ))
+</code></pre>
+
+<h3>Experiments</h3>
+<ul>
+  <li>Generate 100,000 logs across 5 services. Build the inverted index and search for "timeout" or "memory"</li>
+  <li>Configure alert rules: "More than 10 ERRORs from PaymentService in 60 seconds." Inject an error burst and verify the alert fires</li>
+  <li>Measure search performance: how fast can you search 1M log entries? Compare full scan vs inverted index</li>
+</ul>

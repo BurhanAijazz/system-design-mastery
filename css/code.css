@@ -1,0 +1,109 @@
+/* ============================================
+   CODE BLOCKS & SYNTAX HIGHLIGHTING
+   ============================================ */
+
+pre {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  padding: var(--space-lg);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  font-size: var(--text-sm);
+  line-height: var(--line-height-relaxed);
+  margin: var(--space-md) 0;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  max-width: 100%;
+  white-space: pre;
+  word-wrap: normal;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
+}
+
+code {
+  background: var(--bg-tertiary);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 0.9em;
+  word-break: break-word;
+}
+
+/* Catppuccin-inspired syntax colors */
+.hljs-keyword   { color: #cba6f7; } /* Mauve - keywords */
+.hljs-built_in  { color: #f38ba8; } /* Red - builtins */
+.hljs-function  { color: #89b4fa; } /* Blue - functions */
+.hljs-class     { color: #f9e2af; } /* Yellow - classes */
+.hljs-string    { color: #a6e3a1; } /* Green - strings */
+.hljs-number    { color: #fab387; } /* Peach - numbers */
+.hljs-comment   { color: #6c7086; font-style: italic; } /* Overlay0 - comments */
+.hljs-decorator { color: #f5c2e7; } /* Pink - decorators */
+.hljs-operator  { color: #89dceb; } /* Sky - operators */
+.hljs-self      { color: #f38ba8; font-style: italic; } /* Red - self */
+.hljs-bool      { color: #fab387; } /* Peach - booleans */
+.hljs-none      { color: #f38ba8; } /* Red - None */
+.hljs-type      { color: #f9e2af; } /* Yellow - type hints */
+.hljs-param     { color: #eba0ac; } /* Maroon - params */
+.hljs-fstring   { color: #a6e3a1; } /* Green - f-strings */
+.hljs-docstring { color: #6c7086; font-style: italic; }
+.hljs-import    { color: #cba6f7; }
+
+/* Line numbers */
+.code-block {
+  position: relative;
+}
+
+.code-block .code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-sm) var(--space-lg);
+  background: #181825;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: none;
+}
+
+.code-block .code-header .code-lang {
+  font-size: var(--text-xs);
+  color: #6c7086;
+  text-transform: uppercase;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.05em;
+}
+
+.code-block .code-header .copy-btn {
+  font-size: var(--text-xs);
+  color: #6c7086;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.code-block .code-header .copy-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #cdd6f4;
+}
+
+.code-block pre {
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  margin-top: 0;
+}
+
+/* ASCII diagram blocks */
+pre.ascii-diagram {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+
+[data-theme="dark"] pre.ascii-diagram {
+  background: #181825;
+  color: #cdd6f4;
+}

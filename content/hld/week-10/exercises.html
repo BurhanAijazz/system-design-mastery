@@ -1,0 +1,67 @@
+<h2>Week 10 Exercises: Media and Streaming</h2>
+
+<p>These exercises explore video transcoding pipelines, streaming architectures, and file synchronization covered this week.</p>
+
+<h3>Exercise 1: Video Transcoding Priority Queue</h3>
+
+<p>Design the transcoding pipeline for a YouTube-like platform that prioritizes certain jobs over others.</p>
+
+<ul>
+  <li>New uploads from verified channels should be transcoded before unverified uploads</li>
+  <li>Lower resolutions (240p, 360p) should complete first so users can start watching sooner</li>
+  <li>Re-transcoding jobs (e.g., new codec support) should never block new uploads</li>
+</ul>
+
+<p><strong>Tasks:</strong></p>
+<ul>
+  <li>Design the priority queue with at least 3 priority levels</li>
+  <li>How many transcoding workers are needed for 500 hours of video uploaded per minute?</li>
+  <li>Estimate transcoding time: a 10-minute 1080p video takes approximately 4x real-time on a single worker. How do you parallelize?</li>
+  <li>What happens when a transcoding worker crashes mid-job? Design the recovery mechanism.</li>
+</ul>
+
+<pre><code class="language-python"># Resolution configs with transcoding speed ratio:
+RESOLUTIONS = {
+    "240p":  {"bitrate_mbps": 0.4, "speed_ratio": 0.3},
+    "720p":  {"bitrate_mbps": 2.5, "speed_ratio": 2.0},
+    "1080p": {"bitrate_mbps": 5.0, "speed_ratio": 4.0},
+    "4K":    {"bitrate_mbps": 15.0, "speed_ratio": 10.0},
+}
+# speed_ratio: how many seconds of processing per second of video
+# 4K at 10.0x means a 10-min video takes 100 min to transcode</code></pre>
+
+<h3>Exercise 2: Netflix vs YouTube Architecture Comparison</h3>
+
+<p>Write a detailed comparison of how Netflix and YouTube solve the same problems differently:</p>
+
+<p><strong>Tasks:</strong></p>
+<ul>
+  <li>Compare their CDN strategies: Netflix Open Connect (ISP-embedded) vs YouTube (Google's global CDN). Why does each approach suit its use case?</li>
+  <li>Compare content distribution: pre-positioned (Netflix) vs on-demand (YouTube). What drives this choice?</li>
+  <li>Compare transcoding: offline pipeline (Netflix) vs real-time at upload (YouTube). Cost and latency trade-offs?</li>
+  <li>For a new streaming startup with 10K titles and 1M users, which approach would you recommend? Justify with numbers.</li>
+</ul>
+
+<h3>Exercise 3: File Sync Conflict Simulator</h3>
+
+<p>Implement and test different conflict resolution strategies for a Google Drive-like system.</p>
+
+<pre><code class="language-python"># Scenario: 3 devices editing the same file
+# Device A: online, edits paragraph 2
+# Device B: offline for 1 hour, edits paragraph 2 and 5
+# Device C: online, edits paragraph 5
+# Device B comes back online. What happens?
+
+# Strategies to implement and compare:
+# 1. Last-write-wins (simple but loses data)
+# 2. Conflict copy (Google Drive approach)
+# 3. Block-level merge (merge non-overlapping changes)
+# 4. Three-way merge (diff3 against common ancestor)</code></pre>
+
+<p><strong>Tasks:</strong></p>
+<ul>
+  <li>Implement at least two strategies and simulate the scenario above</li>
+  <li>Measure data loss for each strategy</li>
+  <li>Which strategy would you use for binary files (images, PDFs) vs text files?</li>
+  <li>How does block-level chunking affect conflict granularity?</li>
+</ul>

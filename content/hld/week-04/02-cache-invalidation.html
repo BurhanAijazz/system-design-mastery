@@ -1,0 +1,78 @@
+<h2>Cache Invalidation and Consistency</h2>
+
+<p>"There are only two hard things in Computer Science: cache invalidation and naming things." -- Phil Karlton. This lesson covers every cache failure mode and how to fix each one.</p>
+
+<h3>TTL (Time-To-Live): The Simplest Invalidation</h3>
+<p>Set an expiration time on each cache entry. After the TTL, the key is automatically deleted.</p>
+
+<pre><code class="language-python">from dataclasses import dataclass
+from typing import Dict, Optional
+
+@dataclass
+class TTLCacheEntry:
+    value: str
+    expires_at: float
+
+class TTLCache:
+    """Cache with TTL-based expiration."""
+    def __init__(self, ttl_seconds: float):
+        self.ttl = ttl_seconds
+        self.store: Dict[str, TTLCacheEntry] = {}
+        self.hits = 0
+        self.misses = 0
+
+    def get(self, key: str, current_time: float) -> Optional[str]:
+        entry = self.store.get(key)
+        if entry and current_time < entry.expires_at:
+            self.hits += 1
+            return entry.value
+        self.misses += 1
+        return None
+
+    def put(self, key: str, value: str, current_time: float):
+        self.store[key] = TTLCacheEntry(value, current_time + self.ttl)
+</code></pre>
+
+<h3>The TTL Trade-off</h3>
+<ul>
+  <li><strong>Short TTL (30s)</strong>: fresher data, more DB hits, lower hit rate</li>
+  <li><strong>Long TTL (24h)</strong>: more stale data, fewer DB hits, higher hit rate</li>
+  <li>Choose based on: how often data changes, how bad stale data is, how expensive the DB query is</li>
+</ul>
+
+<h3>Event-Based Invalidation</h3>
+<p>When data changes in the database, actively invalidate or update the cache. More complex but ensures freshness.</p>
+<ul>
+  <li><strong>Delete on write</strong>: When updating the DB, delete the cache key. Next read repopulates</li>
+  <li><strong>Update on write</strong>: When updating the DB, update the cache too (write-through)</li>
+  <li><strong>Pub/Sub invalidation</strong>: DB publishes change events, cache subscribers invalidate affected keys</li>
+</ul>
+
+<h3>Common Cache Failure Modes</h3>
+
+<h3>Cache Stampede (Thundering Herd)</h3>
+<p>A popular cache key expires. Thousands of concurrent requests all miss the cache and hit the database simultaneously.</p>
+<ul>
+  <li><strong>Fix 1: Locking</strong> -- Only one request fetches from DB; others wait for the cache to be populated</li>
+  <li><strong>Fix 2: Stale-while-revalidate</strong> -- Serve stale data while one request refreshes in the background</li>
+  <li><strong>Fix 3: Jittered TTL</strong> -- Add random offset to TTLs so keys don't all expire at once</li>
+</ul>
+
+<h3>Cache Penetration</h3>
+<p>Requests for keys that don't exist in the database bypass the cache every time.</p>
+<ul>
+  <li><strong>Fix: Cache negative results</strong> -- Store "not found" with a short TTL</li>
+  <li><strong>Fix: Bloom filter</strong> -- Check a bloom filter before querying the DB</li>
+</ul>
+
+<h3>Cache Avalanche</h3>
+<p>Many cache keys expire at the same time, causing a sudden spike in database load.</p>
+<ul>
+  <li><strong>Fix</strong>: Jittered TTLs, multi-layer caching, circuit breaker on the DB</li>
+</ul>
+
+<h3>Hot Key Problem</h3>
+<p>A single key receives disproportionate traffic, overloading one cache node.</p>
+<ul>
+  <li><strong>Fix</strong>: Replicate the hot key across multiple cache nodes, or use local in-process cache</li>
+</ul>

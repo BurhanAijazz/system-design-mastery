@@ -1,0 +1,85 @@
+<h2>Spotify / Music Streaming Design</h2>
+
+<p>Audio streaming involves much smaller files than video but introduces unique challenges: playlist management for billions of playlists, music discovery as a core product differentiator, complex per-country licensing, real-time cross-device sync, and gapless playback.</p>
+
+<h3>Define: Requirements</h3>
+
+<ul>
+  <li><strong>Functional:</strong> Stream music and podcasts, search (artist/album/song/playlist), create and share playlists (collaborative), personalized recommendations (Discover Weekly, Daily Mix), offline downloads, lyrics display, cross-device sync (Spotify Connect)</li>
+  <li><strong>Non-Functional:</strong> Playback starts within 200ms, gapless playback between tracks, offline mode, real-time sync across devices, 100M+ concurrent listeners</li>
+</ul>
+
+<h3>Key Differences from Video Streaming</h3>
+
+<pre><code class="language-python"># Audio files are MUCH smaller:
+#   3 min song at 320kbps = ~7 MB
+#   vs 3 min 1080p video = ~110 MB (15x larger)
+
+# Entire catalog: 100M songs x 7 MB = 700 TB
+#   vs YouTube's 500+ PB (700x smaller)
+
+# Bandwidth per stream: 320 kbps
+#   vs video 5 Mbps (15x less)
+
+# But different challenges:
+#   - Playlist management: billions of playlists
+#   - Music discovery: core product differentiator
+#   - Rights management: per song per country licensing
+#   - Cross-device sync: "Spotify Connect"
+#   - Gapless playback: pre-buffer next track</code></pre>
+
+<h3>Estimate</h3>
+
+<pre><code class="language-python"># 600M registered, 200M premium, 100M DAU
+# Average 40 min listening/day, 100M songs in catalog
+
+# STREAMING:
+#   100M x 40 min x 320 kbps / 8 = 160 TB/day
+#   Peak: 30M listeners x 320 kbps = 9.6 Tbps
+#   100x less than Netflix!
+
+# STORAGE:
+#   Songs: 100M x 3 quality tiers x 7 MB = 2.1 PB
+#   Playlists: 4B playlists x 50 songs x 16B = 3.2 TB
+#   Play history: 100M x 15 songs/day x 100B = 150 GB/day
+
+# OPERATIONS:
+#   Play requests: 1.5B plays/day = 17K QPS
+#   Playlist updates: 200M/day = 2,300 QPS
+#   Skip events: 500M/day = 5,800 QPS</code></pre>
+
+<h3>Architecture</h3>
+
+<ul>
+  <li><strong>Audio Delivery:</strong> CDN-served audio files in multiple quality tiers (96, 160, 320 kbps). Client pre-buffers next track for gapless playback.</li>
+  <li><strong>Playlist Service:</strong> Manages 4B playlists. Collaborative playlists use event sourcing (append-only log of edits).</li>
+  <li><strong>Recommendation Engine:</strong> Collaborative filtering (users with similar taste), content-based analysis (audio features), and editorial curation combined.</li>
+  <li><strong>Spotify Connect:</strong> Central session service tracks active device. Transfer command switches playback with state sync (track, position, queue).</li>
+  <li><strong>Rights Service:</strong> Per-song, per-country availability checks. Songs unavailable in some regions due to licensing.</li>
+</ul>
+
+<h3>Pre-buffering and Gapless Playback</h3>
+
+<ul>
+  <li>While current track plays, client requests and buffers the next track</li>
+  <li>Audio decoder crossfades or seamlessly transitions between tracks</li>
+  <li>Eliminates silence gaps that break the listening experience</li>
+  <li>Requires knowing the play queue ahead of time (shuffle is pre-computed, not random on the fly)</li>
+</ul>
+
+<h3>Offline Mode</h3>
+
+<ul>
+  <li>Premium users download encrypted audio files to device storage</li>
+  <li>DRM (Digital Rights Management) ensures files are only playable within the Spotify app</li>
+  <li>Periodic online check-in required (every 30 days) to verify subscription is active</li>
+  <li>Downloaded content synced with any playlist changes when back online</li>
+</ul>
+
+<h3>Key Design Decisions</h3>
+
+<ul>
+  <li><strong>Audio file sizes are small:</strong> The entire catalog fits in ~2 PB, making storage cheap. The challenge is metadata and personalization, not raw storage.</li>
+  <li><strong>Discovery is the product:</strong> Spotify's value comes from recommendations and playlists, not just playback.</li>
+  <li><strong>Event-driven architecture:</strong> Play, skip, save, and like events feed the recommendation engine in real-time.</li>
+</ul>

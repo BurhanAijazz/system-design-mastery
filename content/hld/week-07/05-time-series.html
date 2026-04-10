@@ -1,0 +1,86 @@
+<h2>Time-Series and Analytics Stores</h2>
+
+<p>Specialized databases for metrics, logs, and OLAP workloads. When general-purpose databases aren't enough for high-volume, time-ordered data.</p>
+
+<h3>What Is Time-Series Data?</h3>
+<p>Measurements indexed by time: server metrics, IoT sensors, stock prices, application logs. Characteristics:</p>
+<ul>
+  <li><strong>Append-heavy</strong>: Data is almost never updated, only inserted</li>
+  <li><strong>Time-ordered</strong>: Always queried by time range</li>
+  <li><strong>High volume</strong>: Thousands to millions of data points per second</li>
+  <li><strong>Downsampled</strong>: Old data reduced in granularity (1s -> 1m -> 1h)</li>
+  <li><strong>Expirable</strong>: Old data deleted after a retention period</li>
+</ul>
+
+<h3>Why Not Just Use PostgreSQL?</h3>
+<p>1 billion rows of metrics leads to slow queries and huge storage. Time-series databases use specialized compression (10-50x better), built-in downsampling, retention policies, and optimized time-range scans.</p>
+
+<h3>Time-Series Database Simulation</h3>
+<pre><code class="language-python">from dataclasses import dataclass, field
+from typing import Dict, List, Optional
+from collections import defaultdict
+
+@dataclass
+class MetricPoint:
+    timestamp: float
+    metric_name: str
+    value: float
+    tags: Dict[str, str] = field(default_factory=dict)
+
+class TimeSeriesDB:
+    """Simplified time-series database with downsampling."""
+
+    def __init__(self):
+        self.data: Dict[str, List[MetricPoint]] = defaultdict(list)
+        self.total_points = 0
+
+    def write(self, point: MetricPoint):
+        self.data[point.metric_name].append(point)
+        self.total_points += 1
+
+    def query_range(self, metric_name: str, start: float, end: float,
+                     tag_filter: Optional[Dict] = None) -> List[MetricPoint]:
+        """Query by time range with optional tag filtering."""
+        points = self.data.get(metric_name, [])
+        result = [p for p in points if start <= p.timestamp <= end]
+        if tag_filter:
+            result = [p for p in result
+                      if all(p.tags.get(k) == v
+                             for k, v in tag_filter.items())]
+        return result
+
+    def downsample(self, metric_name: str, window_seconds: float):
+        """Reduce granularity by averaging within windows."""
+        points = self.data.get(metric_name, [])
+        if not points:
+            return []
+        buckets = defaultdict(list)
+        for p in points:
+            bucket = int(p.timestamp / window_seconds)
+            buckets[bucket].append(p.value)
+        return [{"window": k * window_seconds,
+                 "avg": sum(v)/len(v),
+                 "min": min(v),
+                 "max": max(v),
+                 "count": len(v)} for k, v in sorted(buckets.items())]
+</code></pre>
+
+<h3>Time-Series Database Comparison</h3>
+<ul>
+  <li><strong>InfluxDB</strong>: General time-series, Flux query language, built-in retention policies</li>
+  <li><strong>TimescaleDB</strong>: Time-series extension for PostgreSQL. Full SQL compatibility</li>
+  <li><strong>Prometheus</strong>: Pull-based monitoring. Scrapes metrics from targets. PromQL for queries</li>
+  <li><strong>QuestDB</strong>: High-performance analytics on time-series data</li>
+  <li><strong>VictoriaMetrics</strong>: Long-term Prometheus storage, high compression</li>
+</ul>
+
+<h3>Key Optimization Techniques</h3>
+<ul>
+  <li><strong>Compression</strong>: Delta encoding, gorilla compression. Store differences between consecutive points</li>
+  <li><strong>Downsampling</strong>: Reduce 1-second data to 1-minute averages after 7 days, 1-hour averages after 30 days</li>
+  <li><strong>Retention policies</strong>: Automatically delete data older than N days</li>
+  <li><strong>Pre-aggregation</strong>: Compute common rollups at write time (hourly totals, daily maximums)</li>
+</ul>
+
+<h3>OLAP Cubes and Analytics Stores</h3>
+<p>For multi-dimensional analytical queries (slice and dice by time, region, product), OLAP stores like ClickHouse, Apache Druid, and Apache Pinot provide sub-second query performance on billions of rows.</p>

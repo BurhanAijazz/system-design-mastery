@@ -1,0 +1,83 @@
+<h2>Synchronous vs Asynchronous Communication</h2>
+
+<p>The most fundamental architectural decision in distributed systems: should the caller <strong>wait</strong> for the callee to finish, or should it <strong>fire-and-forget</strong>? Sync is simpler; async is more resilient and scalable.</p>
+
+<h3>Synchronous Communication: Request-Response</h3>
+<p>The client sends a request and blocks until it receives a response. Total latency equals the sum of all service latencies. If any service is slow or down, the entire chain blocks.</p>
+
+<pre><code class="language-python">from dataclasses import dataclass
+from typing import List
+import random
+
+@dataclass
+class SyncService:
+    name: str
+    latency_ms: float
+    failure_rate: float = 0.0
+
+def sync_request_chain(services: List[SyncService], rng: random.Random):
+    """Simulate a synchronous request through a chain of services."""
+    total_latency = 0.0
+    for svc in services:
+        if rng.random() < svc.failure_rate:
+            return {"success": False, "failed_at": svc.name,
+                    "latency_ms": total_latency + svc.latency_ms}
+        latency = svc.latency_ms * (0.8 + rng.random() * 0.4)
+        total_latency += latency
+    return {"success": True, "latency_ms": total_latency}
+
+# Synchronous chain: API -> Order -> Payment -> Notification
+services = [
+    SyncService("API Gateway", latency_ms=5),
+    SyncService("Order Service", latency_ms=50),
+    SyncService("Payment Service", latency_ms=200, failure_rate=0.05),
+    SyncService("Notification Svc", latency_ms=100),
+]
+# Total latency: ~355ms. If Payment fails (5% chance), everything fails.
+</code></pre>
+
+<h3>Synchronous Problems</h3>
+<ul>
+  <li><strong>Latency accumulation</strong>: Total latency = sum of all services in the chain</li>
+  <li><strong>Cascading failures</strong>: One slow or failed service blocks the entire chain</li>
+  <li><strong>Tight coupling</strong>: Caller depends on callee being available right now</li>
+  <li><strong>Resource holding</strong>: Threads/connections held while waiting for responses</li>
+</ul>
+
+<h3>Asynchronous Communication: Message-Based</h3>
+<p>The client sends a message to a queue or topic and continues immediately. The callee processes it later, independently.</p>
+
+<ul>
+  <li><strong>Decoupling</strong>: Producer and consumer don't need to be available at the same time</li>
+  <li><strong>Load leveling</strong>: Spikes are absorbed by the queue; consumers process at their own pace</li>
+  <li><strong>Resilience</strong>: If a consumer fails, messages stay in the queue for retry</li>
+  <li><strong>Scalability</strong>: Add more consumers to process faster</li>
+</ul>
+
+<h3>When to Use Each</h3>
+<ul>
+  <li><strong>Synchronous</strong>: When you need an immediate result (user login, read user profile, check inventory before placing order)</li>
+  <li><strong>Asynchronous</strong>: When the caller doesn't need the result right away (send email, generate report, update analytics, process payment confirmation)</li>
+</ul>
+
+<h3>Hybrid Approach</h3>
+<p>Most production systems use both. The critical path (user-facing request) is synchronous. Side effects are asynchronous.</p>
+
+<pre><code class="language-python"># Hybrid: sync for the critical path, async for side effects
+def place_order(order):
+    # SYNC: validate inventory (user needs to know immediately)
+    inventory_check = inventory_service.check(order.items)
+    if not inventory_check.available:
+        return {"error": "Out of stock"}
+
+    # SYNC: create order in database
+    saved_order = order_db.save(order)
+
+    # ASYNC: fire-and-forget side effects via message queue
+    message_queue.publish("order.created", {
+        "order_id": saved_order.id,
+        "user_id": order.user_id,
+    })
+    # Notification, analytics, inventory reservation happen async
+    return {"order_id": saved_order.id, "status": "created"}
+</code></pre>

@@ -1,0 +1,45 @@
+<h2>Design: Online Stock Span</h2>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Process a stream of daily stock prices one at a time</li>
+  <li>Return the <strong>span</strong>: number of consecutive days (including today) the price was &le; today's price</li>
+  <li>O(1) amortized per call</li>
+  <li>Encapsulate logic in a clean OOP class with stack internals</li>
+</ul>
+
+<h3>Approach</h3>
+<ul>
+  <li>Maintain a <strong>monotonic decreasing stack</strong> of <code>(price, span)</code> pairs</li>
+  <li>On each new price, pop all stack entries with price &le; current, accumulating their spans</li>
+  <li>Push the new price with its total accumulated span</li>
+  <li>Each element is pushed and popped at most once: amortized O(1)</li>
+</ul>
+
+<h3>Key Code</h3>
+<pre><code class="language-python">class StockSpanner:
+    def __init__(self):
+        self._stack: list[tuple[int, int]] = []  # (price, span)
+
+    def next(self, price: int) -> int:
+        span = 1
+        while self._stack and self._stack[-1][0] <= price:
+            span += self._stack.pop()[1]
+        self._stack.append((price, span))
+        return span
+
+
+# Usage
+spanner = StockSpanner()
+prices = [100, 80, 60, 70, 60, 75, 85]
+spans  = [spanner.next(p) for p in prices]
+# spans: [1, 1, 1, 2, 1, 4, 6]
+</code></pre>
+
+<h3>Takeaways</h3>
+<ul>
+  <li>Monotonic stacks solve "nearest greater/smaller" problems in amortized O(1)</li>
+  <li>Storing accumulated spans avoids re-scanning previous days</li>
+  <li>Pattern applies to temperature problems, histogram areas, and sliding-window max</li>
+  <li>Wrapping in a class provides a clean streaming API for real-time data</li>
+</ul>

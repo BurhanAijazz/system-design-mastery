@@ -1,0 +1,78 @@
+<h2>Database Types: KV, Document, Wide-Column, Graph</h2>
+
+<p>Each NoSQL database type optimizes for a specific access pattern. Choosing the wrong type means fighting against the database's design. In NoSQL, you design the schema around the <strong>queries you need to run</strong>, not around your entities.</p>
+
+<h3>Modeling a Social Network -- Four Ways</h3>
+<p>The same data (users, follows, posts, likes) modeled in four different database types reveals their strengths.</p>
+
+<h3>Relational Model (PostgreSQL)</h3>
+<pre><code class="language-python">class RelationalDB:
+    """Simulate a relational database with tables and JOINs."""
+
+    def __init__(self):
+        self.users = {}       # id -> {name, email}
+        self.follows = []     # (follower_id, following_id)
+        self.posts = {}       # id -> {author_id, content}
+        self.likes = []       # (user_id, post_id)
+
+    def get_followers(self, user_id):
+        """SELECT u.* FROM users u JOIN follows f
+           ON u.id = f.follower_id WHERE f.following_id = ?"""
+        follower_ids = [f[0] for f in self.follows if f[1] == user_id]
+        return [self.users[fid] for fid in follower_ids]
+
+    def get_feed(self, user_id, limit=10):
+        """JOIN posts with follows to build a feed."""
+        following = {f[1] for f in self.follows if f[0] == user_id}
+        feed = [p for p in self.posts.values()
+                if p["author_id"] in following]
+        return feed[:limit]
+</code></pre>
+
+<h3>Document Model (MongoDB)</h3>
+<p>Embed related data directly in the document. No JOINs needed for common reads, but updates to shared data require touching many documents.</p>
+<pre><code class="language-python"># Document model: self-contained user document
+user_doc = {
+    "_id": "user:1",
+    "name": "Alice",
+    "email": "alice@example.com",
+    "followers": ["user:2", "user:3"],
+    "posts": [
+        {"id": "post:1", "content": "Hello!", "likes": 42},
+        {"id": "post:2", "content": "World!", "likes": 17},
+    ]
+}
+# Reading a user profile = 1 document read (fast!)
+# But updating a follower's name requires updating many documents
+</code></pre>
+
+<h3>Graph Model (Neo4j)</h3>
+<p>Nodes and edges. Optimized for traversing relationships -- finding friends-of-friends, shortest paths, and network patterns.</p>
+<ul>
+  <li>Best for: social networks, recommendation engines, fraud detection</li>
+  <li>Query "friends of friends" is O(depth) not O(n) like SQL JOINs</li>
+</ul>
+
+<h3>Wide-Column Model (Cassandra)</h3>
+<p>Rows with flexible columns, optimized for massive write throughput and time-series data. Each row can have different columns.</p>
+<ul>
+  <li>Best for: IoT sensor data, activity logs, messaging at scale</li>
+  <li>Writes distributed across nodes with tunable consistency</li>
+</ul>
+
+<h3>Polyglot Persistence</h3>
+<p>Real-world systems use multiple database types together:</p>
+<ul>
+  <li><strong>PostgreSQL</strong> for user accounts and payments (ACID needed)</li>
+  <li><strong>Redis</strong> for sessions and caching (speed needed)</li>
+  <li><strong>Elasticsearch</strong> for product search (full-text search)</li>
+  <li><strong>Cassandra</strong> for activity feeds (high write volume)</li>
+  <li><strong>Neo4j</strong> for recommendations (relationship traversal)</li>
+</ul>
+
+<h3>Choosing the Right Database</h3>
+<ul>
+  <li>Model your data based on your <strong>queries</strong>, not your entities</li>
+  <li>Start with PostgreSQL if unsure -- it handles most patterns well</li>
+  <li>Add specialized databases only when you have a clear access pattern that demands it</li>
+</ul>

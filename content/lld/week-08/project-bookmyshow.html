@@ -1,0 +1,85 @@
+<h2>Project: BookMyShow</h2>
+
+<p>A full LLD implementation of a movie ticket booking platform. This project uses the State pattern for booking lifecycle, Strategy for seat pricing, Observer for booking notifications, and Factory for seat creation based on screen layout.</p>
+
+<h3>Requirements</h3>
+
+<p><strong>Functional:</strong></p>
+<ul>
+  <li>Browse movies by city</li>
+  <li>View theaters showing a movie</li>
+  <li>View available shows and seats</li>
+  <li>Select seats and book tickets</li>
+  <li>Different seat types with different prices (Regular, Premium, VIP)</li>
+  <li>Cancel booking with refund status</li>
+  <li>Search movies by name, genre, language</li>
+  <li>Notify user on booking confirmation</li>
+</ul>
+
+<p><strong>Out of scope:</strong> Payment gateway integration, food/beverage ordering, seat map UI rendering.</p>
+
+<h3>Core Entities</h3>
+
+<pre><code class="language-python">class Genre(Enum):
+    ACTION = "action"
+    COMEDY = "comedy"
+    DRAMA = "drama"
+    HORROR = "horror"
+    SCIFI = "sci-fi"
+    THRILLER = "thriller"
+
+class SeatType(Enum):
+    REGULAR = "regular"
+    PREMIUM = "premium"
+    VIP = "vip"
+
+class SeatStatus(Enum):
+    AVAILABLE = "available"
+    HELD = "held"
+    BOOKED = "booked"
+
+class BookingStatus(Enum):
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    CANCELLED = "cancelled"</code></pre>
+
+<h3>Architecture</h3>
+
+<p>The system is built around a BookingService that manages theaters, screens, shows, and bookings:</p>
+<ul>
+  <li><strong>Theater</strong> -- has multiple Screens, belongs to a city</li>
+  <li><strong>Screen</strong> -- has a layout of Seats, hosts Shows at specific times</li>
+  <li><strong>Show</strong> -- links a Movie to a Screen at a specific time, tracks seat availability</li>
+  <li><strong>Movie</strong> -- title, genre, language, duration, rating</li>
+  <li><strong>Booking</strong> -- links a user to selected seats in a show, tracks status</li>
+</ul>
+
+<h3>Design Patterns Used</h3>
+
+<ul>
+  <li><strong>State</strong> -- Booking lifecycle: PENDING -> CONFIRMED -> CANCELLED. Each state defines valid transitions and operations</li>
+  <li><strong>Strategy</strong> -- Seat pricing varies by type. RegularPricing, PremiumPricing, and VIPPricing each calculate prices differently</li>
+  <li><strong>Observer</strong> -- When a booking is confirmed, observers (email service, SMS service) are notified</li>
+  <li><strong>Factory</strong> -- Screen layout factory creates seats based on configuration (number of rows, seats per row, type mapping)</li>
+</ul>
+
+<h3>Key Implementation Considerations</h3>
+
+<pre><code class="language-python"># Seat holding prevents double-booking:
+# 1. User selects seats -> status changes to HELD
+# 2. User confirms payment -> status changes to BOOKED
+# 3. If payment times out -> status reverts to AVAILABLE
+
+# Thread safety for seat selection:
+# Use a lock per show to prevent race conditions
+# when multiple users try to book the same seats</code></pre>
+
+<h3>Implementation Steps</h3>
+<ul>
+  <li>Define entities: Movie, Theater, Screen, Seat, Show, Booking</li>
+  <li>Implement seat status management with State pattern</li>
+  <li>Build pricing strategies for different seat types</li>
+  <li>Create the BookingService that orchestrates search, selection, and booking</li>
+  <li>Add seat holding with timeout for reservation safety</li>
+  <li>Implement Observer for booking confirmation notifications</li>
+</ul>

@@ -1,0 +1,203 @@
+<h2>Project: Elevator System</h2>
+
+<p>A full LLD implementation of an elevator system for a multi-story building. This project uses State (elevator states), Strategy (scheduling algorithms), Observer (display updates), and Command (button presses) patterns.</p>
+
+<h3>Patterns Used</h3>
+
+<ul>
+    <li><strong>State</strong> -- Elevator states (Idle, MovingUp, MovingDown, DoorOpen)</li>
+    <li><strong>Strategy</strong> -- Scheduling algorithms (FCFS, SCAN, ShortestSeekFirst)</li>
+    <li><strong>Observer</strong> -- Display updates, arrival notifications</li>
+    <li><strong>Command</strong> -- Button press commands</li>
+</ul>
+
+<h3>Requirements</h3>
+
+<pre><code>Functional:
+  1. Building with N floors and M elevators
+  2. Users press UP/DOWN buttons on floors
+  3. Users press floor buttons inside the cabin
+  4. Elevator moves to requested floors
+  5. Scheduling algorithm decides which elevator to dispatch
+  6. Display shows current floor and direction
+  7. Doors open/close at each stop
+
+Out of scope:
+  - Weight/capacity limits
+  - Emergency stop
+  - VIP/express elevators
+</code></pre>
+
+<h3>Core Entities</h3>
+
+<pre><code class="language-python">from enum import Enum
+from dataclasses import dataclass, field
+from typing import List, Optional, Dict, Set
+from abc import ABC, abstractmethod
+
+class Direction(Enum):
+    UP = "UP"
+    DOWN = "DOWN"
+    IDLE = "IDLE"
+
+class DoorStatus(Enum):
+    OPEN = "open"
+    CLOSED = "closed"
+
+class ElevatorStatus(Enum):
+    IDLE = "idle"
+    MOVING_UP = "moving_up"
+    MOVING_DOWN = "moving_down"
+    DOOR_OPEN = "door_open"
+    MAINTENANCE = "maintenance"
+
+@dataclass
+class Request:
+    """A floor request -- either from a hallway button or cabin button."""
+    floor: int
+    direction: Optional[Direction] = None  # None for cabin requests
+    timestamp: float = 0.0
+</code></pre>
+
+<h3>Elevator</h3>
+
+<pre><code class="language-python">class Elevator:
+    def __init__(self, elevator_id: str, min_floor: int = 0, max_floor: int = 10):
+        self.elevator_id = elevator_id
+        self._current_floor = 0
+        self._status = ElevatorStatus.IDLE
+        self._door = DoorStatus.CLOSED
+        self._requests: Set[int] = set()
+        self._min_floor = min_floor
+        self._max_floor = max_floor
+        self._direction = Direction.IDLE
+
+    @property
+    def current_floor(self) -> int:
+        return self._current_floor
+
+    @property
+    def direction(self) -> Direction:
+        return self._direction
+
+    def add_request(self, floor: int) -> None:
+        if self._min_floor <= floor <= self._max_floor:
+            self._requests.add(floor)
+
+    def has_requests(self) -> bool:
+        return len(self._requests) > 0
+
+    def open_doors(self) -> None:
+        self._door = DoorStatus.OPEN
+        self._status = ElevatorStatus.DOOR_OPEN
+
+    def close_doors(self) -> None:
+        self._door = DoorStatus.CLOSED
+
+    def step(self) -> Optional[int]:
+        """Move one floor in current direction. Returns floor if stopped."""
+        if not self._requests:
+            self._status = ElevatorStatus.IDLE
+            self._direction = Direction.IDLE
+            return None
+
+        # Determine direction
+        if self._direction == Direction.IDLE:
+            target = min(self._requests, key=lambda f: abs(f - self._current_floor))
+            if target > self._current_floor:
+                self._direction = Direction.UP
+            elif target < self._current_floor:
+                self._direction = Direction.DOWN
+
+        # Move one floor
+        if self._direction == Direction.UP:
+            self._current_floor += 1
+            self._status = ElevatorStatus.MOVING_UP
+        elif self._direction == Direction.DOWN:
+            self._current_floor -= 1
+            self._status = ElevatorStatus.MOVING_DOWN
+
+        # Check if we should stop
+        if self._current_floor in self._requests:
+            self._requests.discard(self._current_floor)
+            self.open_doors()
+            self.close_doors()
+            return self._current_floor
+
+        return None
+</code></pre>
+
+<h3>Scheduling Strategy</h3>
+
+<pre><code class="language-python">class SchedulingStrategy(ABC):
+    @abstractmethod
+    def select_elevator(self, elevators: List[Elevator], request: Request) -> Optional[Elevator]:
+        """Choose which elevator should handle this request."""
+        pass
+
+class FCFSStrategy(SchedulingStrategy):
+    """First Come First Served -- assign to the first idle elevator."""
+    def select_elevator(self, elevators, request):
+        for e in elevators:
+            if e._status == ElevatorStatus.IDLE:
+                return e
+        return elevators[0] if elevators else None
+
+class NearestStrategy(SchedulingStrategy):
+    """Assign to the nearest elevator."""
+    def select_elevator(self, elevators, request):
+        if not elevators:
+            return None
+        return min(elevators, key=lambda e: abs(e.current_floor - request.floor))
+
+class SCANStrategy(SchedulingStrategy):
+    """Prefer elevators already moving in the right direction."""
+    def select_elevator(self, elevators, request):
+        best = None
+        best_score = float('inf')
+        for e in elevators:
+            dist = abs(e.current_floor - request.floor)
+            # Prefer same direction
+            if request.direction == e.direction:
+                dist -= 100  # bonus for same direction
+            if dist < best_score:
+                best_score = dist
+                best = e
+        return best
+</code></pre>
+
+<h3>Elevator Controller</h3>
+
+<pre><code class="language-python">class ElevatorController:
+    def __init__(self, elevators: List[Elevator], strategy: SchedulingStrategy):
+        self._elevators = elevators
+        self._strategy = strategy
+        self._observers = []
+
+    def request_elevator(self, floor: int, direction: Direction) -> Optional[str]:
+        request = Request(floor=floor, direction=direction)
+        elevator = self._strategy.select_elevator(self._elevators, request)
+        if elevator:
+            elevator.add_request(floor)
+            return elevator.elevator_id
+        return None
+
+    def press_floor_button(self, elevator_id: str, floor: int) -> None:
+        for e in self._elevators:
+            if e.elevator_id == elevator_id:
+                e.add_request(floor)
+                break
+
+    def step_all(self) -> List[str]:
+        """Advance all elevators by one step. Returns status messages."""
+        messages = []
+        for e in self._elevators:
+            stopped_at = e.step()
+            if stopped_at is not None:
+                messages.append(f"{e.elevator_id} stopped at floor {stopped_at}")
+        return messages
+</code></pre>
+
+<h3>Architecture Summary</h3>
+
+<p>The Elevator system separates movement logic (Elevator) from dispatch logic (ElevatorController + SchedulingStrategy). The Strategy pattern allows swapping scheduling algorithms at runtime. Each elevator independently processes its request queue, while the controller coordinates which elevator handles each new request.</p>

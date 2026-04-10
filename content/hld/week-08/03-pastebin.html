@@ -1,0 +1,80 @@
+<h2>Pastebin Design</h2>
+
+<p>Pastebin is similar to a URL shortener but with <strong>content storage</strong>. The key difference is variable-size content up to 10 MB, which changes how we think about storage, caching, and delivery.</p>
+
+<h3>Define: Requirements</h3>
+
+<ul>
+  <li><strong>Functional:</strong> Create pastes (text up to 10 MB), unique short URL per paste, syntax highlighting, access control (public/unlisted/private), optional expiration</li>
+  <li><strong>Non-Functional:</strong> High availability for reads, low latency (&lt;100ms), durable storage, scale to millions of pastes</li>
+</ul>
+
+<h3>Key Differences from URL Shortener</h3>
+
+<pre><code class="language-python"># Comparison:
+#                  | URL Shortener     | Pastebin
+# -----------------+-------------------+--------------------
+# Data size        | ~500 bytes        | 1KB - 10MB
+# Content storage  | URL in DB         | Content in S3
+# Read pattern     | Redirect (fast)   | Render page (slower)
+# Write pattern    | Tiny metadata     | Large content upload
+# Caching          | Easy (small)      | Harder (large)
+# Access control   | None (public)     | Public/unlisted/private
+
+# KEY INSIGHT: store METADATA in the database,
+# store CONTENT in object storage (S3).</code></pre>
+
+<h3>Estimate: Scale</h3>
+
+<pre><code class="language-python"># Assumptions: 1M new pastes/day, Read:Write = 5:1
+# Average paste size: 10KB (median), up to 10MB (max)
+
+# QPS:
+#   Write: 1M / 86400 ~ 12 QPS (peak ~36)
+#   Read:  5M / 86400 ~ 58 QPS (peak ~174)
+# Much lower than URL shortener!
+
+# Storage:
+#   Daily metadata: 1M x 200B = 200 MB/day
+#   Daily content:  1M x 10KB = 10 GB/day (on S3)
+#   5-year content: 18.25 TB
+
+# Cache: Top 20% of reads: 1M x 10KB = 10 GB
+# CDN handles large pastes efficiently</code></pre>
+
+<h3>Architecture</h3>
+
+<ul>
+  <li><strong>API Gateway:</strong> Routes requests, handles auth for private pastes</li>
+  <li><strong>Metadata DB (PostgreSQL):</strong> paste_id, title, language, timestamps, access_level, user_id</li>
+  <li><strong>Content Store (S3):</strong> Actual paste content stored as objects keyed by paste_id</li>
+  <li><strong>CDN:</strong> Caches popular pastes at edge locations for fast delivery</li>
+  <li><strong>Cache (Redis):</strong> Metadata cache plus hot paste content</li>
+</ul>
+
+<h3>Write Flow</h3>
+
+<ul>
+  <li>Client uploads paste content to the API</li>
+  <li>Service generates a unique paste_id (same Base62 approach as URL shortener)</li>
+  <li>Content written to S3, metadata written to PostgreSQL</li>
+  <li>Return short URL to client</li>
+</ul>
+
+<h3>Read Flow</h3>
+
+<ul>
+  <li>Client requests paste by short URL</li>
+  <li>Check CDN cache first, then Redis, then DB + S3</li>
+  <li>Render page with syntax highlighting based on language metadata</li>
+  <li>Access control check: public serves immediately, private requires auth</li>
+</ul>
+
+<h3>Design Considerations</h3>
+
+<ul>
+  <li><strong>Expiration:</strong> TTL-based cleanup using a background job scanning for expired pastes</li>
+  <li><strong>Burn-after-read:</strong> Delete paste after first successful read (requires atomic check-and-delete)</li>
+  <li><strong>Rate limiting:</strong> Prevent abuse by limiting paste creation per IP/user</li>
+  <li><strong>Content moderation:</strong> Scan content for malware or policy violations asynchronously</li>
+</ul>

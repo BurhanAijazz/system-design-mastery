@@ -1,0 +1,210 @@
+<h2>Payment and Pricing Models</h2>
+
+<p>Most real-world systems involve money: parking fees, vending machine prices, elevator maintenance costs. This lesson covers payment abstraction, pricing strategies, and transaction lifecycle.</p>
+
+<h3>Payment Method Abstraction</h3>
+
+<p>Use the Strategy pattern for payment methods. The system does not care HOW you pay, only THAT you pay.</p>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+from enum import Enum
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Optional
+import uuid
+
+class PaymentStatus(Enum):
+    INITIATED = "initiated"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    REFUNDED = "refunded"
+
+
+class PaymentMethod(ABC):
+    """Strategy interface for payment processing."""
+
+    @abstractmethod
+    def process_payment(self, amount: float) -> bool:
+        pass
+
+    @abstractmethod
+    def process_refund(self, amount: float) -> bool:
+        pass
+
+    @abstractmethod
+    def method_name(self) -> str:
+        pass
+
+
+class CashPayment(PaymentMethod):
+    def __init__(self, amount_tendered: float = 0.0):
+        self._tendered = amount_tendered
+
+    def process_payment(self, amount: float) -> bool:
+        if self._tendered >= amount:
+            change = self._tendered - amount
+            print(f"Cash: Paid ${amount:.2f}, change ${change:.2f}")
+            return True
+        print(f"Cash: Insufficient. Need ${amount:.2f}, got ${self._tendered:.2f}")
+        return False
+
+    def process_refund(self, amount: float) -> bool:
+        print(f"Cash refund: ${amount:.2f}")
+        return True
+
+    def method_name(self) -> str:
+        return "cash"
+
+
+class CreditCardPayment(PaymentMethod):
+    def __init__(self, card_number: str, expiry: str):
+        self._card = card_number[-4:]  # store last 4 only
+        self._expiry = expiry
+
+    def process_payment(self, amount: float) -> bool:
+        print(f"Card ****{self._card}: Charged ${amount:.2f}")
+        return True
+
+    def process_refund(self, amount: float) -> bool:
+        print(f"Card ****{self._card}: Refunded ${amount:.2f}")
+        return True
+
+    def method_name(self) -> str:
+        return f"card_****{self._card}"
+</code></pre>
+
+<h3>Pricing Strategies</h3>
+
+<pre><code class="language-python">class PricingStrategy(ABC):
+    """Strategy for calculating fees."""
+
+    @abstractmethod
+    def calculate(self, hours: float) -> float:
+        pass
+
+    @abstractmethod
+    def name(self) -> str:
+        pass
+
+
+class FlatRatePricing(PricingStrategy):
+    def __init__(self, rate: float):
+        self._rate = rate
+
+    def calculate(self, hours: float) -> float:
+        return self._rate  # same fee regardless of duration
+
+    def name(self) -> str:
+        return f"Flat ${self._rate:.2f}"
+
+
+class HourlyPricing(PricingStrategy):
+    def __init__(self, rate_per_hour: float):
+        self._rate = rate_per_hour
+
+    def calculate(self, hours: float) -> float:
+        import math
+        return math.ceil(hours) * self._rate  # round up to next hour
+
+    def name(self) -> str:
+        return f"${self._rate:.2f}/hour"
+
+
+class TieredPricing(PricingStrategy):
+    """Different rates for different duration tiers."""
+
+    def __init__(self, tiers: list):
+        # tiers = [(hours_threshold, rate_per_hour), ...]
+        self._tiers = sorted(tiers, key=lambda t: t[0])
+
+    def calculate(self, hours: float) -> float:
+        total = 0.0
+        remaining = hours
+        prev_threshold = 0
+
+        for threshold, rate in self._tiers:
+            tier_hours = min(remaining, threshold - prev_threshold)
+            if tier_hours > 0:
+                total += tier_hours * rate
+                remaining -= tier_hours
+            prev_threshold = threshold
+
+        # Remaining hours at the last tier rate
+        if remaining > 0:
+            total += remaining * self._tiers[-1][1]
+
+        return total
+
+    def name(self) -> str:
+        return "Tiered pricing"
+</code></pre>
+
+<h3>Transaction</h3>
+
+<pre><code class="language-python">@dataclass
+class Transaction:
+    """Records a payment transaction."""
+    transaction_id: str
+    amount: float
+    payment_method: str
+    status: PaymentStatus = PaymentStatus.INITIATED
+    created_at: datetime = field(default_factory=datetime.now)
+
+    def complete(self) -> None:
+        self.status = PaymentStatus.COMPLETED
+
+    def fail(self) -> None:
+        self.status = PaymentStatus.FAILED
+
+
+class PaymentProcessor:
+    """Processes payments and records transactions."""
+
+    def __init__(self):
+        self._transactions: list[Transaction] = []
+
+    def charge(self, amount: float, method: PaymentMethod) -> Optional[Transaction]:
+        txn = Transaction(
+            transaction_id=str(uuid.uuid4())[:8],
+            amount=amount,
+            payment_method=method.method_name(),
+        )
+        txn.status = PaymentStatus.PROCESSING
+
+        if method.process_payment(amount):
+            txn.complete()
+        else:
+            txn.fail()
+
+        self._transactions.append(txn)
+        return txn
+</code></pre>
+
+<h3>Receipt Generation</h3>
+
+<pre><code class="language-python">@dataclass
+class Receipt:
+    receipt_id: str
+    transaction_id: str
+    amount: float
+    payment_method: str
+    timestamp: datetime
+
+    def display(self) -> str:
+        return (
+            f"Receipt #{self.receipt_id}\n"
+            f"Amount: ${self.amount:.2f}\n"
+            f"Method: {self.payment_method}\n"
+            f"Date: {self.timestamp.strftime('%Y-%m-%d %H:%M')}"
+        )
+</code></pre>
+
+<h3>When to Apply These Patterns</h3>
+
+<ul>
+    <li><strong>Parking lot</strong>: HourlyPricing, CashPayment or CardPayment</li>
+    <li><strong>Vending machine</strong>: FlatRatePricing per item, coin-based CashPayment</li>
+    <li><strong>Movie booking</strong>: TieredPricing (base + premium seats), CardPayment</li>
+    <li><strong>Hotel</strong>: dynamic pricing (weekday vs weekend), multiple payment methods</li>
+</ul>

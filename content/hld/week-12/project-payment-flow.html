@@ -1,0 +1,126 @@
+<h2>Project: Payment Flow Simulator</h2>
+
+<p>This project implements an interactive payment processing prototype with the full authorize -> capture -> settle flow, idempotency keys, a double-entry ledger, fraud detection scoring, retry logic with exponential backoff, and end-of-day reconciliation.</p>
+
+<h3>Core Data Models</h3>
+
+<pre><code class="language-python">from enum import Enum
+from dataclasses import dataclass, field
+from typing import Optional
+
+class TxnStatus(Enum):
+    PENDING = "pending"
+    AUTHORIZED = "authorized"
+    AUTH_DECLINED = "auth_declined"
+    CAPTURED = "captured"
+    SETTLED = "settled"
+    VOIDED = "voided"
+    REFUNDED = "refunded"
+    PARTIAL_REFUND = "partial_refund"
+    FAILED = "failed"
+
+@dataclass
+class Card:
+    card_id: str
+    customer_id: str
+    last_four: str
+    brand: str            # visa, mastercard, amex
+    balance: float
+    fraud_score_base: float = 0.0  # 0-50 baseline risk
+
+@dataclass
+class Transaction:
+    txn_id: str
+    idempotency_key: str
+    merchant_id: str
+    customer_id: str
+    card_id: str
+    amount: float
+    currency: str
+    status: TxnStatus
+    auth_code: Optional[str] = None
+    fraud_score: float = 0.0
+    retry_count: int = 0
+
+@dataclass
+class LedgerEntry:
+    entry_id: str
+    txn_id: str
+    debit_account: str
+    credit_account: str
+    amount: float
+    currency: str
+    entry_type: str       # authorization, capture, settlement, refund</code></pre>
+
+<h3>Idempotency Implementation</h3>
+
+<pre><code class="language-python"># The idempotency store maps keys to completed results:
+# idempotency_key -> (txn_id, status, response)
+
+# Processing flow:
+# 1. Receive payment request with idempotency_key
+# 2. Check idempotency store:
+#    - Key exists -> return stored result (no new charge)
+#    - Key missing -> process payment
+# 3. After processing, store result under idempotency_key
+# 4. Keys expire after 24 hours
+
+# This ensures: even if the client retries 100 times,
+# the customer is charged exactly once.</code></pre>
+
+<h3>Double-Entry Ledger</h3>
+
+<pre><code class="language-python"># Every payment creates balanced ledger entries:
+#
+# Authorization ($50):
+#   DEBIT  customer_hold_account  $50
+#   CREDIT merchant_pending       $50
+#
+# Capture ($50):
+#   DEBIT  merchant_pending       $50
+#   CREDIT merchant_balance       $50
+#
+# Settlement:
+#   DEBIT  merchant_balance       $48.55 (minus fees)
+#   CREDIT merchant_bank_account  $48.55
+#   DEBIT  merchant_balance       $1.45  (platform fee)
+#   CREDIT platform_revenue       $1.45
+#
+# Invariant: sum(debits) == sum(credits) ALWAYS</code></pre>
+
+<h3>Fraud Detection</h3>
+
+<ul>
+  <li><strong>Velocity check:</strong> How many transactions in the last hour from this card?</li>
+  <li><strong>Amount check:</strong> Is this transaction unusually large for this customer?</li>
+  <li><strong>Geographic check:</strong> Is the transaction location consistent with recent activity?</li>
+  <li><strong>Score threshold:</strong> Transactions scoring above 70 (out of 100) are flagged for additional verification</li>
+</ul>
+
+<h3>Retry Logic</h3>
+
+<ul>
+  <li>Network failures during authorization trigger automatic retries</li>
+  <li>Exponential backoff: 1s, 2s, 4s, 8s (max 3 retries)</li>
+  <li>Idempotency key ensures retries are safe (no double-charge risk)</li>
+  <li>After max retries, transaction marked as FAILED with error details</li>
+</ul>
+
+<h3>End-of-Day Reconciliation</h3>
+
+<ul>
+  <li><strong>Internal check:</strong> Verify all ledger debits equal credits</li>
+  <li><strong>External check:</strong> Match transactions against simulated card network settlement files</li>
+  <li><strong>Discrepancy report:</strong> Flag any mismatches for investigation</li>
+  <li><strong>Settlement batch:</strong> Process all captured transactions for merchant payout</li>
+</ul>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>Idempotency is the most critical feature in a payment system -- without it, network retries cause double charges</li>
+  <li>The double-entry ledger is an ancient accounting principle that ensures money never appears or disappears</li>
+  <li>Fraud detection must be real-time (during authorization) to prevent losses</li>
+  <li>Reconciliation is the safety net that catches any bugs or inconsistencies before they compound</li>
+  <li>The three-phase flow (authorize -> capture -> settle) allows flexibility for pre-orders, partial shipments, and cancellations</li>
+</ul>

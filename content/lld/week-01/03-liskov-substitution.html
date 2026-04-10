@@ -1,0 +1,213 @@
+<h2>Liskov Substitution Principle (LSP)</h2>
+
+<p>
+  The Liskov Substitution Principle states that objects of a superclass should be
+  replaceable with objects of a subclass <strong>without altering the correctness</strong>
+  of the program. If class <code>B</code> is a subclass of class <code>A</code>, then
+  anywhere you use an instance of <code>A</code>, you should be able to substitute an
+  instance of <code>B</code> and everything still works correctly.
+</p>
+
+<h3>The Formal Definition</h3>
+
+<p>
+  Barbara Liskov originally stated: "If for each object <em>o1</em> of type <em>S</em>
+  there is an object <em>o2</em> of type <em>T</em> such that for all programs <em>P</em>
+  defined in terms of <em>T</em>, the behavior of <em>P</em> is unchanged when <em>o1</em>
+  is substituted for <em>o2</em>, then <em>S</em> is a subtype of <em>T</em>."
+</p>
+
+<p>
+  In simpler terms: subclasses must honor the contracts established by their parent classes.
+</p>
+
+<h3>The Classic Rectangle/Square Problem</h3>
+
+<p>
+  The most famous LSP violation is the Rectangle/Square hierarchy. Mathematically,
+  a square <em>is a</em> rectangle, so it seems natural to make <code>Square</code> inherit
+  from <code>Rectangle</code>. But this breaks LSP.
+</p>
+
+<h3>Bad Example: Square Extends Rectangle</h3>
+
+<pre><code class="language-python">class Rectangle:
+    def __init__(self, width: float, height: float):
+        self._width = width
+        self._height = height
+
+    @property
+    def width(self) -> float:
+        return self._width
+
+    @width.setter
+    def width(self, value: float):
+        self._width = value
+
+    @property
+    def height(self) -> float:
+        return self._height
+
+    @height.setter
+    def height(self, value: float):
+        self._height = value
+
+    def area(self) -> float:
+        return self._width * self._height
+
+
+class Square(Rectangle):
+    """A square IS-A rectangle... or is it?"""
+
+    def __init__(self, side: float):
+        super().__init__(side, side)
+
+    @Rectangle.width.setter
+    def width(self, value: float):
+        # Must keep width == height for a square
+        self._width = value
+        self._height = value
+
+    @Rectangle.height.setter
+    def height(self, value: float):
+        # Must keep width == height for a square
+        self._width = value
+        self._height = value
+</code></pre>
+
+<h3>Why This Breaks LSP</h3>
+
+<p>
+  Consider a function that works with any <code>Rectangle</code>:
+</p>
+
+<pre><code class="language-python">def resize_and_check(rect: Rectangle):
+    """Set width to 5 and height to 10, then verify area."""
+    rect.width = 5
+    rect.height = 10
+    expected_area = 50  # 5 * 10
+    actual_area = rect.area()
+
+    assert actual_area == expected_area, (
+        f"Expected area {expected_area}, got {actual_area}"
+    )
+
+# Works fine with Rectangle
+resize_and_check(Rectangle(1, 1))  # passes
+
+# Fails with Square!
+resize_and_check(Square(1))  # AssertionError: Expected area 50, got 100
+</code></pre>
+
+<p>
+  When <code>height</code> is set to 10 on the Square, it also sets width to 10,
+  resulting in area 100 instead of 50. The Square cannot be substituted for a Rectangle
+  without breaking the program. This is a textbook LSP violation.
+</p>
+
+<h3>Good Example: Separate Shape Hierarchy</h3>
+
+<p>
+  Instead of forcing an inheritance relationship, model both as independent
+  implementations of a common interface:
+</p>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+
+
+class Shape(ABC):
+    @abstractmethod
+    def area(self) -> float:
+        pass
+
+    @abstractmethod
+    def perimeter(self) -> float:
+        pass
+
+
+class Rectangle(Shape):
+    def __init__(self, width: float, height: float):
+        self._width = width
+        self._height = height
+
+    @property
+    def width(self) -> float:
+        return self._width
+
+    @width.setter
+    def width(self, value: float):
+        self._width = value
+
+    @property
+    def height(self) -> float:
+        return self._height
+
+    @height.setter
+    def height(self, value: float):
+        self._height = value
+
+    def area(self) -> float:
+        return self._width * self._height
+
+    def perimeter(self) -> float:
+        return 2 * (self._width + self._height)
+
+
+class Square(Shape):
+    def __init__(self, side: float):
+        self._side = side
+
+    @property
+    def side(self) -> float:
+        return self._side
+
+    @side.setter
+    def side(self, value: float):
+        self._side = value
+
+    def area(self) -> float:
+        return self._side ** 2
+
+    def perimeter(self) -> float:
+        return 4 * self._side
+</code></pre>
+
+<p>
+  Now both classes honor the <code>Shape</code> contract independently. Any function
+  that accepts a <code>Shape</code> works correctly with either:
+</p>
+
+<pre><code class="language-python">def print_shape_info(shape: Shape):
+    print(f"Area: {shape.area()}")
+    print(f"Perimeter: {shape.perimeter()}")
+
+print_shape_info(Rectangle(5, 10))  # Area: 50, Perimeter: 30
+print_shape_info(Square(7))          # Area: 49, Perimeter: 28
+</code></pre>
+
+<h3>LSP Rules of Thumb</h3>
+
+<ul>
+  <li><strong>Preconditions</strong>: A subclass must not strengthen preconditions (require more).</li>
+  <li><strong>Postconditions</strong>: A subclass must not weaken postconditions (promise less).</li>
+  <li><strong>Invariants</strong>: A subclass must preserve all invariants of the parent.</li>
+  <li><strong>History constraint</strong>: A subclass must not introduce state changes the parent would not allow.</li>
+</ul>
+
+<h3>Detecting LSP Violations</h3>
+
+<ul>
+  <li>A subclass method raises <code>NotImplementedError</code> for an inherited method.</li>
+  <li>A subclass silently ignores or overrides setter behavior.</li>
+  <li>Client code uses <code>isinstance()</code> checks before calling methods.</li>
+  <li>Unit tests pass for the parent but fail when substituted with a child.</li>
+</ul>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>Inheritance should model behavioral compatibility, not just mathematical "IS-A" relationships.</li>
+  <li>If a subclass cannot fully honor the parent's contract, use composition or a shared interface instead.</li>
+  <li>LSP violations often surface as subtle, hard-to-debug failures in production code.</li>
+  <li>Design by contract (preconditions, postconditions, invariants) helps you verify LSP compliance.</li>
+</ul>

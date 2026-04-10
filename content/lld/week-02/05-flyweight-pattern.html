@@ -1,0 +1,251 @@
+<h2>Flyweight Pattern</h2>
+
+<p>
+  The Flyweight pattern reduces memory usage by sharing common state across many objects
+  instead of storing it in each individual object. It splits object state into two parts:
+  <strong>intrinsic state</strong> (shared, immutable) and <strong>extrinsic state</strong>
+  (unique per instance, stored externally).
+</p>
+
+<h3>When to Use the Flyweight Pattern</h3>
+
+<ul>
+  <li>Your application creates a huge number of similar objects (thousands or millions).</li>
+  <li>Most of the object state can be made extrinsic (moved outside the object).</li>
+  <li>The shared intrinsic state is immutable.</li>
+  <li>Memory consumption is a genuine bottleneck.</li>
+</ul>
+
+<h3>Problem: Particle System for a Game</h3>
+
+<p>
+  A game engine renders thousands of particles (bullets, sparks, smoke). Each particle
+  has a position and velocity (unique per particle) but also a texture, color, and
+  sprite (shared among particles of the same type). Without Flyweight, each particle
+  stores a full copy of the texture data:
+</p>
+
+<pre><code class="language-python">import sys
+
+
+class ParticleNaive:
+    """Naive approach: each particle stores everything."""
+
+    def __init__(self, x: float, y: float, vx: float, vy: float,
+                 texture: bytes, color: str, sprite_name: str, size: float):
+        self.x = x
+        self.y = y
+        self.vx = vx
+        self.vy = vy
+        self.texture = texture        # Large shared data duplicated!
+        self.color = color             # Shared
+        self.sprite_name = sprite_name # Shared
+        self.size = size               # Shared
+
+
+# Simulate 10,000 bullet particles
+fake_texture = b"\x00" * 10_000  # 10 KB texture per particle
+
+particles = [
+    ParticleNaive(
+        x=i * 0.1, y=i * 0.2, vx=1.0, vy=-0.5,
+        texture=fake_texture, color="yellow", sprite_name="bullet_01", size=2.0,
+    )
+    for i in range(10_000)
+]
+
+# Memory: ~100 MB just for textures (10 KB x 10,000 particles)
+print(f"Naive: {sys.getsizeof(fake_texture) * 10_000 / 1_000_000:.1f} MB for textures alone")
+</code></pre>
+
+<h3>Solution: Separate Intrinsic and Extrinsic State</h3>
+
+<p>
+  The <strong>intrinsic state</strong> (texture, color, sprite, size) is shared among all
+  particles of the same type. The <strong>extrinsic state</strong> (position, velocity) is
+  unique to each particle and stored separately.
+</p>
+
+<pre><code class="language-python">class ParticleType:
+    """Flyweight: stores shared (intrinsic) state.
+    One instance per particle type, shared among thousands of particles."""
+
+    def __init__(self, texture: bytes, color: str, sprite_name: str, size: float):
+        self.texture = texture
+        self.color = color
+        self.sprite_name = sprite_name
+        self.size = size
+
+    def render(self, x: float, y: float):
+        """Render the particle at the given (extrinsic) position."""
+        # In a real engine, this would draw the sprite at (x, y)
+        pass
+
+
+class Particle:
+    """Context: stores unique (extrinsic) state and references a shared flyweight."""
+
+    __slots__ = ("x", "y", "vx", "vy", "particle_type")
+
+    def __init__(self, x: float, y: float, vx: float, vy: float,
+                 particle_type: ParticleType):
+        self.x = x
+        self.y = y
+        self.vx = vx
+        self.vy = vy
+        self.particle_type = particle_type  # Reference, not copy
+
+    def update(self, dt: float):
+        self.x += self.vx * dt
+        self.y += self.vy * dt
+
+    def render(self):
+        self.particle_type.render(self.x, self.y)
+</code></pre>
+
+<h3>The Flyweight Factory</h3>
+
+<p>
+  A factory ensures that flyweight objects are created once and reused:
+</p>
+
+<pre><code class="language-python">class ParticleTypeFactory:
+    """Creates and caches flyweight objects."""
+
+    def __init__(self):
+        self._types: dict[str, ParticleType] = {}
+
+    def get_particle_type(self, texture: bytes, color: str,
+                          sprite_name: str, size: float) -> ParticleType:
+        key = f"{sprite_name}_{color}_{size}"
+
+        if key not in self._types:
+            print(f"[Factory] Creating new ParticleType: {key}")
+            self._types[key] = ParticleType(texture, color, sprite_name, size)
+        else:
+            print(f"[Factory] Reusing existing ParticleType: {key}")
+
+        return self._types[key]
+
+    @property
+    def type_count(self) -> int:
+        return len(self._types)
+</code></pre>
+
+<h3>Putting It Together</h3>
+
+<pre><code class="language-python">import random
+
+# Create the factory
+factory = ParticleTypeFactory()
+
+# Textures (loaded once, shared)
+bullet_texture = b"\x00" * 10_000
+spark_texture = b"\xff" * 5_000
+smoke_texture = b"\x80" * 20_000
+
+# Create 10,000 particles with only 3 flyweight types
+particles: list[Particle] = []
+
+for i in range(4000):
+    pt = factory.get_particle_type(bullet_texture, "yellow", "bullet_01", 2.0)
+    particles.append(Particle(
+        x=random.uniform(0, 800), y=random.uniform(0, 600),
+        vx=random.uniform(-5, 5), vy=random.uniform(-5, 5),
+        particle_type=pt,
+    ))
+
+for i in range(3000):
+    pt = factory.get_particle_type(spark_texture, "orange", "spark_01", 1.0)
+    particles.append(Particle(
+        x=random.uniform(0, 800), y=random.uniform(0, 600),
+        vx=random.uniform(-10, 10), vy=random.uniform(-10, 10),
+        particle_type=pt,
+    ))
+
+for i in range(3000):
+    pt = factory.get_particle_type(smoke_texture, "gray", "smoke_01", 5.0)
+    particles.append(Particle(
+        x=random.uniform(0, 800), y=random.uniform(0, 600),
+        vx=random.uniform(-1, 1), vy=random.uniform(1, 3),
+        particle_type=pt,
+    ))
+
+print(f"\nTotal particles: {len(particles)}")
+print(f"Unique flyweight types: {factory.type_count}")
+print(f"Texture memory: {(10_000 + 5_000 + 20_000) / 1_000:.1f} KB (shared)")
+print(f"Without flyweight: {(10_000 * 4000 + 5_000 * 3000 + 20_000 * 3000) / 1_000_000:.1f} MB")
+</code></pre>
+
+<p>Output:</p>
+
+<pre><code class="language-python"># Total particles: 10000
+# Unique flyweight types: 3
+# Texture memory: 35.0 KB (shared)
+# Without flyweight: 115.0 MB
+</code></pre>
+
+<h3>Memory Comparison</h3>
+
+<pre><code class="language-python"># Memory analysis
+# Naive approach: each of 10,000 particles stores its own texture
+#   Texture memory: 10,000 * ~11.7 KB avg = ~115 MB
+#
+# Flyweight approach: 3 shared textures + 10,000 lightweight particles
+#   Texture memory: 3 * ~11.7 KB avg = ~35 KB
+#   Particle memory: 10,000 * ~72 bytes (5 floats + 1 reference) = ~0.7 MB
+#   Total: ~0.7 MB (99.4% reduction)
+</code></pre>
+
+<h3>Game Loop With Flyweight Particles</h3>
+
+<pre><code class="language-python">class ParticleSystem:
+    def __init__(self):
+        self._factory = ParticleTypeFactory()
+        self._particles: list[Particle] = []
+
+    def spawn(self, x: float, y: float, vx: float, vy: float,
+              texture: bytes, color: str, sprite: str, size: float):
+        pt = self._factory.get_particle_type(texture, color, sprite, size)
+        self._particles.append(Particle(x, y, vx, vy, pt))
+
+    def update(self, dt: float):
+        for p in self._particles:
+            p.update(dt)
+
+    def render(self):
+        for p in self._particles:
+            p.render()
+
+    def remove_offscreen(self, width: int, height: int):
+        self._particles = [
+            p for p in self._particles
+            if 0 <= p.x <= width and 0 <= p.y <= height
+        ]
+
+    @property
+    def count(self) -> int:
+        return len(self._particles)
+
+    @property
+    def type_count(self) -> int:
+        return self._factory.type_count
+</code></pre>
+
+<h3>Flyweight vs Singleton</h3>
+
+<ul>
+  <li><strong>Singleton:</strong> Exactly one instance of a class exists globally.</li>
+  <li><strong>Flyweight:</strong> Multiple shared instances exist, one per unique combination of intrinsic state.</li>
+  <li>A flyweight factory may contain many flyweight objects; a singleton is always just one.</li>
+</ul>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>Flyweight splits state into intrinsic (shared) and extrinsic (unique per context).</li>
+  <li>A factory ensures flyweight instances are created once and reused.</li>
+  <li>Use <code>__slots__</code> on context objects to further reduce per-instance memory overhead.</li>
+  <li>The pattern is essential for systems with huge numbers of similar objects: particles, characters in a text editor, map tiles, tree rendering in forests.</li>
+  <li>Only apply Flyweight when memory is a measurable bottleneck &mdash; premature optimization adds complexity.</li>
+</ul>

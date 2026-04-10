@@ -1,0 +1,299 @@
+<h2>API Gateway and Service Mesh</h2>
+
+<p>
+  As systems grow from monoliths to microservices, two infrastructure patterns become
+  essential: the <strong>API Gateway</strong> (managing external traffic into the system)
+  and the <strong>Service Mesh</strong> (managing internal traffic between services).
+  Together, they handle cross-cutting concerns like authentication, rate limiting,
+  observability, and service discovery.
+</p>
+
+<h3>API Gateway: The Front Door</h3>
+
+<p>
+  An API Gateway is a single entry point for all client requests. It sits between
+  clients and backend services, handling concerns that are common to all APIs.
+</p>
+
+<pre><code class="language-python"># Without an API Gateway:
+# Client must know about every service and handle cross-cutting concerns
+#
+# [Mobile App] --> [User Service :8001]
+# [Mobile App] --> [Order Service :8002]
+# [Mobile App] --> [Product Service :8003]
+# [Mobile App] --> [Payment Service :8004]
+#
+# Problems:
+# - Client manages multiple endpoints
+# - Each service implements its own auth, rate limiting, CORS
+# - No centralized logging or metrics
+# - Exposing internal service topology to clients
+
+# With an API Gateway:
+# Single entry point handles all cross-cutting concerns
+#
+# [Mobile App] --> [API Gateway :443]
+#                      |
+#        +-------------+-------------+-------------+
+#        |             |             |             |
+#  [User Service] [Order Service] [Product Svc] [Payment Svc]
+</code></pre>
+
+<h3>API Gateway Responsibilities</h3>
+
+<pre><code class="language-python">class APIGateway:
+    """Conceptual API Gateway showing key responsibilities."""
+
+    def __init__(self, service_registry, auth_service, rate_limiter, cache):
+        self._registry = service_registry
+        self._auth = auth_service
+        self._rate_limiter = rate_limiter
+        self._cache = cache
+
+    def handle_request(self, request: dict) -> dict:
+        """Process an incoming request through the gateway pipeline."""
+
+        # 1. SSL TERMINATION
+        # Gateway handles HTTPS, backends use plain HTTP internally
+        # (already done at the transport layer)
+
+        # 2. AUTHENTICATION & AUTHORIZATION
+        token = request.get("headers", {}).get("Authorization")
+        user = self._auth.validate_token(token)
+        if not user:
+            return {"status": 401, "body": "Unauthorized"}
+
+        # 3. RATE LIMITING
+        if not self._rate_limiter.allow(user["id"], request["path"]):
+            return {"status": 429, "body": "Too Many Requests"}
+
+        # 4. REQUEST ROUTING
+        service = self._route_request(request["path"], request["method"])
+        if not service:
+            return {"status": 404, "body": "Not Found"}
+
+        # 5. CACHING (for GET requests)
+        if request["method"] == "GET":
+            cached = self._cache.get(request["path"])
+            if cached:
+                return {"status": 200, "body": cached, "headers": {"X-Cache": "HIT"}}
+
+        # 6. REQUEST TRANSFORMATION
+        # Convert external API format to internal service format
+        internal_request = self._transform_request(request, user)
+
+        # 7. LOAD BALANCING
+        # Route to a healthy instance of the service
+        instance = self._registry.get_instance(service)
+
+        # 8. FORWARD REQUEST
+        response = self._forward(instance, internal_request)
+
+        # 9. RESPONSE TRANSFORMATION
+        external_response = self._transform_response(response)
+
+        # 10. LOGGING & METRICS
+        self._log_request(request, external_response, user)
+
+        return external_response
+
+    def _route_request(self, path: str, method: str) -> str | None:
+        """Route URL path to internal service."""
+        routes = {
+            "/api/users": "user-service",
+            "/api/orders": "order-service",
+            "/api/products": "product-service",
+            "/api/payments": "payment-service",
+        }
+        for prefix, service in routes.items():
+            if path.startswith(prefix):
+                return service
+        return None
+
+    def _transform_request(self, request: dict, user: dict) -> dict:
+        """Add internal headers, strip external-only fields."""
+        return {
+            **request,
+            "headers": {
+                **request.get("headers", {}),
+                "X-User-ID": user["id"],
+                "X-User-Role": user["role"],
+                "X-Request-ID": self._generate_request_id(),
+            },
+        }
+
+    def _transform_response(self, response: dict) -> dict:
+        """Strip internal headers, format for external clients."""
+        headers = response.get("headers", {})
+        # Remove internal headers that should not leak to clients
+        for key in ["X-Internal-Service", "X-DB-Query-Time"]:
+            headers.pop(key, None)
+        return response
+
+    def _generate_request_id(self) -> str:
+        import uuid
+        return str(uuid.uuid4())
+
+    def _forward(self, instance: str, request: dict) -> dict:
+        # Forward to service instance
+        return {"status": 200, "body": "response data"}
+
+    def _log_request(self, request, response, user):
+        pass
+</code></pre>
+
+<h3>API Gateway Patterns</h3>
+
+<pre><code class="language-python"># Pattern 1: BACKEND FOR FRONTEND (BFF)
+# Separate gateways for different client types
+#
+# [Mobile App]  --> [Mobile BFF Gateway]  --> [Services]
+# [Web App]     --> [Web BFF Gateway]     --> [Services]
+# [Partner API] --> [Partner API Gateway] --> [Services]
+#
+# Each BFF is optimized for its client's needs:
+# - Mobile BFF: smaller payloads, aggregated endpoints
+# - Web BFF: full payloads, supports GraphQL
+# - Partner BFF: versioned, rate-limited
+
+# Pattern 2: API COMPOSITION / AGGREGATION
+# Gateway combines responses from multiple services
+
+class OrderAggregator:
+    """Gateway aggregates data from multiple services for a single client request."""
+
+    async def get_order_details(self, order_id: str) -> dict:
+        """GET /api/orders/{id}/details
+        Aggregates data from 3 services into one response."""
+        import asyncio
+
+        # Parallel calls to multiple services
+        order_task = asyncio.create_task(self._get_order(order_id))
+        user_task = asyncio.create_task(self._get_user(order_id))
+        products_task = asyncio.create_task(self._get_products(order_id))
+
+        order, user, products = await asyncio.gather(
+            order_task, user_task, products_task
+        )
+
+        return {
+            "order": order,
+            "customer": user,
+            "items": products,
+        }
+
+    async def _get_order(self, order_id): return {}
+    async def _get_user(self, order_id): return {}
+    async def _get_products(self, order_id): return []
+</code></pre>
+
+<h3>Service Mesh: Managing Internal Traffic</h3>
+
+<p>
+  A service mesh manages communication between microservices. Unlike an API Gateway
+  which handles north-south traffic (client to service), a service mesh handles
+  east-west traffic (service to service).
+</p>
+
+<pre><code class="language-python"># Service Mesh architecture (sidecar pattern):
+#
+# Each service gets a sidecar proxy that intercepts all network traffic.
+#
+# [Service A] <-> [Proxy A]  <-network->  [Proxy B] <-> [Service B]
+# [Service A] <-> [Proxy A]  <-network->  [Proxy C] <-> [Service C]
+#
+# The service talks to localhost; the proxy handles everything else:
+# - Service discovery (where is Service B?)
+# - Load balancing (which instance of Service B?)
+# - Encryption (mTLS between proxies)
+# - Retries and circuit breaking
+# - Observability (metrics, tracing, logging)
+#
+# Control Plane (manages all proxies):
+#   [Control Plane]
+#      |         |         |
+#   [Proxy A] [Proxy B] [Proxy C]
+#   [Svc A]   [Svc B]   [Svc C]
+#
+# Popular implementations:
+# - Istio (most popular, uses Envoy proxies)
+# - Linkerd (simpler, Rust-based proxy)
+# - Consul Connect (HashiCorp, integrates with Consul)
+</code></pre>
+
+<h3>Service Mesh Capabilities</h3>
+
+<pre><code class="language-python"># What a service mesh provides:
+
+mesh_capabilities = {
+    "service_discovery": {
+        "description": "Automatically find service instances",
+        "without_mesh": "Hardcoded URLs or manual DNS configuration",
+        "with_mesh": "Automatic registration and discovery via control plane",
+    },
+    "load_balancing": {
+        "description": "Distribute traffic across service instances",
+        "without_mesh": "Client-side LB library in every service",
+        "with_mesh": "Proxy handles LB transparently (round robin, least conn, etc.)",
+    },
+    "mutual_tls": {
+        "description": "Encrypt all service-to-service traffic",
+        "without_mesh": "Each service manages its own TLS certificates",
+        "with_mesh": "Proxy handles certificate rotation and mTLS automatically",
+    },
+    "circuit_breaking": {
+        "description": "Stop sending requests to failing services",
+        "without_mesh": "Implement circuit breaker in every service",
+        "with_mesh": "Proxy detects failures and opens circuit automatically",
+    },
+    "retry_policy": {
+        "description": "Automatically retry failed requests",
+        "without_mesh": "Each service implements retry logic",
+        "with_mesh": "Configure retry policies in mesh control plane",
+    },
+    "observability": {
+        "description": "Distributed tracing, metrics, access logs",
+        "without_mesh": "Instrument every service manually",
+        "with_mesh": "Proxy generates metrics and trace spans automatically",
+    },
+    "traffic_management": {
+        "description": "Canary deployments, A/B testing, traffic shifting",
+        "without_mesh": "Complex LB configuration or custom routing",
+        "with_mesh": "Declarative traffic rules (90% v1, 10% v2)",
+    },
+}
+</code></pre>
+
+<h3>API Gateway vs Service Mesh</h3>
+
+<pre><code class="language-python"># Aspect            | API Gateway          | Service Mesh
+# -------------------|----------------------|----------------------
+# Traffic direction  | North-South          | East-West
+#                    | (client -> services) | (service -> service)
+# Deployment         | Centralized          | Distributed (sidecars)
+# Main purpose       | External API mgmt    | Internal communication
+# Auth               | Client auth (JWT)    | Service auth (mTLS)
+# Rate limiting      | Per-client           | Per-service
+# Routing            | URL-based            | Service-name based
+# Observability      | API-level metrics    | Service-level tracing
+# Examples           | Kong, AWS API GW,    | Istio, Linkerd,
+#                    | Nginx, Apigee        | Consul Connect
+</code></pre>
+
+<h3>When to Introduce Each</h3>
+
+<ul>
+  <li><strong>API Gateway:</strong> Introduce early, as soon as you have multiple services exposed to clients. Even a simple Nginx reverse proxy counts.</li>
+  <li><strong>Service Mesh:</strong> Introduce when you have 10+ microservices and cross-cutting concerns (mTLS, observability, traffic management) become painful to implement in each service.</li>
+  <li>For small systems (under 5 services), a simple API Gateway plus direct HTTP calls between services is sufficient.</li>
+</ul>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>An API Gateway is the single entry point for external clients, handling auth, rate limiting, routing, and response transformation.</li>
+  <li>A Service Mesh manages internal service-to-service communication via sidecar proxies.</li>
+  <li>The BFF (Backend for Frontend) pattern creates specialized gateways per client type.</li>
+  <li>Service meshes add operational complexity. Do not introduce one until the pain of manual service management justifies it.</li>
+  <li>In system design interviews, always include an API Gateway. Mention a service mesh for large-scale microservice architectures.</li>
+</ul>

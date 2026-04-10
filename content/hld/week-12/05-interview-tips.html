@@ -1,0 +1,65 @@
+<h2>Interview Anti-Patterns and Tips</h2>
+
+<p>This is the meta-guide: how to use everything you have learned in an actual 45-minute system design interview. Covers the 10 deadly anti-patterns, time management, and how to structure your response for maximum impact.</p>
+
+<h3>The 10 Deadly Anti-Patterns</h3>
+
+<h3>1. Jumping to Solution</h3>
+<p><strong>Wrong:</strong> "Let's use Kafka and Redis and Cassandra and..." <strong>Right:</strong> "Before designing, let me clarify requirements and estimate scale." The interviewer wants to see you ask questions first.</p>
+
+<h3>2. No Estimation</h3>
+<p><strong>Wrong:</strong> "Let's just use a database." <strong>Right:</strong> "With 50M DAU and 10 requests/user, we need ~6K QPS. A single PostgreSQL handles ~5K QPS, so we'll need sharding or read replicas." Numbers separate senior from junior candidates.</p>
+
+<h3>3. Over-Engineering</h3>
+<p><strong>Wrong:</strong> Google-scale infrastructure for 1K users. <strong>Right:</strong> "At current scale, a single server handles this. At 100K users, we add caching and read replicas." A $10K/month architecture for a $1K/month problem is a bad design.</p>
+
+<h3>4. Under-Engineering</h3>
+<p><strong>Wrong:</strong> "Single MySQL and cache everything" for 5M QPS. <strong>Right:</strong> "At 5M QPS, we need sharding. Here's my partitioning strategy." The interviewer gave you a scale for a reason.</p>
+
+<h3>5. No Trade-offs</h3>
+<p><strong>Wrong:</strong> "We should use Cassandra." (end of discussion) <strong>Right:</strong> "Cassandra gives high write throughput but loses strong consistency. PostgreSQL with sharding gives ACID but more operational complexity. Given our write-heavy workload, I'd go with Cassandra."</p>
+
+<h3>6. Monologue Mode</h3>
+<p><strong>Wrong:</strong> Talking for 20 minutes without pause. <strong>Right:</strong> "Does this high-level architecture make sense before I dive deeper?" The interview is a conversation.</p>
+
+<h3>7. Ignoring Hints</h3>
+<p><strong>Wrong:</strong> Interviewer says "What about failure cases?" and you continue with the happy path. <strong>Right:</strong> "Great point -- let me address what happens when node X fails." Hints are free points.</p>
+
+<h3>8. Buzzword Bingo</h3>
+<p><strong>Wrong:</strong> "Microservices, Kubernetes, service mesh, gRPC, event sourcing, CQRS, blockchain..." <strong>Right:</strong> Only mention technologies you can explain in depth. Buzzwords invite follow-up questions you might not be able to answer.</p>
+
+<h3>9. Drawing Before Thinking</h3>
+<p><strong>Wrong:</strong> Immediately drawing boxes and arrows. <strong>Right:</strong> Verbally outline the approach first, then draw. You will end up erasing and redrawing otherwise.</p>
+
+<h3>10. Perfectionism</h3>
+<p><strong>Wrong:</strong> Spending 15 minutes on the database schema. <strong>Right:</strong> "Here's a simplified schema. I can refine if needed." 45 minutes is not enough for a perfect design. Cover breadth first.</p>
+
+<h3>Positive Patterns to Follow</h3>
+
+<ul>
+  <li><strong>Structure your answer:</strong> Always follow DERSC (Define, Estimate, Architect, Scale, Confirm)</li>
+  <li><strong>Think out loud:</strong> The interviewer cannot give you credit for thoughts you do not share</li>
+  <li><strong>Check in frequently:</strong> "Should I go deeper on the database design or move to scaling?"</li>
+  <li><strong>Use numbers:</strong> Every design decision should be justified with back-of-envelope math</li>
+  <li><strong>Discuss trade-offs:</strong> For every choice, briefly mention what you are giving up</li>
+  <li><strong>Prioritize:</strong> Solve the core problem first, then add extensions</li>
+</ul>
+
+<h3>Time Management Checklist</h3>
+
+<pre><code class="language-python"># 45-minute interview breakdown:
+# Minutes  0-5:  DEFINE requirements (ask questions!)
+# Minutes  5-10: ESTIMATE scale (back-of-envelope)
+# Minutes 10-25: ARCHITECT core design (API, data model, components)
+# Minutes 25-35: SCALE (bottlenecks, caching, sharding, failure)
+# Minutes 35-40: CONFIRM (trade-offs, extensions, wrap up)
+# Minutes 40-45: Interviewer questions and deep dives</code></pre>
+
+<h3>Final Advice</h3>
+
+<ul>
+  <li>There is no single right answer -- the interviewer is evaluating your thought process</li>
+  <li>Demonstrating awareness of trade-offs matters more than picking the "optimal" solution</li>
+  <li>Practice with a timer: if you cannot finish DERSC in 40 minutes, you are going too deep in one area</li>
+  <li>The best candidates make the interviewer feel like they are designing alongside a colleague, not evaluating a student</li>
+</ul>

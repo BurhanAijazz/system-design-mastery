@@ -1,0 +1,53 @@
+<h2>Design: HashSet</h2>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Support <code>add(key)</code>, <code>remove(key)</code>, <code>contains(key)</code></li>
+  <li>No duplicate elements allowed</li>
+  <li>Amortized O(1) for all operations</li>
+  <li>Demonstrate composition over inheritance</li>
+</ul>
+
+<h3>Approach</h3>
+<ul>
+  <li>Internally delegate to a HashMap where values are a sentinel</li>
+  <li><strong>Composition</strong>: HashSet <em>has-a</em> HashMap, not <em>is-a</em> HashMap</li>
+  <li>Same bucket-array + chaining strategy under the hood</li>
+  <li>Alternative: use a simple boolean array for constrained key ranges</li>
+</ul>
+
+<h3>Key Code</h3>
+<pre><code class="language-python">class MyHashSet:
+    """HashSet built by composing a HashMap."""
+    _PRESENT = object()  # sentinel value
+
+    def __init__(self):
+        self._map = MyHashMap()
+
+    def add(self, key: int) -> None:
+        self._map.put(key, self._PRESENT)
+
+    def remove(self, key: int) -> None:
+        self._map.remove(key)
+
+    def contains(self, key: int) -> bool:
+        return self._map.get(key) is self._PRESENT
+
+
+# --- Lightweight alternative for key range [0, 10^6] ---
+class BoolHashSet:
+    def __init__(self):
+        self._data = [False] * 1_000_001
+
+    def add(self, key):  self._data[key] = True
+    def remove(self, key): self._data[key] = False
+    def contains(self, key): return self._data[key]
+</code></pre>
+
+<h3>Takeaways</h3>
+<ul>
+  <li>Composition keeps the public interface minimal (no value semantics leak)</li>
+  <li>Sentinel object avoids confusing "not found" with a stored value</li>
+  <li>Boolean-array approach works when the key space is small and dense</li>
+  <li>Same design relationship exists in Java: <code>HashSet</code> wraps <code>HashMap</code></li>
+</ul>

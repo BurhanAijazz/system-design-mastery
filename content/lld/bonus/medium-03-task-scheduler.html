@@ -1,0 +1,61 @@
+<h2>Design: Task Scheduler</h2>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Schedule tasks with a cooldown interval <code>n</code> between same-type tasks</li>
+  <li>Return the minimum number of time slots to finish all tasks</li>
+  <li>Use a <strong>priority queue</strong> to always pick the most frequent task</li>
+  <li>Apply <strong>Strategy</strong> pattern for scheduling policies; <strong>Observer</strong> for completion events</li>
+</ul>
+
+<h3>Approach</h3>
+<ul>
+  <li>Count task frequencies; push into a max-heap</li>
+  <li>Each round processes up to <code>n+1</code> distinct tasks</li>
+  <li>Tasks that still have remaining count go into a cooldown queue</li>
+  <li>Idle slots fill when fewer than <code>n+1</code> tasks are available</li>
+</ul>
+
+<h3>Key Code</h3>
+<pre><code class="language-python">import heapq
+from collections import Counter
+
+class TaskScheduler:
+    def __init__(self, cooldown: int):
+        self._cooldown = cooldown
+        self._observers = []
+
+    def subscribe(self, observer):
+        self._observers.append(observer)
+
+    def _notify(self, msg):
+        for obs in self._observers:
+            obs.on_event(msg)
+
+    def least_interval(self, tasks: list[str]) -> int:
+        heap = [-c for c in Counter(tasks).values()]
+        heapq.heapify(heap)
+        time = 0
+        while heap:
+            cycle, temp = self._cooldown + 1, []
+            for _ in range(cycle):
+                if heap:
+                    cnt = heapq.heappop(heap) + 1  # +1 because stored negative
+                    if cnt:
+                        temp.append(cnt)
+                time += 1
+                if not heap and not temp:
+                    break
+            for t in temp:
+                heapq.heappush(heap, t)
+        self._notify("all_tasks_complete")
+        return time
+</code></pre>
+
+<h3>Takeaways</h3>
+<ul>
+  <li>Greedy + max-heap ensures most-frequent tasks are spaced optimally</li>
+  <li>Strategy pattern lets you swap scheduling policies (round-robin, priority, deadline)</li>
+  <li>Observer decouples completion notification from scheduling logic</li>
+  <li>Formula shortcut: <code>(max_freq - 1) * (n + 1) + count_of_max_freq_tasks</code></li>
+</ul>

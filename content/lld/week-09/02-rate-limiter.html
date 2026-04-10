@@ -1,0 +1,96 @@
+<h2>Rate Limiter Algorithms</h2>
+
+<p>Rate limiting controls how many requests a client can make in a time window. This lesson covers the major algorithms (Token Bucket, Sliding Window, Fixed Window, Leaky Bucket), their trade-offs, and how to apply the Strategy and Decorator patterns for clean integration.</p>
+
+<h3>Rate Limiter Interface</h3>
+
+<pre><code class="language-python">@dataclass
+class RateLimitResult:
+    allowed: bool
+    remaining: int
+    retry_after: Optional[float] = None
+
+
+class RateLimiter(ABC):
+    @abstractmethod
+    def allow_request(self, client_id: str) -> bool:
+        pass</code></pre>
+
+<h3>Token Bucket</h3>
+
+<p>The most widely used algorithm (AWS, Stripe, many APIs). How it works:</p>
+<ul>
+  <li>A bucket holds tokens, starting full at capacity</li>
+  <li>Tokens are added at a fixed refill rate</li>
+  <li>Each request consumes one token</li>
+  <li>If the bucket is empty, the request is rejected</li>
+  <li>The bucket has a maximum capacity (burst limit)</li>
+</ul>
+
+<p><strong>Pros:</strong> Simple, allows bursts up to bucket size. <strong>Cons:</strong> Does not guarantee a smooth rate.</p>
+
+<pre><code class="language-python">class TokenBucketLimiter(RateLimiter):
+    def __init__(self, capacity: int, refill_rate: float):
+        self._capacity = capacity
+        self._refill_rate = refill_rate  # tokens per second
+        self._buckets: Dict[str, List[float]] = {}
+
+    def allow_request(self, client_id: str) -> bool:
+        now = time.time()
+        if client_id not in self._buckets:
+            self._buckets[client_id] = [self._capacity, now]
+
+        tokens, last_refill = self._buckets[client_id]
+        # Refill tokens based on elapsed time
+        elapsed = now - last_refill
+        tokens = min(self._capacity, tokens + elapsed * self._refill_rate)
+
+        if tokens >= 1:
+            self._buckets[client_id] = [tokens - 1, now]
+            return True
+        else:
+            self._buckets[client_id] = [tokens, now]
+            return False</code></pre>
+
+<h3>Sliding Window Log</h3>
+
+<p>Keeps a log of all request timestamps per client. To check a request, count timestamps within the current window. Precise but memory-intensive for high-traffic clients.</p>
+
+<h3>Fixed Window Counter</h3>
+
+<p>Divides time into fixed windows (e.g., each minute). Counts requests per window. Simple but has a boundary problem: a burst at the end of one window plus a burst at the start of the next allows 2x the limit.</p>
+
+<h3>Sliding Window Counter</h3>
+
+<p>Combines fixed window and sliding window approaches. Uses a weighted average of the current and previous window counts based on how far into the current window the request falls. Good balance of accuracy and memory.</p>
+
+<h3>Algorithm Comparison</h3>
+
+<ul>
+  <li><strong>Token Bucket</strong> -- memory: O(1) per client, allows bursts, simple to implement</li>
+  <li><strong>Sliding Window Log</strong> -- memory: O(N) per client, most precise, expensive for high traffic</li>
+  <li><strong>Fixed Window</strong> -- memory: O(1) per client, simplest, boundary spike problem</li>
+  <li><strong>Sliding Window Counter</strong> -- memory: O(1) per client, good accuracy, slightly more complex</li>
+</ul>
+
+<h3>Decorator Pattern for Rate Limiting</h3>
+
+<p>Apply rate limiting to any function transparently using a decorator:</p>
+
+<pre><code class="language-python">def rate_limited(limiter: RateLimiter, client_id: str):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            if not limiter.allow_request(client_id):
+                raise RateLimitExceeded("Too many requests")
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator</code></pre>
+
+<h3>Key Design Takeaways</h3>
+<ul>
+  <li>Token Bucket is the go-to answer for most interview scenarios</li>
+  <li>Use Strategy pattern to make the algorithm swappable at configuration time</li>
+  <li>Decorator pattern cleanly applies rate limiting without modifying business logic</li>
+  <li>Consider composed limiters: 10/second AND 1000/hour for layered protection</li>
+</ul>

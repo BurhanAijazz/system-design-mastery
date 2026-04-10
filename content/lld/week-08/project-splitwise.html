@@ -1,0 +1,87 @@
+<h2>Project: Splitwise</h2>
+
+<p>A full LLD implementation of a Splitwise-like expense sharing platform. This project combines multiple design patterns: Strategy for split calculation, Observer for group notifications, State for expense lifecycle, and Command for undo support.</p>
+
+<h3>Requirements</h3>
+
+<p><strong>Functional:</strong></p>
+<ul>
+  <li>Create users with name and email</li>
+  <li>Create groups with multiple members</li>
+  <li>Add expenses with different split types (equal, exact, percentage, share-based)</li>
+  <li>Track who paid and who owes</li>
+  <li>View balances per user (net amount owed/owing)</li>
+  <li>Settle debts between two users</li>
+  <li>Simplify debts (minimize number of transactions)</li>
+  <li>View expense history for a group</li>
+  <li>Undo the last expense added</li>
+</ul>
+
+<p><strong>Out of scope:</strong> Currency conversion, recurring expenses, image/receipt upload.</p>
+
+<h3>Architecture</h3>
+
+<p>The system is organized around an ExpenseManager that coordinates Groups, a Ledger, and SplitStrategies:</p>
+
+<pre><code class="language-python"># Core entities
+class ExpenseStatus(Enum):
+    PENDING = "pending"
+    SETTLED = "settled"
+    CANCELLED = "cancelled"
+
+class SplitType(Enum):
+    EQUAL = "equal"
+    EXACT = "exact"
+    PERCENTAGE = "percentage"
+    SHARE = "share"
+
+@dataclass
+class User:
+    user_id: str
+    name: str
+    email: str
+
+@dataclass
+class Split:
+    """How much a single user owes in an expense."""
+    user_id: str
+    amount: float</code></pre>
+
+<h3>Design Patterns Used</h3>
+
+<ul>
+  <li><strong>Strategy</strong> -- Split calculation: EqualSplit divides evenly (handling rounding), ExactSplit uses specified amounts, PercentageSplit computes from percentages, ShareSplit divides proportionally</li>
+  <li><strong>Observer</strong> -- When an expense is added to a group, all group members are notified</li>
+  <li><strong>State</strong> -- Expenses transition through PENDING -> SETTLED or CANCELLED</li>
+  <li><strong>Command</strong> -- AddExpense command supports undo by cancelling the expense and reversing ledger entries</li>
+</ul>
+
+<h3>Key Implementation Details</h3>
+
+<pre><code class="language-python">class EqualSplit(SplitStrategy):
+    def calculate(self, total, participants, **kwargs):
+        share = round(total / len(participants), 2)
+        splits = [Split(uid, share) for uid in participants]
+        # Handle rounding remainder
+        diff = round(total - share * len(participants), 2)
+        if diff != 0:
+            splits[0].amount += diff
+        return splits
+
+
+class Ledger:
+    """Append-only ledger for all financial events."""
+    def add_entry(self, transaction): ...
+    def get_balances(self) -> Dict[str, float]: ...
+    def simplify_debts(self) -> List[Tuple[str, str, float]]: ...</code></pre>
+
+<h3>Implementation Steps</h3>
+<ul>
+  <li>Define entities: User, Split, Expense, Group</li>
+  <li>Implement split strategies (Strategy pattern)</li>
+  <li>Build the append-only Ledger for balance tracking</li>
+  <li>Create the ExpenseManager service that coordinates groups, expenses, and the ledger</li>
+  <li>Add Observer notifications for group members</li>
+  <li>Implement debt simplification using net balance calculation</li>
+  <li>Add Command pattern for undo support</li>
+</ul>

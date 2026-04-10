@@ -1,0 +1,152 @@
+<h2>State Machines in Games</h2>
+
+<p>Every game has a lifecycle, and every turn has phases. State machines are the backbone of game logic. This lesson shows how to model game states, turn phases, and transitions.</p>
+
+<h3>Game Lifecycle States</h3>
+
+<p>Every game follows a lifecycle:</p>
+
+<pre><code>NOT_STARTED --> IN_PROGRESS --> FINISHED
+                    |              ^
+                    v              |
+                  PAUSED ----------+
+
+Transitions:
+  NOT_STARTED  -> start()   -> IN_PROGRESS
+  IN_PROGRESS  -> pause()   -> PAUSED
+  IN_PROGRESS  -> finish()  -> FINISHED
+  PAUSED       -> resume()  -> IN_PROGRESS
+  PAUSED       -> forfeit() -> FINISHED
+
+Invalid transitions (should be rejected):
+  NOT_STARTED -> pause()  (can't pause before starting)
+  FINISHED    -> start()  (can't restart a finished game)
+</code></pre>
+
+<h3>Approach 1: Enum + Transition Table</h3>
+
+<p>For simple state machines, use a dictionary mapping (state, action) pairs to next states:</p>
+
+<pre><code class="language-python">from enum import Enum
+from typing import Dict
+
+class LifecycleState(Enum):
+    NOT_STARTED = "not_started"
+    IN_PROGRESS = "in_progress"
+    PAUSED = "paused"
+    FINISHED = "finished"
+
+
+# Transition table: (current_state, action) -> next_state
+LIFECYCLE_TRANSITIONS: Dict[tuple, LifecycleState] = {
+    (LifecycleState.NOT_STARTED, "start"):   LifecycleState.IN_PROGRESS,
+    (LifecycleState.IN_PROGRESS, "pause"):   LifecycleState.PAUSED,
+    (LifecycleState.IN_PROGRESS, "finish"):  LifecycleState.FINISHED,
+    (LifecycleState.PAUSED, "resume"):       LifecycleState.IN_PROGRESS,
+    (LifecycleState.PAUSED, "forfeit"):      LifecycleState.FINISHED,
+}
+
+
+class SimpleGameLifecycle:
+    def __init__(self):
+        self._state = LifecycleState.NOT_STARTED
+
+    @property
+    def state(self) -> LifecycleState:
+        return self._state
+
+    def transition(self, action: str) -> bool:
+        key = (self._state, action)
+        if key in LIFECYCLE_TRANSITIONS:
+            old = self._state
+            self._state = LIFECYCLE_TRANSITIONS[key]
+            print(f"{old.value} --{action}--> {self._state.value}")
+            return True
+        else:
+            print(f"Invalid: cannot '{action}' in state '{self._state.value}'")
+            return False
+</code></pre>
+
+<h3>Approach 2: State Pattern for Complex Games</h3>
+
+<p>When states have complex behavior (not just transitions), use the full State pattern:</p>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+
+class GameState(ABC):
+    @abstractmethod
+    def start(self, game: "Game") -> str: pass
+    @abstractmethod
+    def pause(self, game: "Game") -> str: pass
+    @abstractmethod
+    def make_move(self, game: "Game", move) -> str: pass
+    @abstractmethod
+    def finish(self, game: "Game") -> str: pass
+
+
+class NotStartedState(GameState):
+    def start(self, game):
+        game.set_state(InProgressState())
+        return "Game started!"
+    def pause(self, game):
+        return "Cannot pause -- game hasn't started."
+    def make_move(self, game, move):
+        return "Cannot move -- game hasn't started."
+    def finish(self, game):
+        return "Cannot finish -- game hasn't started."
+
+
+class InProgressState(GameState):
+    def start(self, game):
+        return "Game already in progress."
+    def pause(self, game):
+        game.set_state(PausedState())
+        return "Game paused."
+    def make_move(self, game, move):
+        # Process the move
+        return f"Move executed: {move}"
+    def finish(self, game):
+        game.set_state(FinishedState())
+        return "Game finished!"
+
+
+class PausedState(GameState):
+    def start(self, game):
+        game.set_state(InProgressState())
+        return "Game resumed."
+    def pause(self, game):
+        return "Already paused."
+    def make_move(self, game, move):
+        return "Cannot move -- game is paused."
+    def finish(self, game):
+        game.set_state(FinishedState())
+        return "Game forfeited."
+</code></pre>
+
+<h3>Turn Phase State Machine</h3>
+
+<p>Within a turn, phases also form a state machine. For example, in a card game:</p>
+
+<pre><code>DRAW_PHASE --> MAIN_PHASE --> ATTACK_PHASE --> END_PHASE
+                    |                              |
+                    +--- play cards                +--- next player's turn
+</code></pre>
+
+<h3>Choosing the Right Approach</h3>
+
+<ul>
+    <li><strong>Transition table</strong>: use when states are simple and behavior is limited to "allow/deny transition"</li>
+    <li><strong>State pattern</strong>: use when each state has significantly different behavior (different valid actions, different responses)</li>
+    <li><strong>Hybrid</strong>: use a transition table for validation and State pattern for behavior</li>
+</ul>
+
+<h3>Guard Conditions</h3>
+
+<p>Some transitions have conditions beyond the current state. For example, "finish" might only be allowed if a win condition is met:</p>
+
+<pre><code class="language-python">def finish(self, game):
+    if not game.has_winner():
+        return "Cannot finish -- no winner yet."
+    game.set_state(FinishedState())
+    return f"Game over! Winner: {game.winner}"
+</code></pre>

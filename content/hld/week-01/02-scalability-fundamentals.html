@@ -1,0 +1,222 @@
+<h2>Scalability Fundamentals: Vertical vs Horizontal Scaling</h2>
+
+<p>
+  Scalability is the ability of a system to handle increased load by adding resources.
+  There are two fundamental approaches: <strong>vertical scaling</strong> (scaling up)
+  and <strong>horizontal scaling</strong> (scaling out). Understanding when to use each
+  is critical for system design.
+</p>
+
+<h3>Vertical Scaling (Scaling Up)</h3>
+
+<p>
+  Vertical scaling means adding more power to an existing machine: more CPU, RAM, faster
+  storage, or better network cards. You keep a single server but make it more powerful.
+</p>
+
+<pre><code class="language-python"># Vertical scaling example: upgrading a single database server
+#
+# Before: 1 server with 8 CPU cores, 32 GB RAM, HDD
+#   - Handles 1,000 queries/sec
+#
+# After: 1 server with 64 CPU cores, 512 GB RAM, NVMe SSD
+#   - Handles 10,000 queries/sec
+#
+# Advantages:
+#   + Simple: no code changes needed
+#   + No distributed system complexity
+#   + Strong consistency (single machine)
+#   + Lower operational overhead
+#
+# Disadvantages:
+#   - Hardware limits: you can't scale beyond the biggest available machine
+#   - Single point of failure
+#   - Expensive: high-end hardware costs disproportionately more
+#   - Downtime required for upgrades (usually)
+</code></pre>
+
+<h3>Horizontal Scaling (Scaling Out)</h3>
+
+<p>
+  Horizontal scaling means adding more machines to your pool. Instead of one powerful
+  server, you use many commodity servers working together.
+</p>
+
+<pre><code class="language-python"># Horizontal scaling example: adding more API servers
+#
+# Before: 1 API server handling 1,000 req/sec
+#
+# After: 10 API servers behind a load balancer, handling 10,000 req/sec
+#
+#   [Load Balancer]
+#       |
+#   +---+---+---+---+---+---+---+---+---+---+
+#   |S1 |S2 |S3 |S4 |S5 |S6 |S7 |S8 |S9 |S10|
+#   +---+---+---+---+---+---+---+---+---+---+
+#
+# Advantages:
+#   + Virtually unlimited scaling
+#   + No single point of failure (if designed correctly)
+#   + Can use cheap commodity hardware
+#   + Can scale incrementally (add one server at a time)
+#
+# Disadvantages:
+#   - Distributed system complexity (network failures, consistency)
+#   - Code must be stateless or use external state stores
+#   - Data partitioning and replication challenges
+#   - Higher operational overhead (more machines to manage)
+</code></pre>
+
+<h3>Stateless vs Stateful Services</h3>
+
+<p>
+  Horizontal scaling works best with <strong>stateless</strong> services. A stateless
+  service does not store any client session data locally &mdash; any server can handle
+  any request.
+</p>
+
+<pre><code class="language-python"># BAD: Stateful server - stores session in memory
+# Cannot horizontally scale because user must always hit the same server
+
+class StatefulServer:
+    def __init__(self):
+        self._sessions = {}  # In-memory session store
+
+    def login(self, user_id: str, token: str):
+        self._sessions[user_id] = {"token": token, "cart": []}
+
+    def add_to_cart(self, user_id: str, item: str):
+        # Fails if user hits a different server!
+        self._sessions[user_id]["cart"].append(item)
+
+
+# GOOD: Stateless server - stores session in external store
+# Any server can handle any request
+
+class StatelessServer:
+    def __init__(self, session_store, cart_store):
+        self._sessions = session_store  # Redis, Memcached, etc.
+        self._carts = cart_store         # External database
+
+    def login(self, user_id: str, token: str):
+        self._sessions.set(user_id, {"token": token})
+
+    def add_to_cart(self, user_id: str, item: str):
+        # Works regardless of which server handles the request
+        self._carts.append_item(user_id, item)
+</code></pre>
+
+<h3>Database Scaling Strategies</h3>
+
+<pre><code class="language-python"># Databases are the hardest component to scale horizontally.
+# Common strategies:
+
+# 1. READ REPLICAS (horizontal read scaling)
+#
+#   [Primary DB] --replication--> [Replica 1]
+#        |                        [Replica 2]
+#        |                        [Replica 3]
+#   (all writes)              (distribute reads)
+#
+# Write to primary, read from replicas.
+# Works well when reads >> writes (most web apps).
+
+# 2. SHARDING (horizontal write scaling)
+#
+#   user_id % 4 determines which shard:
+#   Shard 0: user_ids 0, 4, 8, 12, ...
+#   Shard 1: user_ids 1, 5, 9, 13, ...
+#   Shard 2: user_ids 2, 6, 10, 14, ...
+#   Shard 3: user_ids 3, 7, 11, 15, ...
+#
+# Each shard handles 1/4 of the writes.
+# Complexity: cross-shard queries, rebalancing.
+
+# 3. CACHING (reduce database load)
+#
+#   [Client] --> [Cache (Redis)] --> [Database]
+#
+# Cache absorbs repeated reads, reducing DB load by 80-95%.
+
+
+def get_shard(user_id: int, num_shards: int) -> int:
+    """Simple modular sharding function."""
+    return user_id % num_shards
+
+
+def get_shard_consistent_hash(key: str, num_shards: int) -> int:
+    """Consistent hashing for better rebalancing."""
+    import hashlib
+    hash_val = int(hashlib.md5(key.encode()).hexdigest(), 16)
+    return hash_val % num_shards
+</code></pre>
+
+<h3>Scaling Decision Framework</h3>
+
+<pre><code class="language-python"># When to use vertical scaling:
+#   - Early stage / MVP (simplicity wins)
+#   - Database servers (until read replicas are needed)
+#   - Workloads that need strong consistency
+#   - Single-threaded workloads (Redis, some databases)
+#   - When current hardware is underutilized
+#
+# When to use horizontal scaling:
+#   - Stateless application servers
+#   - Read-heavy workloads (add read replicas)
+#   - When you need high availability (redundancy)
+#   - When vertical limits are reached
+#   - When traffic is spiky (scale out/in dynamically)
+#
+# In practice, most systems use BOTH:
+#   - Vertically scale databases (up to a point)
+#   - Horizontally scale application servers
+#   - Add caching and CDN to reduce load on both
+</code></pre>
+
+<h3>Real-World Scaling Example</h3>
+
+<pre><code class="language-python"># Evolution of a startup's architecture:
+#
+# Stage 1: Single server (1,000 users)
+#   [App + DB on one machine]
+#
+# Stage 2: Separate DB (10,000 users)
+#   [App Server] --> [Database Server]
+#
+# Stage 3: Add cache (100,000 users)
+#   [App Server] --> [Redis Cache] --> [Database Server]
+#
+# Stage 4: Horizontal app scaling (500,000 users)
+#   [Load Balancer] --> [App Server x3] --> [Redis] --> [DB]
+#
+# Stage 5: DB read replicas (2,000,000 users)
+#   [LB] --> [App x5] --> [Redis Cluster]
+#                              |
+#                        [Primary DB] --> [Replica x2]
+#
+# Stage 6: Sharding + microservices (10,000,000+ users)
+#   [CDN] --> [API Gateway] --> [Service A (x10)]
+#                                [Service B (x5)]
+#                                [Service C (x8)]
+#                                     |
+#                              [Sharded DB Cluster]
+</code></pre>
+
+<h3>Measuring Scalability</h3>
+
+<ul>
+  <li><strong>Throughput:</strong> Requests per second the system can handle.</li>
+  <li><strong>Latency:</strong> Time to process a single request (p50, p95, p99).</li>
+  <li><strong>Availability:</strong> Percentage of time the system is operational (99.9% = 8.7 hours downtime/year).</li>
+  <li><strong>Efficiency:</strong> Cost per request or per user served.</li>
+</ul>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>Vertical scaling is simpler but has hard limits. Use it for databases and early-stage systems.</li>
+  <li>Horizontal scaling is more complex but offers unlimited growth. Use it for stateless services.</li>
+  <li>Make services stateless to enable horizontal scaling. Move state to external stores.</li>
+  <li>Most production systems combine both approaches with caching to reduce load.</li>
+  <li>Scale when you need to, not before. Premature optimization applies to architecture too.</li>
+</ul>

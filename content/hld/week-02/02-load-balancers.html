@@ -1,0 +1,310 @@
+<h2>Load Balancer Algorithms</h2>
+
+<p>
+  A load balancer distributes incoming network traffic across multiple servers to ensure
+  no single server is overwhelmed. It is a critical component for achieving horizontal
+  scalability and high availability. Understanding the different load balancing algorithms
+  and their trade-offs is essential for system design.
+</p>
+
+<h3>Where Load Balancers Sit</h3>
+
+<pre><code class="language-python"># Load balancers can be placed at multiple levels:
+#
+# Level 1: Between clients and web servers
+#   [Clients] --> [LB] --> [Web Server 1, 2, 3...]
+#
+# Level 2: Between web servers and application servers
+#   [Web Servers] --> [LB] --> [App Server 1, 2, 3...]
+#
+# Level 3: Between application servers and databases
+#   [App Servers] --> [LB] --> [DB Replica 1, 2, 3...]
+#
+# Layer 4 (Transport): Routes based on IP and port. Fast, no content inspection.
+# Layer 7 (Application): Routes based on HTTP headers, URL, cookies. Smarter, slower.
+</code></pre>
+
+<h3>Algorithm 1: Round Robin</h3>
+
+<p>
+  The simplest algorithm. Requests are distributed sequentially across servers in order.
+</p>
+
+<pre><code class="language-python">class RoundRobinBalancer:
+    """Distributes requests in circular order."""
+
+    def __init__(self, servers: list[str]):
+        self._servers = servers
+        self._index = 0
+
+    def get_server(self) -> str:
+        server = self._servers[self._index]
+        self._index = (self._index + 1) % len(self._servers)
+        return server
+
+
+# Usage
+lb = RoundRobinBalancer(["server-1", "server-2", "server-3"])
+for _ in range(6):
+    print(lb.get_server())
+# server-1, server-2, server-3, server-1, server-2, server-3
+
+# Pros: Simple, even distribution, no state needed
+# Cons: Ignores server capacity and current load
+# Best for: Homogeneous servers with similar request processing times
+</code></pre>
+
+<h3>Algorithm 2: Weighted Round Robin</h3>
+
+<p>
+  Like round robin, but servers with higher capacity receive proportionally more requests.
+</p>
+
+<pre><code class="language-python">class WeightedRoundRobinBalancer:
+    """Distributes requests proportional to server weights."""
+
+    def __init__(self, servers: dict[str, int]):
+        """servers: {server_name: weight}"""
+        self._servers = []
+        for server, weight in servers.items():
+            self._servers.extend([server] * weight)
+        self._index = 0
+
+    def get_server(self) -> str:
+        server = self._servers[self._index]
+        self._index = (self._index + 1) % len(self._servers)
+        return server
+
+
+# Usage: server-1 is twice as powerful as server-2
+lb = WeightedRoundRobinBalancer({
+    "server-1 (8 CPU)": 3,
+    "server-2 (4 CPU)": 1,
+    "server-3 (8 CPU)": 3,
+})
+# server-1 gets ~43% of traffic, server-2 gets ~14%, server-3 gets ~43%
+</code></pre>
+
+<h3>Algorithm 3: Least Connections</h3>
+
+<p>
+  Routes each new request to the server with the fewest active connections. Better
+  than round robin when requests have variable processing times.
+</p>
+
+<pre><code class="language-python">class LeastConnectionsBalancer:
+    """Routes to the server with fewest active connections."""
+
+    def __init__(self, servers: list[str]):
+        self._connections: dict[str, int] = {s: 0 for s in servers}
+
+    def get_server(self) -> str:
+        server = min(self._connections, key=self._connections.get)
+        self._connections[server] += 1
+        return server
+
+    def release(self, server: str):
+        """Called when a request completes."""
+        if self._connections[server] > 0:
+            self._connections[server] -= 1
+
+    @property
+    def status(self) -> dict[str, int]:
+        return dict(self._connections)
+
+
+# Usage
+lb = LeastConnectionsBalancer(["server-1", "server-2", "server-3"])
+
+# Simulate: server-1 has a slow request
+s1 = lb.get_server()  # server-1 (0 connections, picked first)
+s2 = lb.get_server()  # server-2 (both have 0, but server-1 now has 1)
+s3 = lb.get_server()  # server-3
+
+# server-1 is still processing, next request goes to least loaded
+s4 = lb.get_server()  # server-2 or server-3 (both have 1 connection)
+
+# Pros: Adapts to variable request processing times
+# Cons: Requires tracking active connections (more state)
+# Best for: Long-lived connections, variable workloads
+</code></pre>
+
+<h3>Algorithm 4: IP Hash (Sticky Sessions)</h3>
+
+<p>
+  Uses a hash of the client IP to consistently route the same client to the same server.
+  Useful when server-side sessions are used.
+</p>
+
+<pre><code class="language-python">class IPHashBalancer:
+    """Routes based on client IP hash for session affinity."""
+
+    def __init__(self, servers: list[str]):
+        self._servers = servers
+
+    def get_server(self, client_ip: str) -> str:
+        hash_value = hash(client_ip)
+        index = hash_value % len(self._servers)
+        return self._servers[index]
+
+
+# Usage
+lb = IPHashBalancer(["server-1", "server-2", "server-3"])
+print(lb.get_server("192.168.1.100"))  # Always the same server
+print(lb.get_server("192.168.1.100"))  # Same server again
+print(lb.get_server("10.0.0.50"))      # Might be a different server
+
+# Pros: Session affinity without shared session store
+# Cons: Uneven distribution if IPs are not evenly distributed
+#        Adding/removing servers remaps many clients
+# Best for: Stateful applications that can't use external session stores
+</code></pre>
+
+<h3>Algorithm 5: Consistent Hashing</h3>
+
+<p>
+  An improvement over IP hash that minimizes redistribution when servers are added
+  or removed. Essential for distributed caches and databases.
+</p>
+
+<pre><code class="language-python">import hashlib
+import bisect
+
+
+class ConsistentHashBalancer:
+    """Consistent hashing with virtual nodes for even distribution."""
+
+    def __init__(self, servers: list[str], virtual_nodes: int = 150):
+        self._ring: list[tuple[int, str]] = []
+        self._virtual_nodes = virtual_nodes
+
+        for server in servers:
+            self._add_server(server)
+        self._ring.sort()
+
+    def _hash(self, key: str) -> int:
+        return int(hashlib.md5(key.encode()).hexdigest(), 16)
+
+    def _add_server(self, server: str):
+        for i in range(self._virtual_nodes):
+            virtual_key = f"{server}:vn{i}"
+            hash_val = self._hash(virtual_key)
+            self._ring.append((hash_val, server))
+
+    def get_server(self, key: str) -> str:
+        if not self._ring:
+            raise RuntimeError("No servers available")
+
+        hash_val = self._hash(key)
+        hashes = [h for h, _ in self._ring]
+        idx = bisect.bisect_left(hashes, hash_val)
+
+        if idx >= len(self._ring):
+            idx = 0
+
+        return self._ring[idx][1]
+
+    def add_server(self, server: str):
+        """Add a new server - only ~1/N keys get remapped."""
+        self._add_server(server)
+        self._ring.sort()
+
+    def remove_server(self, server: str):
+        """Remove a server - only its keys get remapped."""
+        self._ring = [(h, s) for h, s in self._ring if s != server]
+
+
+# When a server is added, only ~1/N of keys are remapped
+# (vs ~N-1/N with simple modular hashing)
+lb = ConsistentHashBalancer(["server-1", "server-2", "server-3"])
+print(lb.get_server("user-123"))  # Consistent mapping
+lb.add_server("server-4")        # Only ~25% of keys remap
+print(lb.get_server("user-123"))  # Likely same server
+</code></pre>
+
+<h3>Algorithm 6: Least Response Time</h3>
+
+<pre><code class="language-python">import time
+
+
+class LeastResponseTimeBalancer:
+    """Routes to the server with the fastest recent response times."""
+
+    def __init__(self, servers: list[str]):
+        self._servers = servers
+        self._response_times: dict[str, list[float]] = {s: [0.0] for s in servers}
+        self._window = 10  # Track last 10 response times
+
+    def get_server(self) -> str:
+        avg_times = {}
+        for server, times in self._response_times.items():
+            avg_times[server] = sum(times) / len(times) if times else 0
+        return min(avg_times, key=avg_times.get)
+
+    def record_response(self, server: str, response_time: float):
+        times = self._response_times[server]
+        times.append(response_time)
+        if len(times) > self._window:
+            times.pop(0)
+
+
+# Pros: Adapts to actual server performance
+# Cons: Requires response time tracking, cold start problem
+# Best for: Heterogeneous server environments
+</code></pre>
+
+<h3>Health Checking</h3>
+
+<pre><code class="language-python">class HealthCheckingBalancer:
+    """Wraps any balancer with health checking to avoid routing to dead servers."""
+
+    def __init__(self, balancer, health_check_interval: float = 10.0):
+        self._balancer = balancer
+        self._healthy_servers: set[str] = set(balancer._servers)
+        self._interval = health_check_interval
+
+    def health_check(self, server: str) -> bool:
+        """Check if a server is healthy (simplified)."""
+        try:
+            # In practice: HTTP GET /health with timeout
+            return True
+        except Exception:
+            return False
+
+    def get_server(self) -> str:
+        """Get a healthy server."""
+        for _ in range(len(self._balancer._servers)):
+            server = self._balancer.get_server()
+            if server in self._healthy_servers:
+                return server
+        raise RuntimeError("No healthy servers available")
+
+    def mark_unhealthy(self, server: str):
+        self._healthy_servers.discard(server)
+
+    def mark_healthy(self, server: str):
+        self._healthy_servers.add(server)
+</code></pre>
+
+<h3>Comparison Matrix</h3>
+
+<pre><code class="language-python"># Algorithm         | Complexity | State     | Best For
+# ------------------|------------|-----------|---------------------------
+# Round Robin       | O(1)       | Minimal   | Homogeneous servers
+# Weighted RR       | O(1)       | Minimal   | Mixed-capacity servers
+# Least Connections | O(N)       | Per-conn  | Variable request times
+# IP Hash           | O(1)       | None      | Session affinity
+# Consistent Hash   | O(log N)   | Hash ring | Distributed caches
+# Least Response    | O(N)       | Per-req   | Heterogeneous environments
+</code></pre>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>Round Robin is the default starting point. Switch only when you have a specific reason.</li>
+  <li>Least Connections adapts to variable workloads automatically.</li>
+  <li>Consistent hashing is essential for distributed caches and database sharding.</li>
+  <li>Health checking is mandatory in production &mdash; never route to dead servers.</li>
+  <li>Layer 4 balancers are faster; Layer 7 balancers are smarter (can route by URL, headers).</li>
+  <li>In practice, use managed load balancers (AWS ALB/NLB, GCP LB, Nginx) rather than building your own.</li>
+</ul>

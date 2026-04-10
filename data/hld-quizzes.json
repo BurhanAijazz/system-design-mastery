@@ -1,0 +1,130 @@
+{
+  "courseId": "hld",
+  "quizzes": [
+    {
+      "weekId": "week-01", "title": "HLD Fundamentals Quiz", "passingScore": 70,
+      "questions": [
+        { "id": "hld-w01-q01", "type": "mcq", "question": "What does the CAP theorem state?", "options": ["A system can have C, A, and P all at once", "A distributed system can guarantee at most 2 of: Consistency, Availability, Partition tolerance", "Caching Always Performs better than DB", "Consistency And Performance are inversely related"], "correct": 1, "explanation": "CAP: a distributed store can provide at most two of three guarantees." },
+        { "id": "hld-w01-q02", "type": "mcq", "question": "Approximately how many seconds are in a day?", "options": ["8,640", "86,400", "864,000", "3,600"], "correct": 1, "explanation": "24 * 60 * 60 = 86,400 seconds. Approximated as ~10^5." },
+        { "id": "hld-w01-q03", "type": "true-false", "question": "Horizontal scaling means adding more powerful hardware to an existing server.", "correct": false, "explanation": "That's vertical scaling. Horizontal scaling means adding more machines." },
+        { "id": "hld-w01-q04", "type": "mcq", "question": "What does DERSC stand for?", "options": ["Design, Evaluate, Review, Scale, Confirm", "Define, Estimate, Resource/API, Scale, Confirm", "Develop, Engineer, Research, Solve, Check", "Define, Execute, Refine, Ship, Close"], "correct": 1, "explanation": "DERSC: Define, Estimate, Resource/API, Scale, Confirm." },
+        { "id": "hld-w01-q05", "type": "multi-select", "question": "Which are non-functional requirements?", "options": ["Users can post tweets", "99.99% availability", "Latency under 200ms", "Users can follow others"], "correct": [1, 2], "explanation": "Availability and latency are non-functional. Posting/following are functional." },
+        { "id": "hld-w01-q06", "type": "mcq", "question": "'4 nines' availability allows how much downtime per year?", "options": ["52.6 minutes", "5.26 minutes", "8.76 hours", "3.65 days"], "correct": 0, "explanation": "99.99% = ~52.6 minutes/year." }
+      ]
+    },
+    {
+      "weekId": "week-02", "title": "Networking & Protocols Quiz", "passingScore": 70,
+      "questions": [
+        { "id": "hld-w02-q01", "type": "mcq", "question": "What is the primary purpose of a CDN?", "options": ["Database replication", "Serving content from geographically closer servers", "Load balancing across data centers", "DNS resolution"], "correct": 1, "explanation": "CDN caches and serves content from edge servers close to users." },
+        { "id": "hld-w02-q02", "type": "mcq", "question": "Which load balancing operates at the transport layer?", "options": ["L7 load balancing", "L4 load balancing", "DNS load balancing", "Application load balancing"], "correct": 1, "explanation": "L4 works at TCP/UDP level, routing based on IP and ports." },
+        { "id": "hld-w02-q03", "type": "true-false", "question": "WebSockets provide full-duplex communication over a single TCP connection.", "correct": true, "explanation": "WebSockets allow both client and server to send data at any time." },
+        { "id": "hld-w02-q04", "type": "mcq", "question": "Which protocol uses Protocol Buffers and HTTP/2?", "options": ["REST", "GraphQL", "gRPC", "SOAP"], "correct": 2, "explanation": "gRPC uses protobuf for serialization and HTTP/2 for transport." },
+        { "id": "hld-w02-q05", "type": "multi-select", "question": "Which are functions of an API Gateway?", "options": ["Rate limiting", "Authentication", "Request routing", "Database sharding"], "correct": [0, 1, 2], "explanation": "API Gateway handles rate limiting, auth, and routing. Sharding is a DB concern." },
+        { "id": "hld-w02-q06", "type": "mcq", "question": "Which real-time method has highest server overhead for idle connections?", "options": ["WebSockets", "SSE", "Short Polling", "Long Polling"], "correct": 2, "explanation": "Short polling makes frequent requests even when there's no new data." }
+      ]
+    },
+    {
+      "weekId": "week-03", "title": "Databases Deep Dive Quiz", "passingScore": 70,
+      "questions": [
+        { "id": "hld-w03-q01", "type": "mcq", "question": "For complex joins and ACID transactions, which database type is best?", "options": ["Key-Value store", "Document DB", "Relational SQL DB", "Graph DB"], "correct": 2, "explanation": "SQL databases excel at joins, ACID, and structured data with relationships." },
+        { "id": "hld-w03-q02", "type": "mcq", "question": "Hash-based sharding distributes data based on:", "options": ["Data ranges", "Hash of shard key", "Geographic location", "Alphabetical order"], "correct": 1, "explanation": "Hash sharding applies a hash function to the shard key for even distribution." },
+        { "id": "hld-w03-q03", "type": "true-false", "question": "In leader-follower replication, followers can accept write operations.", "correct": false, "explanation": "Only the leader accepts writes; followers replicate and serve reads." },
+        { "id": "hld-w03-q04", "type": "mcq", "question": "B-tree indexes are primarily used for:", "options": ["Full-text search", "Range queries and equality lookups", "Graph traversals", "In-memory caching"], "correct": 1, "explanation": "B-trees are optimized for range scans and equality lookups on disk." },
+        { "id": "hld-w03-q05", "type": "mcq", "question": "BASE stands for:", "options": ["Basic Availability, Soft state, Eventual consistency", "Balanced Architecture, Simple Extension", "Buffer Aligned Storage Engine", "Batch And Stream Engine"], "correct": 0, "explanation": "BASE: Basically Available, Soft state, Eventually consistent — the NoSQL counterpart to ACID." },
+        { "id": "hld-w03-q06", "type": "mcq", "question": "Which database type is best for social network friend-of-friend queries?", "options": ["Relational", "Document", "Key-Value", "Graph"], "correct": 3, "explanation": "Graph databases (Neo4j) excel at traversing relationships like friend-of-friend." }
+      ]
+    },
+    {
+      "weekId": "week-04", "title": "Caching & Performance Quiz", "passingScore": 70,
+      "questions": [
+        { "id": "hld-w04-q01", "type": "mcq", "question": "In cache-aside (lazy loading), when does data get cached?", "options": ["On every write", "On cache miss — read from DB then cache", "Periodically via cron job", "When the app starts"], "correct": 1, "explanation": "Cache-aside: on miss, read from DB, populate cache, return to client." },
+        { "id": "hld-w04-q02", "type": "mcq", "question": "Cache stampede occurs when:", "options": ["Cache runs out of memory", "Many requests hit DB simultaneously on cache expiry", "Cache keys have collisions", "Too many writes invalidate cache"], "correct": 1, "explanation": "Stampede: a popular key expires, causing a thundering herd to the database." },
+        { "id": "hld-w04-q03", "type": "mcq", "question": "Consistent hashing solves:", "options": ["Cache invalidation", "Key redistribution on node add/remove", "Cache penetration", "Memory fragmentation"], "correct": 1, "explanation": "Consistent hashing minimizes key redistribution — only K/N keys move on node changes." },
+        { "id": "hld-w04-q04", "type": "true-false", "question": "Redis supports data structures like sorted sets, lists, and hashes — Memcached only supports strings.", "correct": true, "explanation": "Redis has rich data structures. Memcached is simpler — key-value strings only." },
+        { "id": "hld-w04-q05", "type": "mcq", "question": "Virtual nodes in consistent hashing are used to:", "options": ["Store virtual data", "Improve load distribution across physical nodes", "Reduce memory usage", "Speed up hash computation"], "correct": 1, "explanation": "Virtual nodes give each physical node multiple positions on the ring for better balance." }
+      ]
+    },
+    {
+      "weekId": "week-05", "title": "Message Queues & Async Quiz", "passingScore": 70,
+      "questions": [
+        { "id": "hld-w05-q01", "type": "mcq", "question": "Which system is a distributed log-based message broker with high throughput?", "options": ["RabbitMQ", "Kafka", "Redis Pub/Sub", "SQS"], "correct": 1, "explanation": "Kafka is a distributed log broker designed for high throughput and durability." },
+        { "id": "hld-w05-q02", "type": "mcq", "question": "CQRS stands for:", "options": ["Cache Query Replication Service", "Command Query Responsibility Segregation", "Concurrent Queue Response System", "Centralized Query Routing Standard"], "correct": 1, "explanation": "CQRS separates read and write models for different optimization needs." },
+        { "id": "hld-w05-q03", "type": "true-false", "question": "At-least-once delivery guarantees no message duplication.", "correct": false, "explanation": "At-least-once may deliver duplicates. Exactly-once prevents duplicates (harder to achieve)." },
+        { "id": "hld-w05-q04", "type": "mcq", "question": "Idempotency means:", "options": ["Operations are faster", "Repeating an operation produces the same result", "Operations happen in order", "Operations are reversible"], "correct": 1, "explanation": "Idempotent operations produce the same result regardless of how many times they're applied." },
+        { "id": "hld-w05-q05", "type": "mcq", "question": "Lambda architecture combines:", "options": ["Two programming languages", "Batch and stream processing layers", "Multiple databases", "Client and server logic"], "correct": 1, "explanation": "Lambda has a batch layer (accurate) and speed layer (real-time) merged in the serving layer." }
+      ]
+    },
+    {
+      "weekId": "week-06", "title": "Microservices & Distributed Patterns Quiz", "passingScore": 70,
+      "questions": [
+        { "id": "hld-w06-q01", "type": "mcq", "question": "The Saga pattern handles:", "options": ["Service discovery", "Distributed transactions across microservices", "Load balancing", "API versioning"], "correct": 1, "explanation": "Saga manages distributed transactions using compensating actions on failure." },
+        { "id": "hld-w06-q02", "type": "mcq", "question": "A circuit breaker in OPEN state:", "options": ["Forwards all requests normally", "Immediately fails requests without calling the service", "Retries requests 3 times", "Queues requests for later"], "correct": 1, "explanation": "OPEN state = fast-fail. After a timeout, it transitions to HALF_OPEN to test recovery." },
+        { "id": "hld-w06-q03", "type": "true-false", "question": "Microservices are always better than monoliths.", "correct": false, "explanation": "Monoliths are simpler for small teams/products. Microservices add operational complexity." },
+        { "id": "hld-w06-q04", "type": "mcq", "question": "In Raft consensus, how many nodes must agree for a write to succeed (with 5 nodes)?", "options": ["1", "2", "3 (majority)", "All 5"], "correct": 2, "explanation": "Raft requires a majority quorum: ceil(5/2)+0 = 3 nodes must confirm." },
+        { "id": "hld-w06-q05", "type": "mcq", "question": "Bulkhead pattern isolates failures by:", "options": ["Retrying operations", "Partitioning resources per service/call type", "Caching responses", "Encrypting traffic"], "correct": 1, "explanation": "Bulkhead isolates thread pools/connections so one failing service doesn't exhaust shared resources." }
+      ]
+    },
+    {
+      "weekId": "week-07", "title": "Storage & Data Pipeline Quiz", "passingScore": 70,
+      "questions": [
+        { "id": "hld-w07-q01", "type": "mcq", "question": "Object storage (like S3) is best for:", "options": ["Frequent small updates to files", "Storing and serving large immutable blobs", "OLTP transactions", "Graph queries"], "correct": 1, "explanation": "Object storage is optimized for large immutable files with HTTP access." },
+        { "id": "hld-w07-q02", "type": "mcq", "question": "ETL vs ELT: when is ELT preferred?", "options": ["When storage is expensive", "When the data warehouse can handle transformations", "When data is already structured", "When you need real-time processing"], "correct": 1, "explanation": "ELT loads raw data first, then transforms in the warehouse (cheaper storage, powerful compute)." },
+        { "id": "hld-w07-q03", "type": "mcq", "question": "Elasticsearch's core data structure is:", "options": ["B-tree", "Red-black tree", "Inverted index", "Hash table"], "correct": 2, "explanation": "Inverted index maps terms to document IDs for fast full-text search." },
+        { "id": "hld-w07-q04", "type": "true-false", "question": "A data lake stores data in a structured schema-on-write format.", "correct": false, "explanation": "Data lakes use schema-on-read — raw data is stored as-is, schema applied at query time." },
+        { "id": "hld-w07-q05", "type": "mcq", "question": "Time-series databases optimize for:", "options": ["Random access patterns", "Sequential writes and time-range queries", "Complex joins", "Full-text search"], "correct": 1, "explanation": "TSDBs are optimized for append-heavy sequential writes and time-range scans." }
+      ]
+    },
+    {
+      "weekId": "week-08", "title": "HLD Problems: Core Internet Quiz", "passingScore": 70,
+      "questions": [
+        { "id": "hld-w08-q01", "type": "mcq", "question": "A URL shortener generating 100M URLs should use which ID approach?", "options": ["Auto-increment SQL", "Random UUID", "Counter + Base62 encoding", "MD5 hash"], "correct": 2, "explanation": "Counter-based with Base62 gives short, unique, predictable URLs at scale." },
+        { "id": "hld-w08-q02", "type": "mcq", "question": "Which rate limiting algorithm allows bursts?", "options": ["Fixed Window", "Token Bucket", "Leaky Bucket", "Sliding Window Counter"], "correct": 1, "explanation": "Token Bucket accumulates tokens over time, allowing bursts up to bucket capacity." },
+        { "id": "hld-w08-q03", "type": "true-false", "question": "A 301 redirect for URL shortener is cached by browsers, reducing load on the server.", "correct": true, "explanation": "301 (permanent) is cached. 302 (temporary) is not — use 301 if the mapping doesn't change." },
+        { "id": "hld-w08-q04", "type": "mcq", "question": "For Pastebin, where should large text content be stored?", "options": ["In the SQL database", "In object storage (S3)", "In Redis cache", "In the URL itself"], "correct": 1, "explanation": "Large blobs go to object storage. Metadata (owner, expiry) stays in SQL." }
+      ]
+    },
+    {
+      "weekId": "week-09", "title": "HLD Problems: Social & Messaging Quiz", "passingScore": 70,
+      "questions": [
+        { "id": "hld-w09-q01", "type": "mcq", "question": "Twitter uses which approach for celebrity users with millions of followers?", "options": ["Fan-out on write (push)", "Fan-out on read (pull)", "Hybrid: push for normal, pull for celebrities", "Direct database queries"], "correct": 2, "explanation": "Hybrid: push for regular users, pull for celebrities to avoid massive write amplification." },
+        { "id": "hld-w09-q02", "type": "mcq", "question": "WhatsApp message delivery uses which protocol for real-time?", "options": ["HTTP polling", "gRPC", "WebSocket", "SMTP"], "correct": 2, "explanation": "WebSocket provides persistent bidirectional connection for real-time chat." },
+        { "id": "hld-w09-q03", "type": "mcq", "question": "A notification system should prioritize which notification type?", "options": ["Marketing emails", "Security alerts (2FA)", "Weekly digests", "Friend suggestions"], "correct": 1, "explanation": "Security alerts are time-critical and must be delivered with highest priority." },
+        { "id": "hld-w09-q04", "type": "true-false", "question": "Instagram stores the original uploaded photo and generates multiple resolutions asynchronously.", "correct": true, "explanation": "Original is stored immediately. Thumbnails and optimized versions are generated async via a worker pipeline." }
+      ]
+    },
+    {
+      "weekId": "week-10", "title": "HLD Problems: Media & Streaming Quiz", "passingScore": 70,
+      "questions": [
+        { "id": "hld-w10-q01", "type": "mcq", "question": "Adaptive bitrate streaming adjusts video quality based on:", "options": ["Screen size only", "User subscription tier", "Network bandwidth conditions", "Time of day"], "correct": 2, "explanation": "ABR dynamically switches resolution/bitrate based on available bandwidth." },
+        { "id": "hld-w10-q02", "type": "mcq", "question": "Netflix uses which CDN strategy?", "options": ["Third-party CDN only", "Own CDN (Open Connect) with ISP co-location", "Direct from data center", "Peer-to-peer streaming"], "correct": 1, "explanation": "Netflix's Open Connect places servers inside ISP networks for minimal latency." },
+        { "id": "hld-w10-q03", "type": "mcq", "question": "Google Drive uses which sync strategy to minimize bandwidth?", "options": ["Full file upload on any change", "Delta/block-level sync", "Periodic full sync", "Client-side only storage"], "correct": 1, "explanation": "Delta sync only transfers changed blocks, dramatically reducing bandwidth." },
+        { "id": "hld-w10-q04", "type": "true-false", "question": "Video transcoding converts one video format into multiple formats/resolutions.", "correct": true, "explanation": "Transcoding produces multiple output files (480p, 720p, 1080p, 4K) from one source." }
+      ]
+    },
+    {
+      "weekId": "week-11", "title": "HLD Problems: Commerce & Platforms Quiz", "passingScore": 70,
+      "questions": [
+        { "id": "hld-w11-q01", "type": "mcq", "question": "Uber matches drivers to riders using:", "options": ["Random selection", "Geospatial indexing (Geohash/H3)", "Round-robin", "First-come-first-served queue"], "correct": 1, "explanation": "Uber uses geospatial indexing to find nearest available drivers efficiently." },
+        { "id": "hld-w11-q02", "type": "mcq", "question": "To prevent double-booking on Airbnb:", "options": ["Global lock on all listings", "Optimistic locking with version numbers", "Single-threaded server", "Disable concurrent requests"], "correct": 1, "explanation": "Optimistic locking detects conflicts at commit time without blocking concurrent reads." },
+        { "id": "hld-w11-q03", "type": "mcq", "question": "Amazon's payment system ensures orders aren't charged twice using:", "options": ["Retry logic", "Idempotency keys", "Single-threaded processing", "Manual review"], "correct": 1, "explanation": "Idempotency keys ensure that retried payment requests don't create duplicate charges." },
+        { "id": "hld-w11-q04", "type": "true-false", "question": "Surge pricing at Uber is an example of dynamic pricing based on supply and demand.", "correct": true, "explanation": "When demand exceeds driver supply, prices increase to incentivize more drivers." }
+      ]
+    },
+    {
+      "weekId": "week-12", "title": "HLD Problems: Infra & Advanced Quiz", "passingScore": 70,
+      "questions": [
+        { "id": "hld-w12-q01", "type": "mcq", "question": "A web crawler's URL frontier manages:", "options": ["Rendering pages", "Prioritizing and scheduling URLs to crawl", "Storing page content", "Serving search results"], "correct": 1, "explanation": "The URL frontier is the queue that prioritizes and deduplicates URLs to be crawled." },
+        { "id": "hld-w12-q02", "type": "mcq", "question": "DynamoDB/Cassandra use which consistency model by default?", "options": ["Strong consistency", "Eventual consistency", "Linearizability", "Serializability"], "correct": 1, "explanation": "Both default to eventual consistency for higher availability and lower latency." },
+        { "id": "hld-w12-q03", "type": "mcq", "question": "Ticketmaster handles hot events using:", "options": ["Single large server", "Virtual waiting queue + seat reservation with TTL", "Blocking all requests", "First-come email system"], "correct": 1, "explanation": "Virtual queue manages demand; seat holds with TTL prevent abandoned reservations." },
+        { "id": "hld-w12-q04", "type": "mcq", "question": "In payment systems, the authorize → capture → settle flow ensures:", "options": ["Fastest processing", "Funds are verified before goods ship", "No refunds needed", "Single database write"], "correct": 1, "explanation": "Authorize verifies funds, capture charges after fulfillment, settle transfers money." },
+        { "id": "hld-w12-q05", "type": "true-false", "question": "A gossip protocol spreads information by having each node randomly share with a few peers.", "correct": true, "explanation": "Gossip: each node periodically shares state with random peers, eventually reaching all nodes." }
+      ]
+    }
+  ],
+  "revision": {
+    "title": "HLD Mixed Revision Quiz",
+    "description": "Random questions from all HLD weeks",
+    "poolSize": 20,
+    "questions": ["hld-w01-q01","hld-w01-q03","hld-w02-q01","hld-w02-q03","hld-w03-q01","hld-w03-q05","hld-w04-q01","hld-w04-q03","hld-w05-q01","hld-w05-q04","hld-w06-q01","hld-w06-q02","hld-w07-q03","hld-w08-q01","hld-w08-q02","hld-w09-q01","hld-w10-q01","hld-w11-q01","hld-w11-q03","hld-w12-q01"]
+  }
+}

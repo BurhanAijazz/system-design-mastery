@@ -1,0 +1,85 @@
+<h2>Data Lakes vs Data Warehouses</h2>
+
+<p>Where do you put your data once it outgrows a single database? Two major paradigms: <strong>warehouses</strong> (structured, schema-on-write) vs <strong>lakes</strong> (raw, schema-on-read).</p>
+
+<h3>Data Warehouse</h3>
+<p>A data warehouse stores structured data optimized for analytical queries. Examples: Snowflake, BigQuery, Redshift, Azure Synapse.</p>
+<ul>
+  <li><strong>Schema-on-write</strong>: Define the schema before loading data</li>
+  <li><strong>Structured</strong>: Tables with columns, types, constraints</li>
+  <li><strong>SQL interface</strong>: Analysts query with standard SQL</li>
+  <li>Optimized for read-heavy analytical queries (OLAP), not transactional workloads</li>
+</ul>
+
+<h3>Star Schema</h3>
+<p>The most common warehouse design. A central fact table surrounded by dimension tables.</p>
+
+<pre><code class="language-python">from dataclasses import dataclass
+from typing import Dict, List
+from collections import defaultdict
+
+@dataclass
+class FactSale:
+    """Fact table: measurements/events (large, billions of rows)."""
+    date_id: int
+    product_id: int
+    store_id: int
+    customer_id: int
+    quantity: int
+    revenue: float
+
+@dataclass
+class DimProduct:
+    """Dimension table: context (small, thousands of rows)."""
+    product_id: int
+    name: str
+    category: str
+    brand: str
+
+# Analytical query: "Total revenue by category, Q4 2024"
+# SELECT d.category, SUM(f.revenue)
+# FROM fact_sales f
+# JOIN dim_product d ON f.product_id = d.product_id
+# JOIN dim_time t ON f.date_id = t.date_id
+# WHERE t.quarter = 4 AND t.year = 2024
+# GROUP BY d.category
+</code></pre>
+
+<h3>Data Lake</h3>
+<p>A data lake stores raw data in its native format. Schema is applied when reading, not when writing.</p>
+<ul>
+  <li><strong>Schema-on-read</strong>: Store first, structure later</li>
+  <li><strong>Any format</strong>: JSON, CSV, Parquet, Avro, images, logs</li>
+  <li><strong>Cheap storage</strong>: Built on object storage (S3, GCS) -- pennies per GB</li>
+  <li><strong>Flexible</strong>: Raw data preserved, can re-process as needs change</li>
+  <li><strong>Risk</strong>: Without governance, becomes a "data swamp" -- raw data nobody can use</li>
+</ul>
+
+<h3>Data Lakehouse</h3>
+<p>Modern approach that combines lake and warehouse features. Store raw data on cheap object storage but add warehouse-like structure (ACID transactions, schema enforcement, indexing).</p>
+<ul>
+  <li>Examples: Databricks Delta Lake, Apache Iceberg, Apache Hudi</li>
+  <li>One copy of data serves both raw analytics and structured BI queries</li>
+</ul>
+
+<h3>Warehouse vs Lake vs Lakehouse</h3>
+<ul>
+  <li><strong>Warehouse</strong>: Best for BI/reporting, structured analytics, SQL-native teams</li>
+  <li><strong>Lake</strong>: Best for ML/data science, raw data exploration, cost-sensitive storage</li>
+  <li><strong>Lakehouse</strong>: Best when you need both, want one copy of data, modern stack</li>
+</ul>
+
+<h3>Column-Oriented Storage</h3>
+<p>Warehouses store data by column, not by row. This makes analytical queries (aggregations over a few columns across millions of rows) dramatically faster because only the needed columns are read from disk.</p>
+
+<pre><code class="language-python"># Row-oriented (OLTP): store each row contiguously
+# Row 1: [Alice, 30, NYC, $50]
+# Row 2: [Bob,   25, LA,  $30]
+# Query "SELECT name" reads ALL columns for every row
+
+# Column-oriented (OLAP): store each column contiguously
+# Name column:   [Alice, Bob, Carol, ...]
+# Amount column: [50, 30, 100, ...]
+# Query "SELECT SUM(amount)" reads ONLY the amount column
+# 10x-100x faster for analytical queries
+</code></pre>

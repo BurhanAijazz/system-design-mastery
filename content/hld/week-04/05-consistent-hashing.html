@@ -1,0 +1,82 @@
+<h2>Consistent Hashing</h2>
+
+<p>The algorithm that makes distributed caches, databases, and storage systems work. <code>hash(key) % N</code> breaks when N changes. Consistent hashing fixes this by only moving ~1/N keys when a node changes.</p>
+
+<h3>The Problem: hash(key) % N</h3>
+<pre><code class="language-python">import hashlib
+
+def hash_int(key: str) -> int:
+    return int(hashlib.md5(key.encode()).hexdigest(), 16)
+
+# With 4 servers: hash("user:1") % 4 = 2 -> Server 2
+# Add 1 server (4 -> 5):
+# hash("user:1") % 5 = 1 -> Server 1  MOVED!
+
+# Simulate: 10,000 keys, 4 -> 5 servers
+keys = [f"key:{i}" for i in range(10_000)]
+before = {k: hash_int(k) % 4 for k in keys}
+after  = {k: hash_int(k) % 5 for k in keys}
+
+moved = sum(1 for k in keys if before[k] != after[k])
+# Result: ~80% of keys moved! Catastrophic cache wipe.
+</code></pre>
+
+<h3>The Solution: Consistent Hashing Ring</h3>
+<p>Imagine a circular ring of hash values (0 to 2^32 - 1). Hash each server onto the ring at a point. Hash each key onto the ring. Each key maps to the next server clockwise.</p>
+<ul>
+  <li>When a server is added, only keys between the new server and its predecessor move</li>
+  <li>When a server is removed, only its keys move to the next server clockwise</li>
+  <li>Result: only ~1/N keys move instead of ~(N-1)/N</li>
+</ul>
+
+<h3>Virtual Nodes</h3>
+<p>With few servers, the ring can be unbalanced. Virtual nodes solve this by placing each server at multiple points on the ring (typically 100-200 virtual nodes per server).</p>
+
+<pre><code class="language-python">import bisect
+from typing import List, Set, Tuple, Optional
+
+class ConsistentHashRing:
+    """Consistent hash ring with virtual nodes."""
+    def __init__(self, virtual_nodes=150):
+        self.virtual_nodes = virtual_nodes
+        self._ring: List[Tuple[int, str]] = []
+        self._nodes: Set[str] = set()
+
+    def _hash(self, key: str) -> int:
+        return int(hashlib.md5(key.encode()).hexdigest(), 16)
+
+    def add_node(self, node: str):
+        self._nodes.add(node)
+        for i in range(self.virtual_nodes):
+            h = self._hash(f"{node}:vn{i}")
+            self._ring.append((h, node))
+        self._ring.sort()
+
+    def remove_node(self, node: str):
+        self._nodes.discard(node)
+        self._ring = [(h, n) for h, n in self._ring if n != node]
+
+    def get_node(self, key: str) -> Optional[str]:
+        if not self._ring:
+            return None
+        h = self._hash(key)
+        idx = bisect.bisect_left(self._ring, (h,))
+        if idx >= len(self._ring):
+            idx = 0
+        return self._ring[idx][1]
+</code></pre>
+
+<h3>Real-World Usage</h3>
+<ul>
+  <li><strong>Amazon Dynamo</strong>: consistent hashing for key distribution</li>
+  <li><strong>Apache Cassandra</strong>: token ring for data partitioning</li>
+  <li><strong>Memcached clients</strong>: distribute keys across cache servers</li>
+  <li><strong>Discord</strong>: route users to the correct WebSocket server</li>
+</ul>
+
+<h3>Key Properties</h3>
+<ul>
+  <li>Adding a node moves ~1/N keys (vs ~100% with modular hashing)</li>
+  <li>Virtual nodes ensure even distribution regardless of server count</li>
+  <li>Lookup is O(log V) where V = total virtual nodes (binary search on the ring)</li>
+</ul>

@@ -1,0 +1,91 @@
+<h2>Design: Auction System</h2>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Auction lifecycle: <strong>Open -> Bidding -> Closed</strong></li>
+  <li>Bids accepted only during Bidding state; must exceed current highest bid</li>
+  <li><strong>Observer</strong> notifies bidders on new bids and auction close</li>
+  <li><strong>Anti-sniping</strong>: extend deadline if a bid arrives in the last N seconds</li>
+</ul>
+
+<h3>Approach</h3>
+<ul>
+  <li><strong>State pattern</strong> for auction lifecycle with strict transition rules</li>
+  <li>Observer pattern: bidders subscribe and receive real-time bid updates</li>
+  <li>Anti-sniping rule: if bid placed within last 60s, extend end time by 60s</li>
+  <li>Auction holds a sorted bid history for audit and winner determination</li>
+</ul>
+
+<h3>Key Code</h3>
+<pre><code class="language-python">from abc import ABC, abstractmethod
+from datetime import datetime, timedelta
+
+class AuctionState(ABC):
+    @abstractmethod
+    def place_bid(self, ctx, bidder, amount): ...
+    @abstractmethod
+    def close(self, ctx): ...
+
+class OpenState(AuctionState):
+    def place_bid(self, ctx, bidder, amount):
+        raise RuntimeError("Bidding not started yet")
+    def close(self, ctx):
+        raise RuntimeError("Cannot close before bidding starts")
+
+class BiddingState(AuctionState):
+    def place_bid(self, ctx, bidder, amount):
+        if amount <= ctx.highest_bid:
+            raise ValueError("Bid must exceed current highest")
+        ctx.highest_bid = amount
+        ctx.winner = bidder
+        ctx.bids.append((bidder, amount, datetime.utcnow()))
+        # Anti-sniping
+        if ctx.end_time - datetime.utcnow() < timedelta(seconds=60):
+            ctx.end_time += timedelta(seconds=60)
+        ctx._notify(f"New bid: {amount} by {bidder}")
+
+    def close(self, ctx):
+        ctx.state = ClosedState()
+        ctx._notify(f"Auction closed. Winner: {ctx.winner}")
+
+class ClosedState(AuctionState):
+    def place_bid(self, ctx, bidder, amount):
+        raise RuntimeError("Auction is closed")
+    def close(self, ctx):
+        raise RuntimeError("Already closed")
+
+class Auction:
+    def __init__(self, item: str, end_time: datetime):
+        self.item = item
+        self.end_time = end_time
+        self.state: AuctionState = OpenState()
+        self.highest_bid = 0.0
+        self.winner = None
+        self.bids = []
+        self._observers = []
+
+    def subscribe(self, observer):
+        self._observers.append(observer)
+
+    def _notify(self, msg):
+        for obs in self._observers:
+            obs.on_event(msg)
+
+    def start_bidding(self):
+        self.state = BiddingState()
+        self._notify("Bidding is now open")
+
+    def place_bid(self, bidder, amount):
+        self.state.place_bid(self, bidder, amount)
+
+    def close(self):
+        self.state.close(self)
+</code></pre>
+
+<h3>Takeaways</h3>
+<ul>
+  <li>State pattern makes auction rules explicit and prevents invalid actions</li>
+  <li>Observer decouples notification delivery from bidding logic</li>
+  <li>Anti-sniping is a simple time extension, but critical for auction fairness</li>
+  <li>Extend with Strategy for auction types (English, Dutch, sealed-bid)</li>
+</ul>

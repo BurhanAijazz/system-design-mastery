@@ -1,0 +1,124 @@
+<h2>Null Object Pattern</h2>
+
+<p>The Null Object pattern provides a no-op (do-nothing) implementation of an interface instead of using <code>None</code>. This eliminates repetitive null checks throughout code.</p>
+
+<h3>The Problem: None Checks Everywhere</h3>
+
+<pre><code class="language-python">class OrderServiceNaive:
+    """Every method must check if logger exists."""
+
+    def __init__(self, logger=None):
+        self._logger = logger
+
+    def create_order(self, item: str) -> str:
+        if self._logger is not None:  # Check 1
+            self._logger.log(f"Creating order for {item}")
+
+        order_id = f"ORD-{hash(item) % 1000:03d}"
+
+        if self._logger is not None:  # Check 2
+            self._logger.log(f"Order {order_id} created")
+
+        return order_id
+
+    def cancel_order(self, order_id: str) -> None:
+        if self._logger is not None:  # Check 3
+            self._logger.log(f"Cancelling {order_id}")
+
+        # cancel logic...
+
+        if self._logger is not None:  # Check 4
+            self._logger.log(f"Order {order_id} cancelled")
+</code></pre>
+
+<p>Four null checks for just two methods. As the codebase grows, this explodes.</p>
+
+<h3>Solution: Null Object Pattern</h3>
+
+<p>Create a <code>NullLogger</code> that implements the same interface but does nothing:</p>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+
+class Logger(ABC):
+    """Logger interface."""
+
+    @abstractmethod
+    def log(self, message: str) -> None:
+        pass
+
+    @abstractmethod
+    def error(self, message: str) -> None:
+        pass
+
+
+class ConsoleLogger(Logger):
+    """Real logger that prints to console."""
+
+    def log(self, message: str) -> None:
+        print(f"[LOG] {message}")
+
+    def error(self, message: str) -> None:
+        print(f"[ERROR] {message}")
+
+
+class NullLogger(Logger):
+    """Null object -- does absolutely nothing.
+    Same interface, zero behavior."""
+
+    def log(self, message: str) -> None:
+        pass  # intentionally empty
+
+    def error(self, message: str) -> None:
+        pass  # intentionally empty
+</code></pre>
+
+<h3>Clean Service Code</h3>
+
+<pre><code class="language-python">class OrderService:
+    """No None checks needed -- logger is always a valid object."""
+
+    def __init__(self, logger: Logger = None):
+        self._logger = logger or NullLogger()  # default to NullLogger
+
+    def create_order(self, item: str) -> str:
+        self._logger.log(f"Creating order for {item}")
+        order_id = f"ORD-{hash(item) % 1000:03d}"
+        self._logger.log(f"Order {order_id} created")
+        return order_id
+
+    def cancel_order(self, order_id: str) -> None:
+        self._logger.log(f"Cancelling {order_id}")
+        # cancel logic...
+        self._logger.log(f"Order {order_id} cancelled")
+
+
+# With real logging
+svc = OrderService(ConsoleLogger())
+svc.create_order("Widget")  # logs to console
+
+# Without logging -- no None checks, no errors
+svc = OrderService()  # uses NullLogger silently
+svc.create_order("Gadget")  # NullLogger does nothing
+</code></pre>
+
+<h3>Common Use Cases</h3>
+
+<ul>
+    <li><strong>Optional loggers</strong> -- <code>NullLogger</code> when logging is disabled</li>
+    <li><strong>Default configurations</strong> -- <code>NullConfig</code> with sensible defaults</li>
+    <li><strong>Missing entities</strong> -- <code>NullUser</code> for guest/anonymous users</li>
+    <li><strong>Optional dependencies</strong> -- <code>NullCache</code> when caching is not configured</li>
+    <li><strong>Placeholder objects</strong> -- <code>NullRenderer</code> during testing</li>
+</ul>
+
+<h3>Null Object vs None</h3>
+
+<ul>
+    <li><strong>None</strong> requires every caller to check before using</li>
+    <li><strong>Null Object</strong> is a valid object that simply does nothing</li>
+    <li>Callers never need to check -- polymorphism handles it</li>
+</ul>
+
+<h3>When NOT to Use</h3>
+
+<p>Do not use Null Object when the absence of an object is semantically meaningful and callers should know about it. For example, a <code>find_user()</code> function should return <code>None</code> if the user truly does not exist and callers need to handle that case differently.</p>

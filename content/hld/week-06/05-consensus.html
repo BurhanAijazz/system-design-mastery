@@ -1,0 +1,78 @@
+<h2>Distributed Consensus: Raft and Paxos</h2>
+
+<p>How do distributed systems agree on a value when nodes can fail? Leader election, log replication, and the split-brain problem. You rarely implement Raft from scratch, but you <strong>must understand the concept</strong>.</p>
+
+<h3>The Consensus Problem</h3>
+<p>N nodes must agree on a single value, even when some nodes crash or network partitions occur.</p>
+<ul>
+  <li><strong>Leader election</strong>: Who is the primary database node? Two leaders = split brain = data corruption</li>
+  <li><strong>Distributed locks</strong>: Only one service should process a job. Two holders = duplicate processing</li>
+  <li><strong>Configuration</strong>: All nodes must agree on cluster membership</li>
+  <li><strong>Replicated state machine</strong>: All replicas apply operations in the same order</li>
+</ul>
+
+<h3>The Split-Brain Problem</h3>
+<p>A network partition splits the cluster into two groups. Both groups elect a leader. Two leaders accept writes that conflict.</p>
+<p>Solution: <strong>majority quorum</strong>. You need more than N/2 votes to become leader. Only one partition can have a majority. This is why clusters use odd numbers: 3, 5, 7 nodes.</p>
+
+<pre><code class="language-python">from enum import Enum
+from typing import List, Dict, Optional
+
+class Role(Enum):
+    FOLLOWER = "follower"
+    CANDIDATE = "candidate"
+    LEADER = "leader"
+
+class RaftNode:
+    """Simplified Raft node for understanding consensus."""
+    def __init__(self, node_id: str, peers: List[str]):
+        self.id = node_id
+        self.peers = peers
+        self.role = Role.FOLLOWER
+        self.current_term = 0
+        self.voted_for: Optional[str] = None
+        self.log: List[dict] = []
+
+    def start_election(self):
+        """Candidate requests votes from peers."""
+        self.current_term += 1
+        self.role = Role.CANDIDATE
+        self.voted_for = self.id
+        votes = 1  # Vote for self
+
+        for peer in self.peers:
+            # Request vote from peer
+            # peer grants vote if:
+            #   1. peer hasn't voted this term
+            #   2. candidate's log is at least as up-to-date
+            vote_granted = self._request_vote(peer)
+            if vote_granted:
+                votes += 1
+
+        majority = (len(self.peers) + 1) // 2 + 1
+        if votes >= majority:
+            self.role = Role.LEADER
+</code></pre>
+
+<h3>Raft Algorithm</h3>
+<p>Designed to be understandable (unlike Paxos). Used in etcd, CockroachDB, TiKV, Consul.</p>
+<ul>
+  <li><strong>Three roles</strong>: Leader (handles requests), Follower (receives replication), Candidate (during election)</li>
+  <li><strong>Leader Election</strong>: Followers become candidates after an election timeout. Request votes from peers. Majority wins</li>
+  <li><strong>Log Replication</strong>: Leader appends entries to its log, replicates to followers. Entry is committed when a majority confirms</li>
+  <li><strong>Safety</strong>: A node can only become leader if its log contains all committed entries</li>
+</ul>
+
+<h3>Paxos vs Raft</h3>
+<ul>
+  <li><strong>Paxos</strong>: The original consensus algorithm. Proven correct but notoriously difficult to understand and implement</li>
+  <li><strong>Raft</strong>: Equivalent safety guarantees but decomposed into understandable sub-problems (leader election, log replication, safety)</li>
+  <li>In practice: use Raft (via etcd or Consul), not raw Paxos</li>
+</ul>
+
+<h3>Practical Consensus Systems</h3>
+<ul>
+  <li><strong>etcd</strong>: Raft-based KV store. Used by Kubernetes for cluster state</li>
+  <li><strong>ZooKeeper</strong>: ZAB protocol (Paxos variant). Used by Kafka, Hadoop</li>
+  <li><strong>Consul</strong>: Raft-based service discovery and configuration</li>
+</ul>

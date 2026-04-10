@@ -1,0 +1,54 @@
+<h2>Design: URL Shortener (Basic)</h2>
+<p>Design a URL shortening service that maps long URLs to short, unique aliases.</p>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Generate a short URL given a long URL</li>
+  <li>Redirect short URL to original with 301 or 302</li>
+  <li>Handle high read-to-write ratio (100:1 typical)</li>
+  <li>Short URLs should be compact (6-8 characters)</li>
+</ul>
+
+<h3>High-Level Architecture</h3>
+<ul>
+  <li><strong>API Service</strong> &mdash; POST /shorten, GET /{shortCode} redirect</li>
+  <li><strong>ID Generator</strong> &mdash; Auto-increment counter or distributed snowflake IDs</li>
+  <li><strong>Encoder</strong> &mdash; Base62 encode the numeric ID into a short string</li>
+  <li><strong>Database</strong> &mdash; Mapping table: short_code &rarr; long_url, created_at, user_id</li>
+  <li><strong>Cache (Redis)</strong> &mdash; Hot short codes cached for fast redirect</li>
+</ul>
+
+<h3>Key Components</h3>
+<pre><code class="language-python">import string
+
+ALPHABET = string.digits + string.ascii_letters  # 62 chars
+
+def base62_encode(num):
+    if num == 0:
+        return ALPHABET[0]
+    result = []
+    while num > 0:
+        result.append(ALPHABET[num % 62])
+        num //= 62
+    return ''.join(reversed(result))
+
+def shorten(long_url, counter):
+    """counter is an auto-increment ID from DB or Zookeeper range."""
+    short_code = base62_encode(counter)
+    db.save(short_code, long_url)
+    return f"https://short.ly/{short_code}"
+
+def redirect(short_code):
+    url = cache.get(short_code) or db.lookup(short_code)
+    if url:
+        return HTTP_302(url)  # 302 for analytics, 301 for pure caching
+    return HTTP_404()
+</code></pre>
+
+<h3>Scaling Considerations</h3>
+<ul>
+  <li>301 (permanent) lets browsers cache; 302 (temporary) routes through server for analytics</li>
+  <li>Pre-allocate ID ranges per server to avoid single-counter bottleneck</li>
+  <li>Read-heavy: put a CDN or cache in front of redirect path</li>
+  <li>Database sharding by short_code hash for horizontal scale</li>
+</ul>

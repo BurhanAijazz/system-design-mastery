@@ -1,0 +1,235 @@
+<h2>Project: Undo/Redo Text Editor</h2>
+
+<p>A text editor with full undo/redo support combining all five patterns from Week 4: Command for editing operations, Memento for cursor state snapshots, Iterator for document traversal, Null Object for optional formatting, and Visitor for document export.</p>
+
+<h3>Patterns Used</h3>
+
+<ul>
+    <li><strong>Command</strong> -- all editing operations (insert, delete, replace, format)</li>
+    <li><strong>Memento</strong> -- cursor position and selection state snapshots</li>
+    <li><strong>Iterator</strong> -- traverse document by character, word, or line</li>
+    <li><strong>Null Object</strong> -- NullFormatter when no formatting is applied</li>
+    <li><strong>Visitor</strong> -- export document to PlainText, HTML, or Markdown</li>
+</ul>
+
+<h3>Data Model</h3>
+
+<pre><code class="language-python">from dataclasses import dataclass, field
+from typing import List, Dict, Optional, Iterator
+
+@dataclass
+class TextSegment:
+    """A segment of text with optional formatting."""
+    text: str
+    bold: bool = False
+    italic: bool = False
+    underline: bool = False
+
+
+@dataclass
+class CursorState:
+    """Memento for cursor position."""
+    position: int
+    selection_start: int
+    selection_end: int
+
+
+class Document:
+    """The document being edited."""
+
+    def __init__(self):
+        self._content: str = ""
+        self._cursor_pos: int = 0
+        self._selection_start: int = 0
+        self._selection_end: int = 0
+        self._formatting: Dict[int, Dict[str, bool]] = {}
+
+    @property
+    def content(self) -> str:
+        return self._content
+
+    @property
+    def cursor_pos(self) -> int:
+        return self._cursor_pos
+
+    def insert(self, text: str, position: int = -1) -> None:
+        if position == -1:
+            position = self._cursor_pos
+        self._content = self._content[:position] + text + self._content[position:]
+        self._cursor_pos = position + len(text)
+
+    def delete(self, position: int, count: int) -> str:
+        deleted = self._content[position:position + count]
+        self._content = self._content[:position] + self._content[position + count:]
+        self._cursor_pos = position
+        return deleted
+
+    def replace(self, old: str, new: str) -> int:
+        pos = self._content.find(old)
+        if pos != -1:
+            self._content = self._content[:pos] + new + self._content[pos + len(old):]
+        return pos
+</code></pre>
+
+<h3>Command Pattern: Editing Operations</h3>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+
+class EditCommand(ABC):
+    @abstractmethod
+    def execute(self) -> None: pass
+    @abstractmethod
+    def undo(self) -> None: pass
+
+
+class InsertCommand(EditCommand):
+    def __init__(self, doc: Document, text: str, position: int = -1):
+        self._doc = doc
+        self._text = text
+        self._pos = position if position != -1 else doc.cursor_pos
+
+    def execute(self):
+        self._doc.insert(self._text, self._pos)
+
+    def undo(self):
+        self._doc.delete(self._pos, len(self._text))
+
+
+class DeleteCommand(EditCommand):
+    def __init__(self, doc: Document, position: int, count: int):
+        self._doc = doc
+        self._pos = position
+        self._count = count
+        self._deleted = ""
+
+    def execute(self):
+        self._deleted = self._doc.delete(self._pos, self._count)
+
+    def undo(self):
+        self._doc.insert(self._deleted, self._pos)
+
+
+class ReplaceCommand(EditCommand):
+    def __init__(self, doc: Document, old_text: str, new_text: str):
+        self._doc = doc
+        self._old = old_text
+        self._new = new_text
+        self._pos = -1
+
+    def execute(self):
+        self._pos = self._doc.replace(self._old, self._new)
+
+    def undo(self):
+        if self._pos != -1:
+            self._doc.replace(self._new, self._old)
+</code></pre>
+
+<h3>Null Object: Formatter</h3>
+
+<pre><code class="language-python">class Formatter(ABC):
+    @abstractmethod
+    def format_bold(self, text: str) -> str: pass
+    @abstractmethod
+    def format_italic(self, text: str) -> str: pass
+
+
+class RichFormatter(Formatter):
+    def format_bold(self, text): return f"**{text}**"
+    def format_italic(self, text): return f"*{text}*"
+
+
+class NullFormatter(Formatter):
+    """Does nothing -- used when formatting is disabled."""
+    def format_bold(self, text): return text
+    def format_italic(self, text): return text
+</code></pre>
+
+<h3>Iterator: Document Traversal</h3>
+
+<pre><code class="language-python">class CharIterator:
+    """Iterate character by character."""
+    def __init__(self, content: str):
+        self._content = content
+    def __iter__(self):
+        for ch in self._content:
+            yield ch
+
+
+class WordIterator:
+    """Iterate word by word."""
+    def __init__(self, content: str):
+        self._content = content
+    def __iter__(self):
+        for word in self._content.split():
+            yield word
+
+
+class LineIterator:
+    """Iterate line by line."""
+    def __init__(self, content: str):
+        self._content = content
+    def __iter__(self):
+        for line in self._content.split("\n"):
+            yield line
+</code></pre>
+
+<h3>Visitor: Export Formats</h3>
+
+<pre><code class="language-python">class ExportVisitor(ABC):
+    @abstractmethod
+    def export(self, doc: Document) -> str: pass
+
+
+class PlainTextExporter(ExportVisitor):
+    def export(self, doc):
+        return doc.content
+
+
+class HTMLExporter(ExportVisitor):
+    def export(self, doc):
+        lines = doc.content.split("\n")
+        html_lines = [f"&lt;p&gt;{line}&lt;/p&gt;" for line in lines if line]
+        return "\n".join(html_lines)
+</code></pre>
+
+<h3>Editor with Full Undo/Redo</h3>
+
+<pre><code class="language-python">class TextEditor:
+    def __init__(self):
+        self._doc = Document()
+        self._undo_stack: list[EditCommand] = []
+        self._redo_stack: list[EditCommand] = []
+        self._formatter: Formatter = NullFormatter()
+
+    def type_text(self, text: str):
+        cmd = InsertCommand(self._doc, text)
+        cmd.execute()
+        self._undo_stack.append(cmd)
+        self._redo_stack.clear()
+
+    def undo(self) -> bool:
+        if not self._undo_stack:
+            return False
+        cmd = self._undo_stack.pop()
+        cmd.undo()
+        self._redo_stack.append(cmd)
+        return True
+
+    def redo(self) -> bool:
+        if not self._redo_stack:
+            return False
+        cmd = self._redo_stack.pop()
+        cmd.execute()
+        self._undo_stack.append(cmd)
+        return True
+
+    def words(self):
+        return WordIterator(self._doc.content)
+
+    def export(self, visitor: ExportVisitor) -> str:
+        return visitor.export(self._doc)
+</code></pre>
+
+<h3>Architecture Summary</h3>
+
+<p>This project shows how patterns serve different concerns: Command handles reversible editing, Memento snapshots cursor state, Iterator provides flexible traversal, Null Object eliminates conditional checks for optional features, and Visitor decouples export logic from the document model.</p>

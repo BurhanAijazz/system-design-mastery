@@ -1,0 +1,61 @@
+<h2>Design: API Rate Limiter</h2>
+<p>Design a rate limiter that enforces per-user request limits across a distributed API fleet.</p>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Limit each user to N requests per time window</li>
+  <li>Support multiple algorithms: token bucket, sliding window</li>
+  <li>Distributed enforcement across multiple API servers</li>
+  <li>Return 429 Too Many Requests with Retry-After header</li>
+</ul>
+
+<h3>High-Level Architecture</h3>
+<ul>
+  <li><strong>API Gateway</strong> &mdash; Intercepts every request before reaching backend</li>
+  <li><strong>Rate Limiter Service</strong> &mdash; Checks and decrements quota</li>
+  <li><strong>Redis</strong> &mdash; Shared state for distributed counters and token buckets</li>
+  <li><strong>Rules Engine</strong> &mdash; Configurable limits per user tier, endpoint, or IP</li>
+</ul>
+
+<h3>Key Components</h3>
+<pre><code class="language-python">import time
+
+class TokenBucket:
+    def __init__(self, capacity, refill_rate):
+        self.capacity = capacity
+        self.tokens = capacity
+        self.refill_rate = refill_rate  # tokens per second
+        self.last_refill = time.time()
+
+    def allow_request(self):
+        self._refill()
+        if self.tokens >= 1:
+            self.tokens -= 1
+            return True
+        return False
+
+    def _refill(self):
+        now = time.time()
+        elapsed = now - self.last_refill
+        self.tokens = min(
+            self.capacity,
+            self.tokens + elapsed * self.refill_rate
+        )
+        self.last_refill = now
+
+# Redis-based distributed version (pseudocode)
+# EVAL "local t = redis.call('GET', KEYS[1]) or capacity
+#        if tonumber(t) > 0 then
+#          redis.call('DECR', KEYS[1])
+#          return 1
+#        end
+#        return 0" 1 user:{id}:tokens
+</code></pre>
+
+<h3>Scaling Considerations</h3>
+<ul>
+  <li>Redis atomic Lua scripts prevent race conditions across API nodes</li>
+  <li>Local in-memory cache per server reduces Redis round-trips (sync periodically)</li>
+  <li>Sliding window log is more accurate but uses more memory than fixed window</li>
+  <li>Use consistent hashing so each user maps to one Redis shard</li>
+</ul>

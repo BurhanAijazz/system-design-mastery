@@ -1,0 +1,450 @@
+<h2>Project: Load Balancer Simulator</h2>
+
+<p>
+  Build a comprehensive load balancer simulator in Python that implements multiple
+  algorithms, simulates realistic traffic patterns, and produces statistical reports
+  comparing algorithm performance under different conditions.
+</p>
+
+<h3>Project Overview</h3>
+
+<ul>
+  <li><strong>Goal:</strong> Implement and compare 5+ load balancing algorithms under realistic conditions.</li>
+  <li><strong>Skills tested:</strong> Load balancing algorithms, simulation, statistical analysis</li>
+  <li><strong>Estimated time:</strong> 3-4 hours</li>
+  <li><strong>Deliverable:</strong> Python module with simulation engine, algorithms, and reporting</li>
+</ul>
+
+<h3>Core Data Models</h3>
+
+<pre><code class="language-python">from dataclasses import dataclass, field
+from enum import Enum
+import time
+import random
+
+
+class ServerStatus(Enum):
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    UNHEALTHY = "unhealthy"
+
+
+@dataclass
+class Server:
+    name: str
+    capacity: int              # Max concurrent connections
+    weight: int = 1            # For weighted algorithms
+    active_connections: int = 0
+    total_requests: int = 0
+    total_response_time_ms: float = 0.0
+    failed_requests: int = 0
+    status: ServerStatus = ServerStatus.HEALTHY
+
+    @property
+    def load_percent(self) -> float:
+        return (self.active_connections / self.capacity) * 100 if self.capacity > 0 else 0
+
+    @property
+    def avg_response_time_ms(self) -> float:
+        return self.total_response_time_ms / self.total_requests if self.total_requests > 0 else 0
+
+    def process_request(self) -> float:
+        """Simulate processing a request. Returns response time in ms."""
+        self.active_connections += 1
+        self.total_requests += 1
+
+        # Response time increases with load (realistic behavior)
+        base_time = random.uniform(10, 50)
+        load_factor = 1.0 + (self.load_percent / 100) ** 2
+        response_time = base_time * load_factor
+
+        # Simulate occasional failures when overloaded
+        if self.load_percent > 90 and random.random() < 0.1:
+            self.failed_requests += 1
+            self.active_connections -= 1
+            return -1  # indicates failure
+
+        self.total_response_time_ms += response_time
+        return response_time
+
+    def complete_request(self):
+        """Mark a request as completed."""
+        if self.active_connections > 0:
+            self.active_connections -= 1
+
+
+@dataclass
+class Request:
+    id: int
+    client_ip: str
+    path: str
+    timestamp: float
+    response_time_ms: float = 0.0
+    server_name: str = ""
+    success: bool = True
+</code></pre>
+
+<h3>Load Balancer Interface and Implementations</h3>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+
+
+class LoadBalancer(ABC):
+    """Base class for all load balancing algorithms."""
+
+    def __init__(self, servers: list[Server]):
+        self._servers = servers
+        self._name = self.__class__.__name__
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @abstractmethod
+    def select_server(self, request: Request) -> Server | None:
+        """Select a server to handle the request."""
+        pass
+
+    def get_healthy_servers(self) -> list[Server]:
+        return [s for s in self._servers if s.status != ServerStatus.UNHEALTHY]
+
+
+class RoundRobinLB(LoadBalancer):
+    def __init__(self, servers: list[Server]):
+        super().__init__(servers)
+        self._index = 0
+
+    def select_server(self, request: Request) -> Server | None:
+        healthy = self.get_healthy_servers()
+        if not healthy:
+            return None
+        server = healthy[self._index % len(healthy)]
+        self._index += 1
+        return server
+
+
+class WeightedRoundRobinLB(LoadBalancer):
+    def __init__(self, servers: list[Server]):
+        super().__init__(servers)
+        self._current_weights = [0] * len(servers)
+
+    def select_server(self, request: Request) -> Server | None:
+        healthy = self.get_healthy_servers()
+        if not healthy:
+            return None
+
+        total_weight = sum(s.weight for s in healthy)
+        best_server = None
+        best_weight = -1
+
+        for i, server in enumerate(self._servers):
+            if server.status == ServerStatus.UNHEALTHY:
+                continue
+            self._current_weights[i] += server.weight
+            if self._current_weights[i] > best_weight:
+                best_weight = self._current_weights[i]
+                best_server = server
+                best_idx = i
+
+        if best_server:
+            self._current_weights[best_idx] -= total_weight
+        return best_server
+
+
+class LeastConnectionsLB(LoadBalancer):
+    def select_server(self, request: Request) -> Server | None:
+        healthy = self.get_healthy_servers()
+        if not healthy:
+            return None
+        return min(healthy, key=lambda s: s.active_connections)
+
+
+class WeightedLeastConnectionsLB(LoadBalancer):
+    def select_server(self, request: Request) -> Server | None:
+        healthy = self.get_healthy_servers()
+        if not healthy:
+            return None
+        # Lower score = better (fewer connections relative to weight)
+        return min(healthy, key=lambda s: s.active_connections / max(s.weight, 1))
+
+
+class IPHashLB(LoadBalancer):
+    def select_server(self, request: Request) -> Server | None:
+        healthy = self.get_healthy_servers()
+        if not healthy:
+            return None
+        idx = hash(request.client_ip) % len(healthy)
+        return healthy[idx]
+
+
+class RandomLB(LoadBalancer):
+    def select_server(self, request: Request) -> Server | None:
+        healthy = self.get_healthy_servers()
+        if not healthy:
+            return None
+        return random.choice(healthy)
+
+
+class LeastResponseTimeLB(LoadBalancer):
+    def select_server(self, request: Request) -> Server | None:
+        healthy = self.get_healthy_servers()
+        if not healthy:
+            return None
+        # Prefer servers with lowest average response time
+        # Break ties with least connections
+        return min(healthy, key=lambda s: (s.avg_response_time_ms, s.active_connections))
+</code></pre>
+
+<h3>Traffic Generator</h3>
+
+<pre><code class="language-python">class TrafficGenerator:
+    """Generates realistic traffic patterns for simulation."""
+
+    def __init__(self, seed: int = 42):
+        self._rng = random.Random(seed)
+        self._request_id = 0
+
+    def generate_uniform(self, count: int) -> list[Request]:
+        """Uniform traffic: constant rate from many clients."""
+        requests = []
+        for i in range(count):
+            self._request_id += 1
+            requests.append(Request(
+                id=self._request_id,
+                client_ip=f"10.0.{self._rng.randint(0, 255)}.{self._rng.randint(1, 254)}",
+                path="/api/data",
+                timestamp=i * 0.01,
+            ))
+        return requests
+
+    def generate_bursty(self, count: int, burst_size: int = 50) -> list[Request]:
+        """Bursty traffic: periods of quiet followed by traffic spikes."""
+        requests = []
+        t = 0
+        while len(requests) < count:
+            # Quiet period
+            quiet_duration = self._rng.uniform(0.5, 2.0)
+            t += quiet_duration
+
+            # Burst period
+            burst = min(burst_size, count - len(requests))
+            for _ in range(burst):
+                self._request_id += 1
+                requests.append(Request(
+                    id=self._request_id,
+                    client_ip=f"10.0.{self._rng.randint(0, 255)}.{self._rng.randint(1, 254)}",
+                    path="/api/data",
+                    timestamp=t,
+                ))
+                t += self._rng.uniform(0.001, 0.01)
+        return requests[:count]
+
+    def generate_hot_client(self, count: int, hot_clients: int = 5) -> list[Request]:
+        """Hot client traffic: a few IPs generate most traffic (power law)."""
+        hot_ips = [f"10.0.0.{i}" for i in range(1, hot_clients + 1)]
+        cold_ips = [f"10.0.{self._rng.randint(1, 255)}.{self._rng.randint(1, 254)}" for _ in range(100)]
+
+        requests = []
+        for i in range(count):
+            self._request_id += 1
+            # 80% of traffic from hot clients
+            if self._rng.random() < 0.8:
+                ip = self._rng.choice(hot_ips)
+            else:
+                ip = self._rng.choice(cold_ips)
+            requests.append(Request(
+                id=self._request_id,
+                client_ip=ip,
+                path="/api/data",
+                timestamp=i * 0.01,
+            ))
+        return requests
+</code></pre>
+
+<h3>Simulation Engine</h3>
+
+<pre><code class="language-python">@dataclass
+class SimulationResult:
+    algorithm: str
+    total_requests: int
+    successful_requests: int
+    failed_requests: int
+    avg_response_time_ms: float
+    p50_response_time_ms: float
+    p95_response_time_ms: float
+    p99_response_time_ms: float
+    server_distribution: dict[str, int]
+    max_server_load_percent: float
+    load_std_deviation: float  # Lower = more even distribution
+
+
+class Simulator:
+    """Runs load balancer simulations and collects metrics."""
+
+    def run(self, lb: LoadBalancer, requests: list[Request],
+            concurrent_limit: int = 100) -> SimulationResult:
+        """Simulate processing all requests through the load balancer."""
+        response_times = []
+        server_dist: dict[str, int] = {}
+        successful = 0
+        failed = 0
+
+        for request in requests:
+            server = lb.select_server(request)
+            if server is None:
+                failed += 1
+                continue
+
+            response_time = server.process_request()
+            request.server_name = server.name
+            server_dist[server.name] = server_dist.get(server.name, 0) + 1
+
+            if response_time < 0:
+                failed += 1
+                request.success = False
+            else:
+                successful += 1
+                response_times.append(response_time)
+                request.response_time_ms = response_time
+
+            # Simulate some requests completing (simplified)
+            if random.random() < 0.7:
+                server.complete_request()
+
+        # Calculate percentiles
+        response_times.sort()
+        n = len(response_times)
+
+        p50 = response_times[int(n * 0.50)] if n > 0 else 0
+        p95 = response_times[int(n * 0.95)] if n > 0 else 0
+        p99 = response_times[int(n * 0.99)] if n > 0 else 0
+        avg = sum(response_times) / n if n > 0 else 0
+
+        # Calculate load distribution evenness
+        counts = list(server_dist.values())
+        mean_count = sum(counts) / len(counts) if counts else 0
+        variance = sum((c - mean_count) ** 2 for c in counts) / len(counts) if counts else 0
+        std_dev = variance ** 0.5
+
+        healthy_servers = lb.get_healthy_servers()
+        max_load = max((s.load_percent for s in healthy_servers), default=0)
+
+        return SimulationResult(
+            algorithm=lb.name,
+            total_requests=len(requests),
+            successful_requests=successful,
+            failed_requests=failed,
+            avg_response_time_ms=round(avg, 2),
+            p50_response_time_ms=round(p50, 2),
+            p95_response_time_ms=round(p95, 2),
+            p99_response_time_ms=round(p99, 2),
+            server_distribution=server_dist,
+            max_server_load_percent=round(max_load, 1),
+            load_std_deviation=round(std_dev, 2),
+        )
+</code></pre>
+
+<h3>Report Generator</h3>
+
+<pre><code class="language-python">class ReportGenerator:
+    """Generates comparison reports across multiple simulations."""
+
+    @staticmethod
+    def print_comparison(results: list[SimulationResult]):
+        print(f"\n{'=' * 80}")
+        print(f"  LOAD BALANCER ALGORITHM COMPARISON")
+        print(f"{'=' * 80}")
+
+        # Header
+        print(f"\n{'Algorithm':<28} {'Success%':>8} {'Avg(ms)':>8} {'P95(ms)':>8} {'P99(ms)':>8} {'StdDev':>8}")
+        print("-" * 80)
+
+        for r in results:
+            success_pct = r.successful_requests / r.total_requests * 100 if r.total_requests > 0 else 0
+            print(f"{r.algorithm:<28} {success_pct:>7.1f}% {r.avg_response_time_ms:>8.1f} "
+                  f"{r.p95_response_time_ms:>8.1f} {r.p99_response_time_ms:>8.1f} {r.load_std_deviation:>8.1f}")
+
+        print(f"\n--- Server Distribution ---")
+        for r in results:
+            print(f"\n{r.algorithm}:")
+            total = sum(r.server_distribution.values())
+            for server, count in sorted(r.server_distribution.items()):
+                pct = count / total * 100 if total > 0 else 0
+                bar = "#" * int(pct / 2)
+                print(f"  {server:<15} {count:>6} ({pct:>5.1f}%) {bar}")
+</code></pre>
+
+<h3>Running the Simulation</h3>
+
+<pre><code class="language-python">def main():
+    # Create server pool (heterogeneous)
+    def make_servers():
+        return [
+            Server("web-1", capacity=100, weight=3),
+            Server("web-2", capacity=100, weight=3),
+            Server("web-3", capacity=50, weight=1),
+            Server("web-4", capacity=75, weight=2),
+            Server("web-5", capacity=100, weight=3),
+        ]
+
+    # Generate traffic
+    gen = TrafficGenerator(seed=42)
+    traffic_patterns = {
+        "Uniform": gen.generate_uniform(10_000),
+        "Bursty": gen.generate_bursty(10_000),
+        "Hot Client": gen.generate_hot_client(10_000),
+    }
+
+    # Algorithms to test
+    algorithm_factories = [
+        lambda s: RoundRobinLB(s),
+        lambda s: WeightedRoundRobinLB(s),
+        lambda s: LeastConnectionsLB(s),
+        lambda s: WeightedLeastConnectionsLB(s),
+        lambda s: IPHashLB(s),
+        lambda s: RandomLB(s),
+        lambda s: LeastResponseTimeLB(s),
+    ]
+
+    sim = Simulator()
+
+    for pattern_name, requests in traffic_patterns.items():
+        print(f"\n\n{'#' * 80}")
+        print(f"  TRAFFIC PATTERN: {pattern_name}")
+        print(f"{'#' * 80}")
+
+        results = []
+        for factory in algorithm_factories:
+            servers = make_servers()
+            lb = factory(servers)
+            result = sim.run(lb, requests)
+            results.append(result)
+
+        ReportGenerator.print_comparison(results)
+
+
+if __name__ == "__main__":
+    main()
+</code></pre>
+
+<h3>Requirements Checklist</h3>
+
+<ul>
+  <li>Implement at least 5 load balancing algorithms (Round Robin, Weighted RR, Least Connections, IP Hash, and one more).</li>
+  <li>Implement at least 3 traffic patterns (uniform, bursty, hot client).</li>
+  <li>Simulation tracks: response time (avg, p50, p95, p99), success rate, server distribution.</li>
+  <li>Servers have realistic behavior: response time increases with load, failures at high load.</li>
+  <li>Report compares all algorithms across all traffic patterns.</li>
+  <li>Health checking: mark unhealthy servers and stop routing to them.</li>
+  <li>Unit tests for each algorithm verifying correct server selection.</li>
+</ul>
+
+<h3>Stretch Goals</h3>
+
+<ul>
+  <li>Implement consistent hashing with virtual nodes and demonstrate minimal key redistribution when a server is added or removed.</li>
+  <li>Simulate server failure mid-simulation and show how each algorithm handles the failover.</li>
+  <li>Add a circuit breaker that stops routing to a server after N consecutive failures.</li>
+  <li>Generate ASCII or HTML charts showing load distribution over time.</li>
+  <li>Add a "slow start" feature: new servers receive traffic gradually to warm up caches.</li>
+</ul>

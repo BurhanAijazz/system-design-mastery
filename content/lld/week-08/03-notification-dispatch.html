@@ -1,0 +1,109 @@
+<h2>Notification Dispatch Patterns</h2>
+
+<p>Platform systems need to notify users about events: new expenses, booking confirmations, payment receipts. This lesson covers notification channels, delivery strategies using the Strategy pattern, content formatting using the Template pattern, and user notification preferences.</p>
+
+<h3>Notification Model</h3>
+
+<p>A notification has a recipient, channel, content, priority, and status. Model each as an enum for type safety:</p>
+
+<pre><code class="language-python">class NotificationChannel(Enum):
+    EMAIL = "email"
+    SMS = "sms"
+    PUSH = "push"
+    IN_APP = "in_app"
+
+
+class NotificationPriority(Enum):
+    HIGH = "high"
+    NORMAL = "normal"
+    LOW = "low"
+
+
+class NotificationStatus(Enum):
+    PENDING = "pending"
+    SENT = "sent"
+    FAILED = "failed"
+    READ = "read"
+
+
+@dataclass
+class Notification:
+    notification_id: str
+    recipient_id: str
+    channel: NotificationChannel
+    subject: str
+    body: str
+    priority: NotificationPriority = NotificationPriority.NORMAL
+    status: NotificationStatus = NotificationStatus.PENDING
+    created_at: datetime = field(default_factory=datetime.now)
+    sent_at: Optional[datetime] = None
+
+    def mark_sent(self) -> None:
+        self.status = NotificationStatus.SENT
+        self.sent_at = datetime.now()
+
+    def mark_failed(self) -> None:
+        self.status = NotificationStatus.FAILED
+
+    def mark_read(self) -> None:
+        self.status = NotificationStatus.READ</code></pre>
+
+<h3>Delivery Strategy</h3>
+
+<p>Each channel has its own delivery mechanism. The Strategy pattern lets you swap channels without changing the notification service:</p>
+
+<pre><code class="language-python">class DeliveryStrategy(ABC):
+    @abstractmethod
+    def send(self, notification: Notification) -> bool:
+        pass
+
+    @abstractmethod
+    def channel(self) -> NotificationChannel:
+        pass
+
+
+class EmailDelivery(DeliveryStrategy):
+    def send(self, notification):
+        # Connect to SMTP, format HTML email, send
+        print(f"Sending email to {notification.recipient_id}")
+        return True
+
+    def channel(self):
+        return NotificationChannel.EMAIL
+
+
+class PushDelivery(DeliveryStrategy):
+    def send(self, notification):
+        # Send via push notification service (FCM, APNs)
+        print(f"Push to {notification.recipient_id}")
+        return True
+
+    def channel(self):
+        return NotificationChannel.PUSH</code></pre>
+
+<h3>User Notification Preferences</h3>
+
+<p>Users choose which channels they want notifications on. The service respects these preferences before dispatching:</p>
+
+<pre><code class="language-python">@dataclass
+class NotificationPreference:
+    user_id: str
+    enabled_channels: Set[NotificationChannel]
+    quiet_hours_start: Optional[int] = None  # hour 0-23
+    quiet_hours_end: Optional[int] = None
+
+    def is_channel_enabled(self, channel: NotificationChannel) -> bool:
+        return channel in self.enabled_channels</code></pre>
+
+<h3>Observer Integration</h3>
+
+<p>Events in the system (new expense added, booking confirmed) trigger notifications automatically via the Observer pattern. The notification service subscribes to domain events and dispatches messages through the appropriate channels.</p>
+
+<h3>Key Design Takeaways</h3>
+<ul>
+  <li>Use Strategy pattern for delivery channels -- adding a new channel (e.g., Slack) requires only a new strategy class</li>
+  <li>Model notification status transitions explicitly (PENDING -> SENT -> READ or FAILED)</li>
+  <li>Respect user preferences before sending -- check enabled channels and quiet hours</li>
+  <li>Integrate with Observer pattern so domain events automatically trigger notifications</li>
+  <li>Use Template pattern for content formatting -- same event, different content per channel</li>
+</ul>

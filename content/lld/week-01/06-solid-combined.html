@@ -1,0 +1,306 @@
+<h2>SOLID Principles: Combined Refactoring Example</h2>
+
+<p>
+  In real-world code, SOLID violations rarely occur in isolation. A poorly designed system
+  usually breaks multiple principles simultaneously. In this lesson, we take a realistic
+  e-commerce order processing system that violates all five SOLID principles and
+  systematically refactor it.
+</p>
+
+<h3>The Original Code: Five Violations in One Class</h3>
+
+<pre><code class="language-python">import json
+import smtplib
+import sqlite3
+from datetime import datetime
+
+
+class OrderProcessor:
+    """Violates ALL five SOLID principles."""
+
+    def __init__(self):
+        self.db = sqlite3.connect("orders.db")
+
+    def process_order(self, order_data: dict):
+        # --- SRP violation: validation, persistence, payment, notification all here ---
+        # --- OCP violation: if/elif for payment types ---
+        # --- DIP violation: direct instantiation of SMTP and SQLite ---
+
+        # Validate
+        if not order_data.get("items"):
+            raise ValueError("Order must have items")
+        if not order_data.get("customer_email"):
+            raise ValueError("Customer email required")
+
+        # Calculate total (OCP violation: hardcoded discount types)
+        total = 0
+        for item in order_data["items"]:
+            total += item["price"] * item["quantity"]
+
+        if order_data.get("discount_type") == "percentage":
+            total *= 1 - order_data["discount_value"] / 100
+        elif order_data.get("discount_type") == "fixed":
+            total -= order_data["discount_value"]
+        elif order_data.get("discount_type") == "bogo":
+            total *= 0.5
+
+        # Process payment (OCP violation: if/elif chain)
+        if order_data["payment_method"] == "credit_card":
+            print(f"Charging credit card: ${total:.2f}")
+        elif order_data["payment_method"] == "paypal":
+            print(f"Processing PayPal payment: ${total:.2f}")
+        elif order_data["payment_method"] == "crypto":
+            print(f"Processing crypto payment: ${total:.2f}")
+
+        # Save to database (DIP violation: hardcoded SQLite)
+        cursor = self.db.cursor()
+        cursor.execute(
+            "INSERT INTO orders (data, total, created_at) VALUES (?, ?, ?)",
+            (json.dumps(order_data), total, datetime.now().isoformat()),
+        )
+        self.db.commit()
+
+        # Send notification (DIP violation: hardcoded SMTP)
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.sendmail(
+            "shop@example.com",
+            order_data["customer_email"],
+            f"Order confirmed! Total: ${total:.2f}",
+        )
+        server.quit()
+
+        return {"status": "completed", "total": total}
+</code></pre>
+
+<h3>Identifying the Violations</h3>
+
+<ul>
+  <li><strong>SRP</strong>: One class handles validation, pricing, payment, persistence, and email.</li>
+  <li><strong>OCP</strong>: Adding a new payment method or discount type requires modifying the class.</li>
+  <li><strong>LSP</strong>: Not applicable yet (no inheritance), but the monolith prevents proper subtyping.</li>
+  <li><strong>ISP</strong>: Any consumer of <code>OrderProcessor</code> gets all functionality bundled together.</li>
+  <li><strong>DIP</strong>: Business logic directly instantiates SQLite and SMTP connections.</li>
+</ul>
+
+<h3>Step 1: Define Abstractions (DIP + ISP)</h3>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+
+@dataclass
+class OrderItem:
+    name: str
+    price: float
+    quantity: int
+
+
+@dataclass
+class Order:
+    items: list[OrderItem]
+    customer_email: str
+    discount_type: str | None = None
+    discount_value: float = 0.0
+    payment_method: str = "credit_card"
+
+
+class OrderRepository(ABC):
+    @abstractmethod
+    def save(self, order: Order, total: float) -> str:
+        """Save order and return order ID."""
+        pass
+
+
+class PaymentProcessor(ABC):
+    @abstractmethod
+    def charge(self, amount: float, order: Order) -> bool:
+        pass
+
+
+class NotificationService(ABC):
+    @abstractmethod
+    def send_order_confirmation(self, email: str, total: float) -> None:
+        pass
+
+
+class DiscountStrategy(ABC):
+    @abstractmethod
+    def apply(self, total: float, value: float) -> float:
+        pass
+</code></pre>
+
+<h3>Step 2: Implement Strategies (OCP)</h3>
+
+<pre><code class="language-python">class PercentageDiscount(DiscountStrategy):
+    def apply(self, total: float, value: float) -> float:
+        return total * (1 - value / 100)
+
+
+class FixedDiscount(DiscountStrategy):
+    def apply(self, total: float, value: float) -> float:
+        return max(0, total - value)
+
+
+class BogoDiscount(DiscountStrategy):
+    def apply(self, total: float, value: float) -> float:
+        return total * 0.5
+
+
+class NoDiscount(DiscountStrategy):
+    def apply(self, total: float, value: float) -> float:
+        return total
+</code></pre>
+
+<h3>Step 3: Separate Responsibilities (SRP)</h3>
+
+<pre><code class="language-python">class OrderValidator:
+    """Single responsibility: validate orders."""
+
+    def validate(self, order: Order) -> list[str]:
+        errors = []
+        if not order.items:
+            errors.append("Order must have at least one item")
+        if not order.customer_email:
+            errors.append("Customer email is required")
+        for item in order.items:
+            if item.price <= 0:
+                errors.append(f"Invalid price for {item.name}")
+            if item.quantity <= 0:
+                errors.append(f"Invalid quantity for {item.name}")
+        return errors
+
+
+class PricingCalculator:
+    """Single responsibility: calculate order totals."""
+
+    def __init__(self, discount_strategies: dict[str, DiscountStrategy]):
+        self._strategies = discount_strategies
+
+    def calculate_total(self, order: Order) -> float:
+        subtotal = sum(
+            item.price * item.quantity for item in order.items
+        )
+        strategy = self._strategies.get(
+            order.discount_type or "none", NoDiscount()
+        )
+        return strategy.apply(subtotal, order.discount_value)
+</code></pre>
+
+<h3>Step 4: Concrete Implementations (DIP)</h3>
+
+<pre><code class="language-python">import sqlite3
+import json
+from datetime import datetime
+import uuid
+
+
+class SQLiteOrderRepository(OrderRepository):
+    def __init__(self, db_path: str):
+        self._conn = sqlite3.connect(db_path)
+
+    def save(self, order: Order, total: float) -> str:
+        order_id = str(uuid.uuid4())
+        cursor = self._conn.cursor()
+        cursor.execute(
+            "INSERT INTO orders (id, data, total, created_at) VALUES (?, ?, ?, ?)",
+            (order_id, json.dumps(order.__dict__, default=str), total, datetime.now().isoformat()),
+        )
+        self._conn.commit()
+        return order_id
+
+
+class CreditCardProcessor(PaymentProcessor):
+    def charge(self, amount: float, order: Order) -> bool:
+        print(f"Charging credit card: ${amount:.2f}")
+        return True
+
+
+class PayPalProcessor(PaymentProcessor):
+    def charge(self, amount: float, order: Order) -> bool:
+        print(f"Processing PayPal payment: ${amount:.2f}")
+        return True
+
+
+class EmailNotificationService(NotificationService):
+    def __init__(self, smtp_host: str, smtp_port: int):
+        self._host = smtp_host
+        self._port = smtp_port
+
+    def send_order_confirmation(self, email: str, total: float) -> None:
+        print(f"Sending confirmation to {email}: ${total:.2f}")
+</code></pre>
+
+<h3>Step 5: Compose the Refactored Service</h3>
+
+<pre><code class="language-python">class OrderService:
+    """Clean orchestrator with single responsibility: coordinate the order workflow."""
+
+    def __init__(
+        self,
+        validator: OrderValidator,
+        pricing: PricingCalculator,
+        payment: PaymentProcessor,
+        repository: OrderRepository,
+        notifications: NotificationService,
+    ):
+        self._validator = validator
+        self._pricing = pricing
+        self._payment = payment
+        self._repository = repository
+        self._notifications = notifications
+
+    def process_order(self, order: Order) -> dict:
+        errors = self._validator.validate(order)
+        if errors:
+            return {"status": "invalid", "errors": errors}
+
+        total = self._pricing.calculate_total(order)
+
+        if not self._payment.charge(total, order):
+            return {"status": "payment_failed"}
+
+        order_id = self._repository.save(order, total)
+        self._notifications.send_order_confirmation(order.customer_email, total)
+
+        return {"status": "completed", "order_id": order_id, "total": total}
+</code></pre>
+
+<h3>Step 6: Composition Root</h3>
+
+<pre><code class="language-python">def create_order_service() -> OrderService:
+    discount_strategies = {
+        "percentage": PercentageDiscount(),
+        "fixed": FixedDiscount(),
+        "bogo": BogoDiscount(),
+    }
+
+    return OrderService(
+        validator=OrderValidator(),
+        pricing=PricingCalculator(discount_strategies),
+        payment=CreditCardProcessor(),
+        repository=SQLiteOrderRepository("orders.db"),
+        notifications=EmailNotificationService("smtp.gmail.com", 587),
+    )
+
+
+# Usage
+service = create_order_service()
+order = Order(
+    items=[OrderItem("Widget", 29.99, 2), OrderItem("Gadget", 49.99, 1)],
+    customer_email="alice@example.com",
+    discount_type="percentage",
+    discount_value=10,
+)
+result = service.process_order(order)
+print(result)
+</code></pre>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>Real-world refactoring addresses multiple SOLID violations simultaneously.</li>
+  <li>Start by defining abstractions, then separate responsibilities, then inject dependencies.</li>
+  <li>The final design has more classes, but each is small, focused, testable, and independently replaceable.</li>
+  <li>New payment methods, discounts, or notification channels require zero changes to existing code.</li>
+  <li>The composition root is the only place that knows about concrete implementations.</li>
+</ul>

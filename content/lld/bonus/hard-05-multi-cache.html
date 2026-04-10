@@ -1,0 +1,75 @@
+<h2>Design: Multi-Level Cache</h2>
+
+<h3>Requirements</h3>
+<ul>
+  <li>L1 (small/fast), L2 (medium), L3 (large/slow) cache hierarchy</li>
+  <li>Lookup traverses levels via <strong>Chain of Responsibility</strong></li>
+  <li><strong>Write-through</strong>: writes propagate down to all levels</li>
+  <li>Each level can have its own eviction policy (LRU, LFU, etc.)</li>
+</ul>
+
+<h3>Approach</h3>
+<ul>
+  <li>Each cache level implements a common interface with <code>get</code>/<code>put</code></li>
+  <li>Chain of Responsibility: on miss, delegate to the next level; on hit, backfill upper levels</li>
+  <li>Write-through: <code>put</code> writes to current level and forwards to successor</li>
+  <li>Each level wraps an LRU (or other) cache with its own capacity</li>
+</ul>
+
+<h3>Key Code</h3>
+<pre><code class="language-python">from collections import OrderedDict
+from abc import ABC, abstractmethod
+
+class CacheLevel(ABC):
+    @abstractmethod
+    def get(self, key): ...
+    @abstractmethod
+    def put(self, key, value): ...
+
+class LRUCacheLevel(CacheLevel):
+    def __init__(self, capacity: int, name: str, next_level: CacheLevel = None):
+        self.cap = capacity
+        self.name = name
+        self.next = next_level
+        self._store = OrderedDict()
+
+    def get(self, key):
+        if key in self._store:
+            self._store.move_to_end(key)
+            return self._store[key]
+        if self.next:
+            val = self.next.get(key)
+            if val is not None:
+                self.put_local(key, val)  # backfill
+                return val
+        return None
+
+    def put_local(self, key, value):
+        if key in self._store:
+            self._store.move_to_end(key)
+        self._store[key] = value
+        if len(self._store) > self.cap:
+            self._store.popitem(last=False)
+
+    def put(self, key, value):
+        self.put_local(key, value)
+        if self.next:  # write-through
+            self.next.put(key, value)
+
+
+# Build L3 -> L2 -> L1 chain
+l3 = LRUCacheLevel(capacity=1000, name="L3")
+l2 = LRUCacheLevel(capacity=100,  name="L2", next_level=l3)
+l1 = LRUCacheLevel(capacity=10,   name="L1", next_level=l2)
+
+l1.put("x", 42)       # writes through L1 -> L2 -> L3
+assert l1.get("x") == 42
+</code></pre>
+
+<h3>Takeaways</h3>
+<ul>
+  <li>Chain of Responsibility cleanly models hierarchical cache lookup</li>
+  <li>Backfill on miss keeps hot data in faster levels automatically</li>
+  <li>Write-through ensures consistency; write-back trades it for lower write latency</li>
+  <li>Each level's eviction policy is independent and swappable via Strategy</li>
+</ul>

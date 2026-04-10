@@ -1,0 +1,190 @@
+<h2>Week 6 Exercises: Game and Board Design</h2>
+
+<p>These exercises practice game design patterns, state machines, and board representation strategies.</p>
+
+<h3>Exercise 1: Connect Four Win Checker</h3>
+
+<p>Implement a win-checking strategy for Connect Four. The board is a 6x7 grid. A player wins by placing 4 of their symbols in a row horizontally, vertically, or diagonally. Write a <code>ConnectFourWinChecker</code> class with a method <code>check_win(board, symbol) -> bool</code> that checks all four directions.</p>
+
+<details>
+    <summary>Reveal Answer</summary>
+
+<pre><code class="language-python">from typing import List
+
+class ConnectFourWinChecker:
+    ROWS = 6
+    COLS = 7
+    WIN_LENGTH = 4
+
+    def check_win(self, board: List[List[str]], symbol: str) -> bool:
+        # Horizontal
+        for r in range(self.ROWS):
+            for c in range(self.COLS - 3):
+                if all(board[r][c + i] == symbol for i in range(4)):
+                    return True
+
+        # Vertical
+        for r in range(self.ROWS - 3):
+            for c in range(self.COLS):
+                if all(board[r + i][c] == symbol for i in range(4)):
+                    return True
+
+        # Diagonal (down-right)
+        for r in range(self.ROWS - 3):
+            for c in range(self.COLS - 3):
+                if all(board[r + i][c + i] == symbol for i in range(4)):
+                    return True
+
+        # Diagonal (down-left)
+        for r in range(self.ROWS - 3):
+            for c in range(3, self.COLS):
+                if all(board[r + i][c - i] == symbol for i in range(4)):
+                    return True
+
+        return False
+
+
+# Test
+board = [[" "] * 7 for _ in range(6)]
+board[5][0] = board[5][1] = board[5][2] = board[5][3] = "X"
+checker = ConnectFourWinChecker()
+print(checker.check_win(board, "X"))  # True
+print(checker.check_win(board, "O"))  # False
+</code></pre>
+</details>
+
+<h3>Exercise 2: Game State Machine with Events</h3>
+
+<p>Create a game lifecycle state machine that emits events on transitions. Implement:</p>
+
+<ul>
+    <li>A <code>GameLifecycle</code> class with states: LOBBY, PLAYING, PAUSED, GAME_OVER</li>
+    <li>Each transition should notify registered observers with the old state, action, and new state</li>
+    <li>Invalid transitions should return an error message without changing state</li>
+</ul>
+
+<details>
+    <summary>Reveal Answer</summary>
+
+<pre><code class="language-python">from enum import Enum
+from typing import Dict, List, Callable, Tuple, Optional
+
+class GamePhase(Enum):
+    LOBBY = "lobby"
+    PLAYING = "playing"
+    PAUSED = "paused"
+    GAME_OVER = "game_over"
+
+TRANSITIONS: Dict[Tuple[GamePhase, str], GamePhase] = {
+    (GamePhase.LOBBY, "start"):     GamePhase.PLAYING,
+    (GamePhase.PLAYING, "pause"):   GamePhase.PAUSED,
+    (GamePhase.PLAYING, "end"):     GamePhase.GAME_OVER,
+    (GamePhase.PAUSED, "resume"):   GamePhase.PLAYING,
+    (GamePhase.PAUSED, "quit"):     GamePhase.GAME_OVER,
+}
+
+class GameLifecycle:
+    def __init__(self):
+        self._state = GamePhase.LOBBY
+        self._observers: List[Callable] = []
+
+    @property
+    def state(self) -> GamePhase:
+        return self._state
+
+    def on_transition(self, callback: Callable) -> None:
+        self._observers.append(callback)
+
+    def do(self, action: str) -> str:
+        key = (self._state, action)
+        if key not in TRANSITIONS:
+            return f"Cannot '{action}' in {self._state.value}"
+        old = self._state
+        self._state = TRANSITIONS[key]
+        for obs in self._observers:
+            obs(old, action, self._state)
+        return f"{old.value} --{action}--> {self._state.value}"
+
+# Usage
+lifecycle = GameLifecycle()
+lifecycle.on_transition(
+    lambda old, action, new: print(f"  Event: {old.value} -> {new.value}")
+)
+print(lifecycle.do("start"))
+print(lifecycle.do("pause"))
+print(lifecycle.do("resume"))
+print(lifecycle.do("end"))
+</code></pre>
+</details>
+
+<h3>Exercise 3: Board with Undo Support</h3>
+
+<p>Create a <code>GameBoard</code> class for a Tic-Tac-Toe-like game that supports placing pieces and undoing the last N moves. Use the Command pattern. Implement <code>place(row, col, symbol)</code>, <code>undo()</code>, and <code>display()</code> methods.</p>
+
+<details>
+    <summary>Reveal Answer</summary>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+from typing import List, Optional
+
+class BoardCommand(ABC):
+    @abstractmethod
+    def execute(self) -> bool: pass
+    @abstractmethod
+    def undo(self) -> None: pass
+
+class PlaceCommand(BoardCommand):
+    def __init__(self, board: List[List[str]], row: int, col: int, symbol: str):
+        self._board = board
+        self._row = row
+        self._col = col
+        self._symbol = symbol
+
+    def execute(self) -> bool:
+        if self._board[self._row][self._col] != " ":
+            return False
+        self._board[self._row][self._col] = self._symbol
+        return True
+
+    def undo(self) -> None:
+        self._board[self._row][self._col] = " "
+
+
+class GameBoard:
+    def __init__(self, size: int = 3):
+        self._size = size
+        self._grid = [[" "] * size for _ in range(size)]
+        self._history: List[BoardCommand] = []
+
+    def place(self, row: int, col: int, symbol: str) -> bool:
+        if not (0 <= row < self._size and 0 <= col < self._size):
+            return False
+        cmd = PlaceCommand(self._grid, row, col, symbol)
+        if cmd.execute():
+            self._history.append(cmd)
+            return True
+        return False
+
+    def undo(self) -> bool:
+        if not self._history:
+            return False
+        cmd = self._history.pop()
+        cmd.undo()
+        return True
+
+    def display(self) -> None:
+        for i, row in enumerate(self._grid):
+            print(" | ".join(row))
+            if i < self._size - 1:
+                print("-" * (4 * self._size - 1))
+
+
+# Usage
+board = GameBoard()
+board.place(0, 0, "X")
+board.place(1, 1, "O")
+board.display()
+board.undo()  # removes O from (1,1)
+board.display()
+</code></pre>
+</details>

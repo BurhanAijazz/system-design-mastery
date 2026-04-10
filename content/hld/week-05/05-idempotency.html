@@ -1,0 +1,74 @@
+<h2>Idempotency and Exactly-Once Delivery</h2>
+
+<p>The hardest problem in distributed messaging: processing a message <strong>exactly once</strong>. The practical solution is <strong>at-least-once delivery + idempotent processing</strong>.</p>
+
+<h3>Message Delivery Guarantees</h3>
+<ul>
+  <li><strong>At-Most-Once</strong>: Fire and forget. If the network drops it, the message is lost. OK for metrics and logs</li>
+  <li><strong>At-Least-Once</strong>: Retry until acknowledged. Message arrives but may arrive multiple times. The default for Kafka, RabbitMQ, SQS</li>
+  <li><strong>Exactly-Once</strong>: Each message processed exactly one time. Extremely hard due to the Two Generals' Problem</li>
+</ul>
+
+<p>The Two Generals' Problem proves there is <strong>no protocol that guarantees exactly-once delivery</strong> over an unreliable network. The practical solution: at-least-once delivery + idempotent consumers.</p>
+
+<h3>What Is Idempotency?</h3>
+<p>An operation is idempotent if performing it multiple times has the same effect as performing it once. <code>f(f(x)) = f(x)</code>.</p>
+
+<pre><code class="language-python"># Naturally idempotent operations:
+# SET balance = 500        (same result every time)
+# DELETE FROM orders WHERE id = 123  (deleting twice = same as once)
+# PUT /users/123 {"name": "Alice"}   (full replacement)
+
+# NOT idempotent:
+# balance += 100           (each call adds more)
+# INSERT INTO orders (...)  (each call creates a new row)
+# POST /users {"name": "Alice"}  (each call creates a new user)
+</code></pre>
+
+<h3>Idempotency Key Pattern</h3>
+<pre><code class="language-python">import hashlib
+from typing import Dict, Set
+
+class IdempotentProcessor:
+    """Process messages exactly once using idempotency keys."""
+
+    def __init__(self):
+        self.processed_keys: Set[str] = set()
+        self.results: Dict[str, dict] = {}
+
+    def process(self, idempotency_key: str, message: dict) -> dict:
+        # Check if already processed
+        if idempotency_key in self.processed_keys:
+            return self.results[idempotency_key]  # Return cached result
+
+        # Process the message
+        result = self._do_work(message)
+
+        # Record that we processed it
+        self.processed_keys.add(idempotency_key)
+        self.results[idempotency_key] = result
+        return result
+
+    def _do_work(self, message: dict) -> dict:
+        return {"status": "processed", "order_id": message.get("order_id")}
+
+# Usage: client generates idempotency key
+key = hashlib.md5(f"order:123:user:456:amount:99.99".encode()).hexdigest()
+processor = IdempotentProcessor()
+result1 = processor.process(key, {"order_id": "123", "amount": 99.99})
+result2 = processor.process(key, {"order_id": "123", "amount": 99.99})
+# result1 == result2, work only done once
+</code></pre>
+
+<h3>Implementation Strategies</h3>
+<ul>
+  <li><strong>Database unique constraint</strong>: INSERT with a unique idempotency_key column. Duplicates fail with a constraint violation</li>
+  <li><strong>Redis SET NX</strong>: <code>SETNX idempotency:{key} 1 EX 86400</code>. Atomic check-and-set with TTL</li>
+  <li><strong>Kafka consumer offsets</strong>: Commit offset only after successful processing. On restart, replay from last committed offset</li>
+</ul>
+
+<h3>Stripe's Idempotency Model</h3>
+<p>Stripe's API is the gold standard. Pass an <code>Idempotency-Key</code> header with every POST request. Stripe caches the response for 24 hours. Retrying with the same key returns the same response without re-processing.</p>
+
+<h3>Dead Letter Queue (DLQ)</h3>
+<p>Messages that fail repeatedly (after N retries) are moved to a Dead Letter Queue for manual inspection instead of blocking the pipeline.</p>

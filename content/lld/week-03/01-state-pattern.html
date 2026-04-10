@@ -1,0 +1,160 @@
+<h2>State Pattern</h2>
+
+<p>The State pattern allows an object to alter its behavior when its internal state changes. The object will appear to change its class. Instead of giant <code>if/elif</code> blocks checking state in every method, you encapsulate each state as a separate class.</p>
+
+<h3>The Problem: If/Elif State Hell</h3>
+
+<p>Consider a vending machine with multiple states. Without the State pattern, every method must check the current state with long conditional chains:</p>
+
+<pre><code class="language-python">class VendingMachineNaive:
+    """Every method checks the current state -- messy and error-prone."""
+
+    def __init__(self):
+        self.state = "idle"  # idle, has_money, dispensing, out_of_stock
+        self.balance = 0.0
+        self.stock = 3
+
+    def insert_money(self, amount: float) -> str:
+        if self.state == "idle":
+            self.balance += amount
+            self.state = "has_money"
+            return f"Inserted ${amount:.2f}. Balance: ${self.balance:.2f}"
+        elif self.state == "has_money":
+            self.balance += amount
+            return f"Added ${amount:.2f}. Balance: ${self.balance:.2f}"
+        elif self.state == "dispensing":
+            return "Please wait, dispensing in progress."
+        elif self.state == "out_of_stock":
+            return "Machine is out of stock. Returning money."
+        return "Unknown state"
+
+    def select_product(self, price: float) -> str:
+        if self.state == "idle":
+            return "Please insert money first."
+        elif self.state == "has_money":
+            if self.balance >= price:
+                self.state = "dispensing"
+                # ... more conditional logic
+        # ... repeated for every state
+</code></pre>
+
+<p>Every method has the same <code>if/elif</code> chain. Adding a new state means modifying <strong>every</strong> method. This violates the Open/Closed Principle.</p>
+
+<h3>Solution: The State Pattern</h3>
+
+<p>Encapsulate each state as a separate class. Each state class handles behavior for that specific state and knows which state to transition to next.</p>
+
+<h3>Key Components</h3>
+
+<ul>
+    <li><strong>Context</strong> -- the object whose behavior changes (e.g., VendingMachine)</li>
+    <li><strong>State Interface</strong> -- abstract class defining all possible actions</li>
+    <li><strong>Concrete States</strong> -- one class per state, implementing behavior for that state</li>
+</ul>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+
+class VendingState(ABC):
+    """Abstract base state. Each concrete state handles behavior
+    for that particular state of the vending machine."""
+
+    @abstractmethod
+    def insert_money(self, machine: "VendingMachine", amount: float) -> str:
+        pass
+
+    @abstractmethod
+    def select_product(self, machine: "VendingMachine", price: float) -> str:
+        pass
+
+    @abstractmethod
+    def eject_money(self, machine: "VendingMachine") -> str:
+        pass
+</code></pre>
+
+<h3>Concrete State Classes</h3>
+
+<pre><code class="language-python">class IdleState(VendingState):
+    def insert_money(self, machine, amount):
+        machine.balance += amount
+        machine.set_state(HasMoneyState())
+        return f"Inserted ${amount:.2f}"
+
+    def select_product(self, machine, price):
+        return "Please insert money first."
+
+    def eject_money(self, machine):
+        return "No money to return."
+
+
+class HasMoneyState(VendingState):
+    def insert_money(self, machine, amount):
+        machine.balance += amount
+        return f"Added ${amount:.2f}. Balance: ${machine.balance:.2f}"
+
+    def select_product(self, machine, price):
+        if machine.balance >= price:
+            machine.balance -= price
+            machine.stock -= 1
+            machine.set_state(
+                IdleState() if machine.stock > 0 else OutOfStockState()
+            )
+            return f"Dispensing! Change: ${machine.balance:.2f}"
+        return f"Need ${price - machine.balance:.2f} more."
+
+    def eject_money(self, machine):
+        amount = machine.balance
+        machine.balance = 0
+        machine.set_state(IdleState())
+        return f"Returning ${amount:.2f}"
+</code></pre>
+
+<h3>The Context Class</h3>
+
+<pre><code class="language-python">class VendingMachine:
+    """Context -- delegates behavior to the current state."""
+
+    def __init__(self, stock: int = 5):
+        self.balance = 0.0
+        self.stock = stock
+        self._state: VendingState = IdleState()
+
+    def set_state(self, state: VendingState) -> None:
+        self._state = state
+
+    def insert_money(self, amount: float) -> str:
+        return self._state.insert_money(self, amount)
+
+    def select_product(self, price: float) -> str:
+        return self._state.select_product(self, price)
+
+    def eject_money(self) -> str:
+        return self._state.eject_money(self)
+</code></pre>
+
+<h3>When to Use the State Pattern</h3>
+
+<ul>
+    <li><strong>Vending machines</strong> -- idle, has money, dispensing, out of stock</li>
+    <li><strong>Document workflows</strong> -- draft, review, approved, published</li>
+    <li><strong>Order processing</strong> -- pending, paid, shipped, delivered</li>
+    <li><strong>TCP connections</strong> -- listening, established, closed</li>
+    <li><strong>Game characters</strong> -- idle, walking, running, jumping, attacking</li>
+</ul>
+
+<h3>Key Benefits</h3>
+
+<ul>
+    <li>Adding a new state means adding a new class -- no existing code changes</li>
+    <li>Each state class is focused and easy to understand</li>
+    <li>State transitions are explicit and controlled</li>
+    <li>Eliminates complex conditional logic scattered across methods</li>
+</ul>
+
+<h3>State vs Strategy</h3>
+
+<p>Both patterns use polymorphism to delegate behavior, but they differ in intent:</p>
+
+<ul>
+    <li><strong>State</strong>: The object changes its behavior automatically based on internal state transitions. The state knows about other states.</li>
+    <li><strong>Strategy</strong>: The client explicitly selects an algorithm. Strategies are independent of each other.</li>
+</ul>

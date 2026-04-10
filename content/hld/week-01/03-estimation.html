@@ -1,0 +1,227 @@
+<h2>Back-of-Envelope Estimation</h2>
+
+<p>
+  Back-of-envelope estimation is the practice of making rough calculations to determine
+  whether a design is feasible before investing time in detailed engineering. In system
+  design interviews and real architecture work, these estimates help you choose the right
+  technologies and identify bottlenecks early.
+</p>
+
+<h3>Why Estimation Matters</h3>
+
+<ul>
+  <li>Determines whether a single machine can handle the load or you need distributed systems.</li>
+  <li>Identifies which component will be the bottleneck (CPU, memory, disk, network).</li>
+  <li>Guides technology choices (SQL vs NoSQL, in-memory vs disk-based).</li>
+  <li>Prevents over-engineering (why shard a database if all data fits on one machine?).</li>
+</ul>
+
+<h3>Essential Numbers Every Engineer Should Know</h3>
+
+<pre><code class="language-python"># Latency numbers (approximate, as of modern hardware)
+LATENCIES = {
+    "L1 cache reference":            "1 ns",
+    "L2 cache reference":            "4 ns",
+    "Main memory reference":         "100 ns",
+    "SSD random read":               "16 us",      # 16,000 ns
+    "HDD seek":                      "4 ms",       # 4,000,000 ns
+    "Send 1 KB over 1 Gbps network": "10 us",
+    "Read 1 MB from SSD":            "200 us",
+    "Read 1 MB from HDD":            "2 ms",
+    "Read 1 MB from memory":         "3 us",
+    "Round trip within datacenter":   "500 us",
+    "Round trip cross-continent":     "150 ms",
+}
+
+# Throughput numbers
+THROUGHPUT = {
+    "SSD sequential read":     "500 MB/s - 3 GB/s (NVMe)",
+    "HDD sequential read":     "100 MB/s",
+    "Network (1 Gbps)":        "125 MB/s",
+    "Network (10 Gbps)":       "1.25 GB/s",
+    "Memory bandwidth":        "10-50 GB/s",
+}
+
+# Scale reference points
+SCALE = {
+    "Seconds in a day":        86_400,
+    "Seconds in a month":      2_592_000,   # ~2.5 million
+    "Seconds in a year":       31_536_000,  # ~31.5 million
+    "Requests if 1 per second": 86_400,     # per day
+    "1 million req/day":       "~12 req/sec",
+    "1 billion req/day":       "~12,000 req/sec",
+}
+</code></pre>
+
+<h3>The Estimation Framework</h3>
+
+<pre><code class="language-python"># Step 1: Clarify the scope
+# - How many users? (DAU = Daily Active Users)
+# - What operations? (reads vs writes)
+# - What data? (size per record, retention period)
+#
+# Step 2: Estimate traffic
+# - Requests per second (RPS)
+# - Read/write ratio
+# - Peak vs average traffic
+#
+# Step 3: Estimate storage
+# - Size per record * number of records * retention period
+# - Growth rate
+#
+# Step 4: Estimate bandwidth
+# - Incoming: write RPS * request size
+# - Outgoing: read RPS * response size
+#
+# Step 5: Estimate compute
+# - Can one server handle this? How many servers needed?
+</code></pre>
+
+<h3>Example: Estimating a URL Shortener</h3>
+
+<pre><code class="language-python">def estimate_url_shortener():
+    """Back-of-envelope estimation for a URL shortener like bit.ly."""
+
+    # --- Step 1: Assumptions ---
+    new_urls_per_month = 100_000_000     # 100M new URLs/month
+    read_write_ratio = 100               # 100 reads per write
+    url_retention_years = 5
+
+    # --- Step 2: Traffic Estimation ---
+    writes_per_second = new_urls_per_month / (30 * 24 * 3600)
+    reads_per_second = writes_per_second * read_write_ratio
+
+    print("=== Traffic ===")
+    print(f"  Write RPS: {writes_per_second:.0f}")        # ~38 writes/sec
+    print(f"  Read RPS:  {reads_per_second:.0f}")          # ~3,800 reads/sec
+    print(f"  Peak RPS (3x): {reads_per_second * 3:.0f}")  # ~11,400 reads/sec
+
+    # --- Step 3: Storage Estimation ---
+    avg_url_size_bytes = 500  # long URL + short URL + metadata
+    total_urls = new_urls_per_month * 12 * url_retention_years
+    total_storage_bytes = total_urls * avg_url_size_bytes
+    total_storage_tb = total_storage_bytes / (1024 ** 4)
+
+    print("\n=== Storage ===")
+    print(f"  Total URLs over {url_retention_years} years: {total_urls:,.0f}")  # 6 billion
+    print(f"  Storage needed: {total_storage_tb:.1f} TB")                        # ~2.7 TB
+
+    # --- Step 4: Bandwidth Estimation ---
+    incoming_kbps = writes_per_second * avg_url_size_bytes / 1024
+    outgoing_kbps = reads_per_second * avg_url_size_bytes / 1024
+
+    print("\n=== Bandwidth ===")
+    print(f"  Incoming: {incoming_kbps:.1f} KB/s")   # ~19 KB/s
+    print(f"  Outgoing: {outgoing_kbps:.1f} KB/s")   # ~1,855 KB/s (~1.8 MB/s)
+
+    # --- Step 5: Compute Estimation ---
+    requests_per_server = 2000  # typical web server handles ~2K req/sec
+    servers_needed = reads_per_second / requests_per_server
+
+    print("\n=== Compute ===")
+    print(f"  App servers needed: {servers_needed:.0f}")   # ~2 servers
+    print(f"  (at peak 3x: {servers_needed * 3:.0f})")     # ~6 servers
+
+    # --- Step 6: Cache Estimation ---
+    cache_hit_rate = 0.80
+    hot_urls_percentage = 0.20  # 80/20 rule: 20% of URLs get 80% of traffic
+    daily_reads = reads_per_second * 86400
+    cache_entries = daily_reads * hot_urls_percentage
+    cache_size_gb = cache_entries * avg_url_size_bytes / (1024 ** 3)
+
+    print("\n=== Cache ===")
+    print(f"  Daily reads: {daily_reads:,.0f}")
+    print(f"  Cache size for hot URLs: {cache_size_gb:.1f} GB")
+
+    return {
+        "write_rps": writes_per_second,
+        "read_rps": reads_per_second,
+        "storage_tb": total_storage_tb,
+        "servers": servers_needed,
+    }
+
+
+estimate_url_shortener()
+</code></pre>
+
+<h3>Quick Estimation Shortcuts</h3>
+
+<pre><code class="language-python"># Useful approximations for fast mental math:
+#
+# Time conversions:
+#   1 day   ~ 100,000 seconds (actual: 86,400)
+#   1 month ~ 2.5 million seconds
+#   1 year  ~ 30 million seconds
+#
+# Data size conversions:
+#   1 character        = 1 byte (ASCII) or 2-4 bytes (UTF-8 non-ASCII)
+#   1 typical tweet    ~ 300 bytes
+#   1 typical web page ~ 2 MB
+#   1 photo (medium)   ~ 200 KB
+#   1 photo (high-res) ~ 2 MB
+#   1 minute of video  ~ 50 MB (720p) / 150 MB (1080p)
+#
+# Quick RPS calculation:
+#   X million requests per day / 100,000 seconds = X * 10 RPS
+#   Example: 5M req/day = 50 RPS (average)
+#   Peak is typically 2-3x average
+#
+# Server capacity rules of thumb:
+#   1 web server:     1,000-10,000 req/sec (depends on complexity)
+#   1 database server: 5,000-10,000 simple queries/sec
+#   1 Redis instance:  100,000 operations/sec
+</code></pre>
+
+<h3>Common Estimation Mistakes</h3>
+
+<ul>
+  <li><strong>Forgetting peaks:</strong> Average load is 3-10x lower than peak. Design for peak.</li>
+  <li><strong>Ignoring growth:</strong> If traffic doubles yearly, your 2-year estimate is 4x today.</li>
+  <li><strong>False precision:</strong> Saying "38.58 writes/sec" is false precision. Say "~40 writes/sec."</li>
+  <li><strong>Mixing units:</strong> Always track whether you are using bytes, KB, MB, GB, or TB.</li>
+  <li><strong>Ignoring metadata overhead:</strong> Indexes, replication, and backups multiply raw storage by 3-5x.</li>
+</ul>
+
+<h3>Practice Template</h3>
+
+<pre><code class="language-python">def estimate_system(
+    daily_active_users: int,
+    actions_per_user_per_day: int,
+    avg_request_size_bytes: int,
+    avg_response_size_bytes: int,
+    read_write_ratio: int,
+    retention_years: int,
+):
+    """Reusable estimation template for any system."""
+
+    total_daily_actions = daily_active_users * actions_per_user_per_day
+    write_rps = total_daily_actions / 86400
+    read_rps = write_rps * read_write_ratio
+    peak_rps = (write_rps + read_rps) * 3
+
+    daily_storage = total_daily_actions * avg_request_size_bytes
+    total_storage = daily_storage * 365 * retention_years
+
+    incoming_bandwidth = write_rps * avg_request_size_bytes
+    outgoing_bandwidth = read_rps * avg_response_size_bytes
+
+    return {
+        "write_rps": round(write_rps),
+        "read_rps": round(read_rps),
+        "peak_total_rps": round(peak_rps),
+        "daily_storage_gb": round(daily_storage / 1e9, 2),
+        "total_storage_tb": round(total_storage / 1e12, 2),
+        "incoming_mbps": round(incoming_bandwidth * 8 / 1e6, 2),
+        "outgoing_mbps": round(outgoing_bandwidth * 8 / 1e6, 2),
+    }
+</code></pre>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>Back-of-envelope estimates are about getting the right order of magnitude, not exact numbers.</li>
+  <li>Memorize the key latency and throughput numbers &mdash; they guide technology choices.</li>
+  <li>Always estimate traffic (RPS), storage (TB), bandwidth (MB/s), and compute (number of servers).</li>
+  <li>Design for peak load (2-3x average), not average load.</li>
+  <li>Round aggressively. Use powers of 10 for mental math.</li>
+</ul>

@@ -1,0 +1,220 @@
+<h2>Project: URL Shortener Design</h2>
+
+<p>A full LLD implementation of a URL Shortener following the 6-step framework. This project demonstrates Factory, Strategy, and Observer patterns in a practical system.</p>
+
+<h3>Patterns Used</h3>
+
+<ul>
+    <li><strong>Factory</strong> -- ID generation strategies (base62, random)</li>
+    <li><strong>Strategy</strong> -- storage backends (in-memory, file-based)</li>
+    <li><strong>Observer</strong> -- analytics tracking on redirect</li>
+</ul>
+
+<h3>Requirements</h3>
+
+<pre><code>Functional:
+  1. Shorten a long URL to a short URL
+  2. Redirect a short URL to its original URL
+  3. Support custom aliases (user-chosen short codes)
+  4. URLs can have expiration dates
+  5. Track click analytics (count, last accessed)
+
+Out of scope:
+  - User authentication
+  - Rate limiting
+  - Distributed storage
+</code></pre>
+
+<h3>Core Entities</h3>
+
+<pre><code class="language-python">from dataclasses import dataclass, field
+from typing import Optional
+from datetime import datetime
+
+@dataclass
+class ShortenedURL:
+    """A mapping from short code to original URL."""
+    short_code: str
+    original_url: str
+    created_at: datetime = field(default_factory=datetime.now)
+    expires_at: Optional[datetime] = None
+    click_count: int = 0
+    last_accessed: Optional[datetime] = None
+    custom_alias: bool = False
+
+    def is_expired(self) -> bool:
+        if self.expires_at is None:
+            return False
+        return datetime.now() > self.expires_at
+
+    def record_click(self) -> None:
+        self.click_count += 1
+        self.last_accessed = datetime.now()
+
+
+@dataclass
+class ClickEvent:
+    """Analytics event for a redirect."""
+    short_code: str
+    timestamp: datetime
+    original_url: str
+</code></pre>
+
+<h3>ID Generation Strategy</h3>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+import hashlib
+import random
+import string
+
+class IDGenerator(ABC):
+    """Strategy for generating short codes."""
+
+    @abstractmethod
+    def generate(self, url: str) -> str:
+        pass
+
+
+class Base62Generator(IDGenerator):
+    """Generate a short code using base62 encoding of a hash."""
+
+    BASE62 = string.digits + string.ascii_letters
+
+    def generate(self, url: str) -> str:
+        hash_val = int(hashlib.md5(url.encode()).hexdigest(), 16)
+        code = []
+        for _ in range(7):
+            code.append(self.BASE62[hash_val % 62])
+            hash_val //= 62
+        return "".join(code)
+
+
+class RandomGenerator(IDGenerator):
+    """Generate a random alphanumeric short code."""
+
+    def generate(self, url: str) -> str:
+        chars = string.ascii_letters + string.digits
+        return "".join(random.choices(chars, k=7))
+</code></pre>
+
+<h3>Storage Strategy</h3>
+
+<pre><code class="language-python">class URLStore(ABC):
+    """Strategy for storing shortened URLs."""
+
+    @abstractmethod
+    def save(self, url: ShortenedURL) -> None: pass
+
+    @abstractmethod
+    def find(self, short_code: str) -> Optional[ShortenedURL]: pass
+
+    @abstractmethod
+    def delete(self, short_code: str) -> bool: pass
+
+    @abstractmethod
+    def exists(self, short_code: str) -> bool: pass
+
+
+class InMemoryStore(URLStore):
+    def __init__(self):
+        self._data: dict[str, ShortenedURL] = {}
+
+    def save(self, url: ShortenedURL) -> None:
+        self._data[url.short_code] = url
+
+    def find(self, short_code: str) -> Optional[ShortenedURL]:
+        return self._data.get(short_code)
+
+    def delete(self, short_code: str) -> bool:
+        return self._data.pop(short_code, None) is not None
+
+    def exists(self, short_code: str) -> bool:
+        return short_code in self._data
+</code></pre>
+
+<h3>The URL Shortener Service</h3>
+
+<pre><code class="language-python">from typing import List, Callable
+from datetime import timedelta
+
+class URLShortener:
+    def __init__(self, base_url: str = "https://short.url/",
+                 generator: IDGenerator = None,
+                 store: URLStore = None):
+        self._base_url = base_url
+        self._generator = generator or Base62Generator()
+        self._store = store or InMemoryStore()
+        self._on_redirect: List[Callable[[ClickEvent], None]] = []
+
+    def shorten(self, original_url: str,
+                custom_alias: str = None,
+                ttl_hours: int = None) -> str:
+        """Shorten a URL. Returns the full short URL."""
+        if custom_alias:
+            if self._store.exists(custom_alias):
+                raise ValueError(f"Alias '{custom_alias}' already taken")
+            code = custom_alias
+        else:
+            code = self._generator.generate(original_url)
+            # Handle collisions
+            while self._store.exists(code):
+                code = self._generator.generate(original_url + str(random.random()))
+
+        expires = None
+        if ttl_hours:
+            expires = datetime.now() + timedelta(hours=ttl_hours)
+
+        entry = ShortenedURL(
+            short_code=code,
+            original_url=original_url,
+            expires_at=expires,
+            custom_alias=custom_alias is not None,
+        )
+        self._store.save(entry)
+        return f"{self._base_url}{code}"
+
+    def redirect(self, short_code: str) -> Optional[str]:
+        """Look up original URL. Returns None if not found or expired."""
+        entry = self._store.find(short_code)
+        if not entry:
+            return None
+        if entry.is_expired():
+            self._store.delete(short_code)
+            return None
+        entry.record_click()
+        # Notify observers
+        event = ClickEvent(short_code, datetime.now(), entry.original_url)
+        for callback in self._on_redirect:
+            callback(event)
+        return entry.original_url
+
+    def on_redirect(self, callback: Callable) -> None:
+        """Register an observer for redirect events."""
+        self._on_redirect.append(callback)
+</code></pre>
+
+<h3>Usage</h3>
+
+<pre><code class="language-python">shortener = URLShortener()
+
+# Shorten a URL
+short = shortener.shorten("https://example.com/very/long/path")
+print(short)  # https://short.url/abc1234
+
+# Custom alias
+short = shortener.shorten("https://docs.python.org", custom_alias="pydocs")
+print(short)  # https://short.url/pydocs
+
+# Redirect
+original = shortener.redirect("pydocs")
+print(original)  # https://docs.python.org
+</code></pre>
+
+<h3>Architecture Highlights</h3>
+
+<ul>
+    <li><strong>Strategy pattern</strong> makes ID generation and storage swappable</li>
+    <li><strong>Observer pattern</strong> decouples analytics from core shortening logic</li>
+    <li><strong>Collision handling</strong> retries with a modified input if the generated code already exists</li>
+    <li><strong>TTL support</strong> allows URLs to auto-expire</li>
+</ul>

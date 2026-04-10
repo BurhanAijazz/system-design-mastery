@@ -1,0 +1,86 @@
+<h2>Stream Processing vs Batch Processing</h2>
+
+<p>Two paradigms for processing large amounts of data. <strong>Batch</strong>: process all data at once, periodically. <strong>Stream</strong>: process data as it arrives, continuously. The choice depends on your latency requirements.</p>
+
+<h3>Batch Processing</h3>
+<p>Collect data, wait, process the entire batch, output results. Results are stale until the next batch runs.</p>
+<ul>
+  <li>Examples: MapReduce (Hadoop), Apache Spark, daily ETL jobs</li>
+  <li><strong>Pro</strong>: Processes complete data, simple to reason about</li>
+  <li><strong>Pro</strong>: Efficient for large computations (amortized setup costs)</li>
+  <li><strong>Con</strong>: High latency -- results are stale until next batch</li>
+  <li><strong>Con</strong>: Resource spikes during batch execution</li>
+</ul>
+
+<pre><code class="language-python">from dataclasses import dataclass
+from typing import List, Dict
+from collections import defaultdict
+
+@dataclass
+class ClickEvent:
+    user_id: str
+    page: str
+    timestamp: float
+    duration_sec: float = 0.0
+
+def batch_process(events: List[ClickEvent]) -> Dict:
+    """Batch: process all events at once to compute metrics."""
+    page_views = defaultdict(int)
+    unique_users = set()
+    total_duration = 0.0
+
+    for event in events:
+        page_views[event.page] += 1
+        unique_users.add(event.user_id)
+        total_duration += event.duration_sec
+
+    return {
+        "total_events": len(events),
+        "unique_users": len(unique_users),
+        "page_views": dict(page_views),
+        "avg_duration": total_duration / len(events) if events else 0,
+    }
+# Runs once per day/hour. Simple but stale results.
+</code></pre>
+
+<h3>Stream Processing</h3>
+<p>Process each event as it arrives. Results are continuously updated in near real-time.</p>
+<ul>
+  <li>Examples: Apache Flink, Kafka Streams, Apache Storm</li>
+  <li><strong>Pro</strong>: Low latency -- results available in seconds or milliseconds</li>
+  <li><strong>Pro</strong>: Steady resource usage (no spikes)</li>
+  <li><strong>Con</strong>: More complex (out-of-order events, windowing, state management)</li>
+  <li><strong>Con</strong>: Harder to debug and test</li>
+</ul>
+
+<pre><code class="language-python">class StreamProcessor:
+    """Process events in real-time with tumbling windows."""
+    def __init__(self, window_seconds=60):
+        self.window_seconds = window_seconds
+        self.current_window = defaultdict(int)
+        self.window_start = 0
+
+    def process_event(self, event: ClickEvent):
+        window_id = int(event.timestamp / self.window_seconds)
+        if window_id != self.window_start:
+            self._emit_window()  # Emit previous window results
+            self.current_window = defaultdict(int)
+            self.window_start = window_id
+        self.current_window[event.page] += 1
+
+    def _emit_window(self):
+        print(f"Window {self.window_start}: {dict(self.current_window)}")
+</code></pre>
+
+<h3>Windowing Strategies</h3>
+<ul>
+  <li><strong>Tumbling Window</strong>: Fixed-size, non-overlapping. "Count page views per 1-minute window"</li>
+  <li><strong>Sliding Window</strong>: Fixed-size, overlapping. "Count events in the last 5 minutes, updated every 30 seconds"</li>
+  <li><strong>Session Window</strong>: Dynamic size based on activity gaps. "Group events with less than 30 minutes between them"</li>
+</ul>
+
+<h3>Lambda and Kappa Architecture</h3>
+<ul>
+  <li><strong>Lambda</strong>: Run both batch and stream processing. Batch layer for accuracy, speed layer for low latency. Complex to maintain</li>
+  <li><strong>Kappa</strong>: Stream-only. Replay the stream to recompute if needed. Simpler but requires a replayable log (Kafka)</li>
+</ul>

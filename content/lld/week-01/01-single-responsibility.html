@@ -1,0 +1,78 @@
+<h2>Single Responsibility Principle (SRP)</h2>
+<p><strong>"A class should have only one reason to change."</strong> — Robert C. Martin</p>
+
+<h3>The Problem</h3>
+<p>When a class handles multiple unrelated responsibilities, changing one feature can break another. This makes the code fragile and hard to test.</p>
+
+<h3>Bad Example: God Class</h3>
+<pre><code class="language-python">class UserManager:
+    """Violates SRP - handles CRUD, email, AND reporting"""
+
+    def create_user(self, name, email):
+        # Database logic
+        user = {"name": name, "email": email}
+        self.save_to_db(user)
+        self.send_welcome_email(user)
+        self.generate_signup_report(user)
+        return user
+
+    def save_to_db(self, user):
+        print(f"Saving {user['name']} to database...")
+
+    def send_welcome_email(self, user):
+        print(f"Sending welcome email to {user['email']}...")
+
+    def generate_signup_report(self, user):
+        print(f"Generating PDF report for {user['name']}...")
+</code></pre>
+
+<p>This class has <strong>three reasons to change</strong>: database schema changes, email template changes, or report format changes.</p>
+
+<h3>Good Example: Separated Responsibilities</h3>
+<pre><code class="language-python">from abc import ABC, abstractmethod
+
+class UserRepository:
+    """Handles ONLY persistence"""
+    def save(self, user):
+        print(f"Saving {user['name']} to database...")
+
+class EmailService:
+    """Handles ONLY email"""
+    def send_welcome(self, user):
+        print(f"Sending welcome email to {user['email']}...")
+
+class ReportGenerator:
+    """Handles ONLY reports"""
+    def generate_signup_report(self, user):
+        print(f"Generating PDF report for {user['name']}...")
+
+class UserService:
+    """Orchestrates user creation - single responsibility: coordination"""
+    def __init__(self, repo, email, reports):
+        self._repo = repo
+        self._email = email
+        self._reports = reports
+
+    def create_user(self, name, email):
+        user = {"name": name, "email": email}
+        self._repo.save(user)
+        self._email.send_welcome(user)
+        self._reports.generate_signup_report(user)
+        return user
+</code></pre>
+
+<h3>How to Identify SRP Violations</h3>
+<ul>
+  <li>The class name contains "And" or "Manager" (red flag)</li>
+  <li>You can describe the class using "and" — "It saves users <em>and</em> sends emails <em>and</em> generates reports"</li>
+  <li>Changes in unrelated features force changes to the same class</li>
+  <li>The class imports from many unrelated modules</li>
+</ul>
+
+<h3>Key Takeaways</h3>
+<ul>
+  <li>Each class should have exactly <strong>one reason to change</strong></li>
+  <li>SRP doesn't mean one method per class — it means one <strong>responsibility</strong></li>
+  <li>Orchestrating other services is itself a valid single responsibility</li>
+  <li>SRP is the foundation all other SOLID principles build upon</li>
+</ul>

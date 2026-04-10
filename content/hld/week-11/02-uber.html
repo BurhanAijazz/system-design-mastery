@@ -1,0 +1,101 @@
+<h2>Uber / Ride-Sharing Platform Design</h2>
+
+<p>Uber is a real-time geospatial matching system. The core challenges are matching riders with nearby drivers in seconds, handling 250K location updates per second, and implementing dynamic surge pricing based on supply and demand.</p>
+
+<h3>Define: Requirements</h3>
+
+<ul>
+  <li><strong>Functional:</strong> Request ride (pickup + destination), match with nearest available driver, real-time tracking (rider sees driver on map), dynamic pricing (surge), automatic payment, rating system, ETA estimation</li>
+  <li><strong>Non-Functional:</strong> Match within 30 seconds (p95), driver location updates every 3-4 seconds, tracking latency &lt;1 second, 99.99% availability, support 5M concurrent drivers</li>
+  <li><strong>Out of Scope:</strong> Uber Eats, scheduled rides, carpooling</li>
+</ul>
+
+<h3>Estimate</h3>
+
+<pre><code class="language-python"># 100M MAU, 20M rides/day, 5M drivers (1M active at peak)
+
+# RIDE REQUESTS:
+#   20M / 86400 = 230 QPS (peak ~700)
+#   Not that high! Challenge is MATCHING, not throughput.
+
+# DRIVER LOCATION UPDATES:
+#   1M drivers x 1 update/4 sec = 250K updates/sec
+#   THIS is the high-volume operation
+#   Each update: {driver_id, lat, lng, timestamp} ~ 50 bytes
+
+# TRACKING:
+#   500K concurrent rides
+#   500K x 0.5 updates/sec = 250K WebSocket pushes/sec
+
+# STORAGE:
+#   Ride history: 20M/day x 365 x 2 KB = 14.6 TB/year
+#   Location traces: 250K/sec x 50B x 86400 = 1 TB/day
+#   Keep 30 days hot, archive to cold storage</code></pre>
+
+<h3>Geospatial Indexing with Geohash</h3>
+
+<pre><code class="language-python">import math
+
+def geohash_encode(lat: float, lng: float, precision: int = 6) -> str:
+    """Encode lat/lng to geohash string."""
+    BASE32 = "0123456789bcdefghjkmnpqrstuvwxyz"
+    lat_range, lng_range = [-90.0, 90.0], [-180.0, 180.0]
+    bits, is_lng = [], True
+    while len(bits) < precision * 5:
+        if is_lng:
+            mid = (lng_range[0] + lng_range[1]) / 2
+            if lng >= mid:
+                bits.append(1); lng_range[0] = mid
+            else:
+                bits.append(0); lng_range[1] = mid
+        else:
+            mid = (lat_range[0] + lat_range[1]) / 2
+            if lat >= mid:
+                bits.append(1); lat_range[0] = mid
+            else:
+                bits.append(0); lat_range[1] = mid
+        is_lng = not is_lng
+    # Convert bits to BASE32 characters
+    result = []
+    for i in range(0, len(bits), 5):
+        chunk = bits[i:i+5]
+        idx = sum(b << (4-j) for j, b in enumerate(chunk))
+        result.append(BASE32[idx])
+    return "".join(result)</code></pre>
+
+<h3>Matching Algorithm</h3>
+
+<ul>
+  <li><strong>Geohash index:</strong> Drivers indexed by geohash prefix. Finding nearby drivers = query same geohash + neighbors.</li>
+  <li><strong>Candidate selection:</strong> Find all available drivers in nearby geohash cells</li>
+  <li><strong>Ranking:</strong> Score candidates by distance, ETA, driver rating, acceptance rate</li>
+  <li><strong>Offer cascade:</strong> Send ride offer to top driver first. If declined/timeout, try next driver.</li>
+</ul>
+
+<h3>Surge Pricing</h3>
+
+<ul>
+  <li>Divide city into hexagonal zones (H3 cells)</li>
+  <li>Calculate supply (available drivers) and demand (ride requests) per zone</li>
+  <li>Surge multiplier = demand / supply, capped at a maximum (e.g., 3x)</li>
+  <li>Update every 2-5 minutes to respond to changing conditions</li>
+</ul>
+
+<h3>Architecture</h3>
+
+<ul>
+  <li><strong>Location Service:</strong> Ingests 250K updates/sec, updates geohash index in Redis</li>
+  <li><strong>Matching Service:</strong> Queries geohash index, runs ranking algorithm, sends offers</li>
+  <li><strong>Trip Service:</strong> Manages active trips, calculates fares, handles payments</li>
+  <li><strong>ETA Service:</strong> Graph-based routing with real-time traffic data</li>
+  <li><strong>Pricing Service:</strong> Dynamic surge calculation per zone</li>
+</ul>
+
+<h3>Key Design Decisions</h3>
+
+<ul>
+  <li><strong>Geohash precision 6:</strong> ~1 km cells balance precision with query efficiency</li>
+  <li><strong>Location data is ephemeral:</strong> Only current positions matter for matching; historical data archived</li>
+  <li><strong>WebSocket for tracking:</strong> Push-based updates for real-time rider experience</li>
+  <li><strong>Eventual consistency for location:</strong> A few seconds of stale location data is acceptable for matching</li>
+</ul>

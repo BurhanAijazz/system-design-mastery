@@ -1,0 +1,94 @@
+<h2>ATM Machine Walkthrough</h2>
+
+<p>This lesson walks through designing an ATM Machine using the 6-step LLD interview framework. The ATM is a classic State pattern problem with Chain of Responsibility for transaction processing and Strategy for cash dispensing.</p>
+
+<h3>Step 1: Clarify Requirements</h3>
+
+<ul>
+  <li>"What operations should the ATM support?" -- Balance inquiry, withdrawal, deposit, and fund transfer</li>
+  <li>"Should I model the bank backend or just the ATM?" -- Focus on the ATM; assume a BankingService interface</li>
+  <li>"Should I handle cash denomination?" -- Yes, minimize the number of notes dispensed</li>
+  <li>"What about error cases?" -- Handle wrong PIN (3 attempts max), insufficient funds, ATM out of cash</li>
+</ul>
+
+<p><strong>Functional Requirements:</strong></p>
+<ul>
+  <li>Insert card, authenticate with PIN (3 attempts max)</li>
+  <li>Balance inquiry, cash withdrawal, cash deposit, fund transfer</li>
+  <li>Print receipt, eject card</li>
+  <li>Handle errors: wrong PIN, insufficient funds, ATM out of cash</li>
+</ul>
+
+<p><strong>Out of scope:</strong> Cheque deposit, card-less transactions, multi-language support, network failure handling.</p>
+
+<h3>Step 2: Identify Entities</h3>
+
+<pre><code class="language-python"># ATM State Machine:
+# Idle -> CardInserted -> PINEntered -> TransactionSelected
+#      -> Processing -> Dispensing -> Idle
+
+class ATMStatus(Enum):
+    IDLE = "idle"
+    CARD_INSERTED = "card_inserted"
+    PIN_ENTERED = "pin_entered"
+    TRANSACTION_SELECTED = "transaction_selected"
+    PROCESSING = "processing"
+    DISPENSING = "dispensing"
+    OUT_OF_SERVICE = "out_of_service"
+
+class TransactionType(Enum):
+    BALANCE_INQUIRY = "balance_inquiry"
+    WITHDRAWAL = "withdrawal"
+    DEPOSIT = "deposit"
+    TRANSFER = "transfer"
+
+class CashDenomination(Enum):
+    HUNDRED = 100
+    FIFTY = 50
+    TWENTY = 20
+    TEN = 10
+    FIVE = 5
+    ONE = 1</code></pre>
+
+<h3>Step 3: Key Components</h3>
+
+<ul>
+  <li><strong>ATM</strong> -- id, location, state, cash_dispenser, card_reader, screen, keypad</li>
+  <li><strong>Card</strong> -- card_number, pin_hash, account_id</li>
+  <li><strong>Account</strong> -- id, holder_name, balance, account_type</li>
+  <li><strong>BankingService</strong> -- interface for verify_pin, get_balance, withdraw, deposit, transfer</li>
+  <li><strong>CashDispenser</strong> -- tracks denominations and available stock, dispenses cash</li>
+  <li><strong>Transaction</strong> -- id, type, account, amount, status, timestamp</li>
+</ul>
+
+<h3>Step 4: Design Patterns</h3>
+
+<ul>
+  <li><strong>State</strong> -- Each ATM state (Idle, CardInserted, PINEntered, etc.) is a separate class with its own valid operations. In Idle state, only insertCard() works. In PINEntered, only selectTransaction() works. Invalid operations in any state raise clear errors</li>
+  <li><strong>Chain of Responsibility</strong> -- Transaction validation: AuthHandler (is PIN correct?) -> BalanceCheckHandler (sufficient funds?) -> WithdrawalLimitHandler (within daily limit?) -> Each handler approves and forwards, or rejects</li>
+  <li><strong>Strategy</strong> -- Cash dispensing: greedy algorithm that minimizes the number of notes by using the largest denominations first, checking available stock of each denomination</li>
+  <li><strong>Command</strong> -- Each transaction (withdraw, deposit, transfer) is a command object that can be logged and potentially reversed</li>
+</ul>
+
+<h3>Step 5: Cash Dispensing Algorithm</h3>
+
+<pre><code class="language-python"># Greedy approach: use largest denominations first
+def dispense(self, amount: int) -> Dict[CashDenomination, int]:
+    result = {}
+    remaining = amount
+    for denom in sorted(CashDenomination,
+                        key=lambda d: d.value, reverse=True):
+        if remaining <= 0:
+            break
+        count = min(remaining // denom.value,
+                    self._stock[denom])
+        if count > 0:
+            result[denom] = count
+            remaining -= count * denom.value
+            self._stock[denom] -= count
+    if remaining > 0:
+        raise ATMOutOfCashError("Cannot dispense exact amount")
+    return result</code></pre>
+
+<h3>Key Takeaway</h3>
+<p>The ATM is the definitive State pattern problem. When presenting in an interview, draw the state machine diagram first, then show how each state class restricts operations to only those valid in that state.</p>

@@ -1,0 +1,83 @@
+<h2>Traffic Signal System Walkthrough</h2>
+
+<p>This lesson walks through designing a Traffic Signal System using the 6-step LLD framework. It combines the State pattern for signal transitions, Observer for intersection coordination, and Mediator for multi-signal synchronization.</p>
+
+<h3>Step 1: Clarify Requirements</h3>
+
+<ul>
+  <li>"Are we designing a single intersection or multiple?" -- Start with one, then discuss coordination</li>
+  <li>"Standard 4-way intersection with traffic lights?" -- Yes, include pedestrian crossing signals too</li>
+  <li>"Should I handle emergency vehicle preemption?" -- Yes, that is a great edge case</li>
+</ul>
+
+<p><strong>Functional Requirements:</strong></p>
+<ul>
+  <li>Traffic signal with Red, Yellow, Green states</li>
+  <li>Timed transitions (Green 30s -> Yellow 5s -> Red 30s)</li>
+  <li>Coordinate signals at a 4-way intersection (when N-S is Green, E-W must be Red)</li>
+  <li>Pedestrian crossing signal</li>
+  <li>Emergency vehicle override (all Red except emergency direction)</li>
+  <li>Manual override by traffic controller</li>
+  <li>Configurable timing for peak/off-peak hours</li>
+</ul>
+
+<p><strong>Out of scope:</strong> Turn signals, sensor-triggered signals, multi-intersection corridor synchronization.</p>
+
+<h3>Step 2: Identify Entities</h3>
+
+<pre><code class="language-python"># Core entities:
+# TrafficSignal     - id, direction, state, timer config
+# SignalState       - Red, Yellow, Green, PedestrianWalk
+# Intersection      - id, signals (N,S,E,W), controller
+# Road              - id, name, direction, signal
+# TrafficController - intersection, schedule, mode
+# TimerConfig       - green_duration, yellow_duration,
+#                     red_duration, pedestrian_duration
+# EmergencyOverride - direction, duration, priority</code></pre>
+
+<h3>Signal State Machine</h3>
+
+<p>Each signal cycles through states with configurable timing:</p>
+<ul>
+  <li>Green (30s) -> Yellow (5s) -> Red (30s) -> Green (repeat)</li>
+  <li>Emergency override: all signals go Red except the emergency direction</li>
+  <li>Pedestrian phase: inserted during the Red phase of vehicle signals</li>
+</ul>
+
+<h3>Intersection Coordination</h3>
+
+<p>The intersection cycles through phases to ensure safety:</p>
+<ul>
+  <li><strong>Phase 1:</strong> N-S Green, E-W Red</li>
+  <li><strong>Phase 2:</strong> N-S Yellow, E-W Red</li>
+  <li><strong>Phase 3:</strong> N-S Red, E-W Green</li>
+  <li><strong>Phase 4:</strong> N-S Red, E-W Yellow</li>
+  <li>(repeat)</li>
+</ul>
+
+<h3>Step 3: Design Patterns</h3>
+
+<ul>
+  <li><strong>State</strong> -- Each signal state (RedState, YellowState, GreenState) handles its own transition logic and timer. The signal delegates behavior to its current state object</li>
+  <li><strong>Observer</strong> -- When one signal changes state, the intersection controller is notified and can coordinate other signals accordingly</li>
+  <li><strong>Mediator</strong> -- The IntersectionController acts as a mediator between signals. Signals do not communicate directly; they go through the controller, which enforces safety invariants (never two conflicting greens)</li>
+  <li><strong>Strategy</strong> -- Timing strategies: PeakHourTiming (shorter cycles, more throughput), OffPeakTiming (longer cycles, pedestrian-friendly), EmergencyTiming (immediate override)</li>
+</ul>
+
+<h3>Emergency Override Flow</h3>
+
+<pre><code class="language-python"># When an emergency vehicle is detected:
+# 1. Controller receives emergency signal with direction
+# 2. All signals immediately transition to Red
+# 3. Emergency direction signal transitions to Green
+# 4. After emergency passes, resume normal cycle
+
+class IntersectionController:
+    def handle_emergency(self, direction: Direction):
+        for signal in self._signals.values():
+            signal.force_red()
+        self._signals[direction].force_green()
+        # Set timer to resume normal operation</code></pre>
+
+<h3>Key Takeaway</h3>
+<p>The traffic signal system demonstrates how State, Observer, and Mediator patterns work together. State handles individual signal behavior, Observer enables reactive coordination, and Mediator ensures safety by centralizing cross-signal communication. In an interview, emphasize the safety invariant: conflicting directions must never both be Green.</p>

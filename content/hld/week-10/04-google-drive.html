@@ -1,0 +1,88 @@
+<h2>Google Drive / File Storage Design</h2>
+
+<p>Google Drive is about file sync, delta sync, block-level deduplication, conflict resolution, and versioning. The core challenge is syncing files across devices efficiently -- only transferring the parts that changed.</p>
+
+<h3>Define: Requirements</h3>
+
+<ul>
+  <li><strong>Functional:</strong> Upload/download files, sync across devices (desktop/mobile/web), share files with permissions, version history with restore, real-time collaborative editing, search across files, offline access</li>
+  <li><strong>Non-Functional:</strong> Sync within seconds of file change, never lose data (durability is paramount), handle files from 1 KB to 5 TB, minimize bandwidth (only sync changes), millions of concurrent syncs</li>
+  <li><strong>Out of Scope:</strong> Google Docs real-time editing (OT/CRDT), Sheets, Slides, admin console</li>
+</ul>
+
+<h3>Estimate</h3>
+
+<pre><code class="language-python"># 1B registered users, 50M DAU
+# 10 file operations/day per active user, avg file: 500 KB
+
+# OPERATIONS:
+#   50M x 10 = 500M ops/day = ~5,800 QPS (peak ~17K)
+
+# STORAGE:
+#   1B users x 5 GB avg used = 5 EB (exabytes!)
+#   Daily new: 500M x 500KB x 20% new = 50 TB/day
+#   With delta sync: only ~20% changed = 10 TB/day
+#   With dedup: ~30% savings = 7 TB/day actual new storage
+
+# METADATA:
+#   50B files total x 1 KB = 50 TB
+#   PostgreSQL cluster or Spanner for strong consistency</code></pre>
+
+<h3>Architecture</h3>
+
+<pre><code class="language-python"># Desktop sync daemon detects file changes
+# -> Notification Service (WebSocket for push sync)
+# -> Block Sync Service
+#    1. Split file into blocks (4 MB chunks)
+#    2. Hash each block (SHA-256)
+#    3. Compare hashes with server
+#    4. Upload ONLY changed blocks (delta sync)
+#    5. Server deduplicates blocks across all users
+# -> Block Store (S3): content-addressable storage
+# -> Metadata DB: file tree, permissions, versions</code></pre>
+
+<h3>Block-Level Delta Sync</h3>
+
+<p>This is the key innovation that makes Drive efficient:</p>
+
+<ul>
+  <li><strong>Chunking:</strong> Files are split into fixed or content-defined blocks (typically 4 MB)</li>
+  <li><strong>Hashing:</strong> Each block gets a SHA-256 hash (content-addressable)</li>
+  <li><strong>Delta detection:</strong> Only blocks with changed hashes are uploaded</li>
+  <li><strong>Deduplication:</strong> If two users upload the same file, blocks are stored once, referenced twice</li>
+</ul>
+
+<pre><code class="language-python"># Example: 100 MB file, 25 blocks of 4 MB each
+# User edits 1 paragraph -> only 1 block changes
+# Upload: 4 MB instead of 100 MB = 96% bandwidth saving
+
+# With dedup across users:
+# 1000 users share the same PDF -> stored once
+# Reference count tracks how many users point to each block</code></pre>
+
+<h3>Conflict Resolution</h3>
+
+<ul>
+  <li><strong>Problem:</strong> Two devices edit the same file while offline, then both sync</li>
+  <li><strong>Detection:</strong> Compare version numbers -- if both edits are based on the same version, it is a conflict</li>
+  <li><strong>Resolution:</strong> Keep both versions, rename the later one as "filename (conflict copy)", let the user merge manually</li>
+  <li><strong>Prevention:</strong> Real-time sync notifications reduce the window for conflicts</li>
+</ul>
+
+<h3>Version History</h3>
+
+<ul>
+  <li>Every file change creates a new version (list of block hashes)</li>
+  <li>Restore any previous version by reassembling its blocks</li>
+  <li>Storage-efficient: versions share unchanged blocks through deduplication</li>
+  <li>Retention policy: keep all versions for 30 days, then compress to major versions only</li>
+</ul>
+
+<h3>Key Design Decisions</h3>
+
+<ul>
+  <li><strong>Block storage is the foundation:</strong> Everything (sync, dedup, versioning) builds on content-addressable blocks</li>
+  <li><strong>Notification-driven sync:</strong> Push notifications (WebSocket) tell clients when to pull changes, avoiding polling</li>
+  <li><strong>Strong consistency for metadata:</strong> File tree and permissions use Spanner or PostgreSQL with synchronous replication</li>
+  <li><strong>Eventual consistency for content:</strong> Block uploads can be slightly delayed without affecting user experience</li>
+</ul>

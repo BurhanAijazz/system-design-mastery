@@ -1,0 +1,249 @@
+<h2>Proxy Pattern</h2>
+
+<p>
+  The Proxy pattern provides a surrogate or placeholder for another object to control
+  access to it. The proxy implements the same interface as the real object, so clients
+  cannot tell whether they are working with the real object or its proxy.
+</p>
+
+<h3>Types of Proxies</h3>
+
+<ul>
+  <li><strong>Virtual Proxy:</strong> Defers creation or loading of expensive objects until needed (lazy initialization).</li>
+  <li><strong>Protection Proxy:</strong> Controls access based on permissions or roles.</li>
+  <li><strong>Caching Proxy:</strong> Stores results of expensive operations and returns cached data on subsequent calls.</li>
+  <li><strong>Logging Proxy:</strong> Adds logging around method calls without modifying the real object.</li>
+  <li><strong>Remote Proxy:</strong> Represents an object that lives in a different address space (network).</li>
+</ul>
+
+<h3>The Common Interface</h3>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+
+@dataclass
+class Document:
+    id: str
+    title: str
+    content: str
+    size_mb: float
+
+
+class DocumentService(ABC):
+    @abstractmethod
+    def get_document(self, doc_id: str) -> Document:
+        pass
+
+    @abstractmethod
+    def save_document(self, doc: Document) -> None:
+        pass
+
+    @abstractmethod
+    def delete_document(self, doc_id: str) -> None:
+        pass
+</code></pre>
+
+<h3>The Real Service</h3>
+
+<pre><code class="language-python">import time
+
+
+class RealDocumentService(DocumentService):
+    """Simulates a slow document storage system (e.g., remote file server)."""
+
+    def __init__(self):
+        self._storage: dict[str, Document] = {}
+
+    def get_document(self, doc_id: str) -> Document:
+        time.sleep(2)  # Simulate slow I/O
+        if doc_id not in self._storage:
+            raise FileNotFoundError(f"Document {doc_id} not found")
+        print(f"[RealService] Fetched document {doc_id} from storage")
+        return self._storage[doc_id]
+
+    def save_document(self, doc: Document) -> None:
+        time.sleep(1)  # Simulate slow write
+        self._storage[doc.id] = doc
+        print(f"[RealService] Saved document {doc.id}")
+
+    def delete_document(self, doc_id: str) -> None:
+        time.sleep(0.5)
+        del self._storage[doc_id]
+        print(f"[RealService] Deleted document {doc_id}")
+</code></pre>
+
+<h3>Virtual Proxy: Lazy Initialization</h3>
+
+<p>
+  A virtual proxy defers creation of the real service until it is actually needed.
+  This is useful when the real object is expensive to create but may not be used:
+</p>
+
+<pre><code class="language-python">class VirtualDocumentServiceProxy(DocumentService):
+    """Delays creation of the real service until first use."""
+
+    def __init__(self):
+        self._real_service: RealDocumentService | None = None
+
+    def _get_real_service(self) -> RealDocumentService:
+        if self._real_service is None:
+            print("[VirtualProxy] Initializing real service (first access)...")
+            self._real_service = RealDocumentService()
+        return self._real_service
+
+    def get_document(self, doc_id: str) -> Document:
+        return self._get_real_service().get_document(doc_id)
+
+    def save_document(self, doc: Document) -> None:
+        self._get_real_service().save_document(doc)
+
+    def delete_document(self, doc_id: str) -> None:
+        self._get_real_service().delete_document(doc_id)
+
+
+# The real service is not created until the first call
+proxy = VirtualDocumentServiceProxy()
+# ... later, when actually needed:
+proxy.save_document(Document("doc-1", "Report", "Contents...", 2.5))
+</code></pre>
+
+<h3>Protection Proxy: Access Control</h3>
+
+<p>
+  A protection proxy checks whether the caller has permission to perform an operation:
+</p>
+
+<pre><code class="language-python">@dataclass
+class User:
+    username: str
+    role: str  # "admin", "editor", "viewer"
+
+
+class ProtectionDocumentProxy(DocumentService):
+    """Controls access based on user role."""
+
+    def __init__(self, real_service: DocumentService, current_user: User):
+        self._real = real_service
+        self._user = current_user
+
+    def _check_permission(self, required_role: str, operation: str):
+        role_hierarchy = {"viewer": 0, "editor": 1, "admin": 2}
+        user_level = role_hierarchy.get(self._user.role, 0)
+        required_level = role_hierarchy.get(required_role, 0)
+
+        if user_level < required_level:
+            raise PermissionError(
+                f"User '{self._user.username}' ({self._user.role}) "
+                f"lacks permission for: {operation} (requires {required_role})"
+            )
+
+    def get_document(self, doc_id: str) -> Document:
+        self._check_permission("viewer", "get_document")
+        return self._real.get_document(doc_id)
+
+    def save_document(self, doc: Document) -> None:
+        self._check_permission("editor", "save_document")
+        self._real.save_document(doc)
+
+    def delete_document(self, doc_id: str) -> None:
+        self._check_permission("admin", "delete_document")
+        self._real.delete_document(doc_id)
+
+
+# Usage
+admin = User("alice", "admin")
+viewer = User("bob", "viewer")
+
+service = RealDocumentService()
+
+admin_proxy = ProtectionDocumentProxy(service, admin)
+admin_proxy.save_document(Document("doc-1", "Report", "...", 1.0))  # OK
+
+viewer_proxy = ProtectionDocumentProxy(service, viewer)
+viewer_proxy.get_document("doc-1")  # OK
+# viewer_proxy.delete_document("doc-1")  # raises PermissionError
+</code></pre>
+
+<h3>Caching Proxy: Avoiding Redundant Work</h3>
+
+<p>
+  A caching proxy stores results and returns them on subsequent identical requests,
+  avoiding expensive recomputation or I/O:
+</p>
+
+<pre><code class="language-python">from datetime import datetime, timedelta
+
+
+class CachingDocumentProxy(DocumentService):
+    """Caches documents to avoid repeated slow fetches."""
+
+    def __init__(self, real_service: DocumentService, ttl_seconds: int = 300):
+        self._real = real_service
+        self._cache: dict[str, tuple[Document, datetime]] = {}
+        self._ttl = timedelta(seconds=ttl_seconds)
+
+    def _is_cached(self, doc_id: str) -> bool:
+        if doc_id not in self._cache:
+            return False
+        _, cached_at = self._cache[doc_id]
+        if datetime.now() - cached_at > self._ttl:
+            del self._cache[doc_id]
+            return False
+        return True
+
+    def get_document(self, doc_id: str) -> Document:
+        if self._is_cached(doc_id):
+            print(f"[CacheProxy] Cache HIT for {doc_id}")
+            return self._cache[doc_id][0]
+
+        print(f"[CacheProxy] Cache MISS for {doc_id}")
+        doc = self._real.get_document(doc_id)
+        self._cache[doc_id] = (doc, datetime.now())
+        return doc
+
+    def save_document(self, doc: Document) -> None:
+        self._real.save_document(doc)
+        # Invalidate cache on write
+        self._cache[doc.id] = (doc, datetime.now())
+        print(f"[CacheProxy] Cache updated for {doc.id}")
+
+    def delete_document(self, doc_id: str) -> None:
+        self._real.delete_document(doc_id)
+        self._cache.pop(doc_id, None)
+        print(f"[CacheProxy] Cache invalidated for {doc_id}")
+</code></pre>
+
+<h3>Composing Multiple Proxies</h3>
+
+<p>
+  Because all proxies share the same interface, you can stack them:
+</p>
+
+<pre><code class="language-python"># Stack: CachingProxy -> ProtectionProxy -> RealService
+real = RealDocumentService()
+protected = ProtectionDocumentProxy(real, User("alice", "admin"))
+cached = CachingDocumentProxy(protected, ttl_seconds=600)
+
+# Client uses 'cached', unaware of the proxy chain
+cached.save_document(Document("doc-1", "Report", "...", 1.0))
+doc = cached.get_document("doc-1")  # first call: fetches from real
+doc = cached.get_document("doc-1")  # second call: cache hit
+</code></pre>
+
+<h3>Proxy vs Decorator</h3>
+
+<ul>
+  <li><strong>Proxy</strong> controls access to the object (permission, caching, lazy loading).</li>
+  <li><strong>Decorator</strong> adds new behavior or responsibilities to the object.</li>
+  <li>Both use composition and share the same interface, but the <em>intent</em> differs.</li>
+</ul>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>Proxies control access without clients knowing they are not using the real object.</li>
+  <li>Virtual proxies defer expensive initialization. Protection proxies enforce authorization. Caching proxies avoid redundant work.</li>
+  <li>Proxies compose naturally because they share the same interface as the real object.</li>
+  <li>Use proxies to add cross-cutting concerns (caching, auth, logging) without polluting business logic.</li>
+</ul>

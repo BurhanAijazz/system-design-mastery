@@ -1,0 +1,133 @@
+{
+  "frameworks": {
+    "dersc": {
+      "title": "DERSC Framework (HLD)",
+      "steps": [
+        { "name": "Define Requirements", "time": "5 min", "description": "Clarify functional and non-functional requirements. Ask about scale, users, read/write ratio.", "tips": ["Ask about scale explicitly", "Confirm read/write ratio", "Clarify must-haves vs nice-to-haves", "Identify core use cases (max 3-4)"] },
+        { "name": "Estimate Scale", "time": "5 min", "description": "Back-of-envelope: QPS, storage, bandwidth, memory.", "tips": ["Use powers of 2", "State assumptions explicitly", "Calculate peak vs average", "Round generously for simplicity"] },
+        { "name": "Resource/API Design", "time": "5 min", "description": "Define core API endpoints and data models.", "tips": ["Use RESTful conventions", "Define key entities and their relationships", "Think about pagination for list endpoints"] },
+        { "name": "Scale Architecture", "time": "20 min", "description": "Draw high-level architecture. Deep dive into 2-3 critical components.", "tips": ["Start with simple design, then scale", "Discuss database choice (SQL vs NoSQL)", "Add caching, queues, CDN as needed", "Address bottlenecks explicitly"] },
+        { "name": "Confirm Trade-offs", "time": "5 min", "description": "Walk through requirements, discuss trade-offs and alternatives.", "tips": ["Revisit each requirement", "Discuss consistency vs availability", "Mention monitoring and alerting", "Suggest future improvements"] }
+      ]
+    },
+    "lld6step": {
+      "title": "6-Step LLD Framework",
+      "steps": [
+        { "name": "Clarify Requirements", "time": "2-3 min", "description": "Ask about scope, constraints, and key behaviors. Identify actors and use cases.", "tips": ["Don't assume — ask", "Focus on core use cases", "Clarify edge cases early"] },
+        { "name": "Identify Core Entities", "time": "2-3 min", "description": "List the main objects/classes that will exist in the system.", "tips": ["Think nouns in the requirements", "Usually 4-8 core entities", "Don't over-model"] },
+        { "name": "Define Interfaces/APIs", "time": "3-5 min", "description": "Define the public methods and interfaces before implementation.", "tips": ["Think about the API consumer", "Use clear method names", "Define input/output types"] },
+        { "name": "Design Class Hierarchy", "time": "5-7 min", "description": "Establish inheritance, composition, and relationships between classes.", "tips": ["Prefer composition over inheritance", "Identify where patterns apply", "Use UML if it helps communicate"] },
+        { "name": "Implement Core Logic", "time": "15-20 min", "description": "Write the key algorithms and business logic.", "tips": ["Start with the happy path", "Keep it clean and readable", "Use design patterns where natural"] },
+        { "name": "Discuss Trade-offs", "time": "2-3 min", "description": "Explain design decisions, alternatives considered, and extensibility.", "tips": ["Mention SOLID compliance", "Discuss concurrency if relevant", "Suggest what you'd add with more time"] }
+      ]
+    }
+  },
+  "checklists": {
+    "hld": [
+      "Define functional requirements (3-4 core features)",
+      "Define non-functional requirements (latency, availability, consistency)",
+      "Identify read/write ratio",
+      "Estimate DAU/MAU",
+      "Calculate QPS (average and peak)",
+      "Estimate storage requirements",
+      "Estimate bandwidth",
+      "Choose database type (SQL vs NoSQL)",
+      "Design API endpoints",
+      "Draw high-level architecture diagram",
+      "Add load balancer",
+      "Add caching layer (with strategy)",
+      "Consider CDN for static content",
+      "Add message queue for async processing",
+      "Discuss database sharding strategy",
+      "Address single points of failure",
+      "Discuss monitoring and alerting",
+      "Walk through a complete request flow"
+    ],
+    "lld": [
+      "Identify all actors/users",
+      "List core use cases",
+      "Define main entities (nouns)",
+      "Identify relationships between entities",
+      "Choose appropriate design patterns",
+      "Define public interfaces/APIs",
+      "Consider thread safety",
+      "Handle edge cases",
+      "Apply SOLID principles",
+      "Draw class diagram (mental or actual)",
+      "Implement core business logic",
+      "Discuss extensibility",
+      "Mention what you'd test"
+    ]
+  },
+  "antiPatterns": [
+    { "name": "Jumping to Solution", "description": "Starting with architecture before understanding requirements.", "fix": "Always spend 5 minutes on requirements first. Repeat them back to the interviewer." },
+    { "name": "Over-Engineering", "description": "Adding unnecessary complexity like microservices for a simple problem.", "fix": "Start simple. Add complexity only when the scale demands it." },
+    { "name": "Ignoring Scale", "description": "Designing for 100 users when the problem says 100M.", "fix": "Always do back-of-envelope estimation. Let numbers drive design decisions." },
+    { "name": "Monologue Mode", "description": "Talking for 10+ minutes without checking in with the interviewer.", "fix": "Pause every 3-5 minutes. Ask 'Does this make sense?' or 'Should I dive deeper here?'" },
+    { "name": "No Trade-offs", "description": "Presenting one solution as if it's perfect without discussing alternatives.", "fix": "Every design choice is a trade-off. State what you're gaining and what you're giving up." },
+    { "name": "God Class", "description": "Putting all logic in one massive class.", "fix": "Apply SRP. If a class has more than one reason to change, split it." },
+    { "name": "Premature Pattern Application", "description": "Forcing design patterns where they don't naturally fit.", "fix": "Let patterns emerge from the problem. Don't use Strategy when a simple if/else suffices." }
+  ],
+  "cheatSheets": {
+    "latencyNumbers": {
+      "L1 cache reference": "0.5 ns",
+      "L2 cache reference": "7 ns",
+      "Main memory reference": "100 ns",
+      "SSD random read": "150 μs",
+      "HDD seek": "10 ms",
+      "Send 1KB over 1 Gbps": "10 μs",
+      "Read 1 MB from memory": "250 μs",
+      "Read 1 MB from SSD": "1 ms",
+      "Read 1 MB from HDD": "20 ms",
+      "Round trip same datacenter": "0.5 ms",
+      "Round trip cross-continent": "150 ms"
+    },
+    "estimationFormulas": {
+      "QPS": "DAU × avg_requests / 86400",
+      "Peak QPS": "QPS × 2 (or ×3 for spiky)",
+      "Storage/year": "DAU × data_per_user × 365",
+      "Bandwidth": "QPS × avg_response_size",
+      "Cache size": "QPS × avg_object × 0.2 (80/20 rule)",
+      "Seconds in day": "~86,400 (~10^5)",
+      "Seconds in year": "~31.5M (~3×10^7)"
+    },
+    "patternSelection": {
+      "Need multiple algorithms?": "Strategy Pattern",
+      "Object changes behavior based on state?": "State Pattern",
+      "Need undo/redo?": "Command Pattern",
+      "Notify multiple objects of changes?": "Observer Pattern",
+      "Tree/hierarchical structure?": "Composite Pattern",
+      "Simplify complex subsystem?": "Facade Pattern",
+      "Convert incompatible interface?": "Adapter Pattern",
+      "Control access to an object?": "Proxy Pattern",
+      "Add behavior without subclassing?": "Decorator Pattern",
+      "Ensure single instance?": "Singleton Pattern"
+    }
+  },
+  "commonQuestions": {
+    "hld": [
+      "Design Twitter / News Feed",
+      "Design URL Shortener",
+      "Design WhatsApp / Chat System",
+      "Design YouTube / Video Platform",
+      "Design Netflix / Streaming Service",
+      "Design Uber / Ride Sharing",
+      "Design Amazon / E-Commerce",
+      "Design Google Search / Web Crawler",
+      "Design Rate Limiter",
+      "Design Notification System"
+    ],
+    "lld": [
+      "Design Parking Lot",
+      "Design Elevator System",
+      "Design Chess Game",
+      "Design Vending Machine",
+      "Design BookMyShow",
+      "Design Splitwise",
+      "Design LRU Cache",
+      "Design Tic-Tac-Toe",
+      "Design Hotel Booking",
+      "Design ATM Machine"
+    ]
+  }
+}

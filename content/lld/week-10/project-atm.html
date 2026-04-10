@@ -1,0 +1,112 @@
+<h2>Project: ATM Machine</h2>
+
+<p>A full LLD implementation of an ATM (Automated Teller Machine) system. This project uses State for ATM states, Chain of Responsibility for transaction validation, Command for transactions as undoable operations, and Strategy for cash dispensing algorithms.</p>
+
+<h3>Requirements</h3>
+
+<p><strong>Functional:</strong></p>
+<ul>
+  <li>Insert card, validate PIN (3 attempts max, then retain card)</li>
+  <li>Balance inquiry</li>
+  <li>Cash withdrawal (with denomination calculation to minimize notes)</li>
+  <li>Cash deposit</li>
+  <li>Transfer between accounts</li>
+  <li>Print receipt</li>
+  <li>Card ejection</li>
+</ul>
+
+<p><strong>Out of scope:</strong> Multi-bank networking, check deposits, bill payments, physical hardware simulation, encryption.</p>
+
+<h3>Core Entities</h3>
+
+<pre><code class="language-python">class ATMStatus(Enum):
+    IDLE = "idle"
+    CARD_INSERTED = "card_inserted"
+    PIN_ENTERED = "pin_entered"
+    TRANSACTION_SELECTED = "transaction_selected"
+    PROCESSING = "processing"
+    DISPENSING = "dispensing"
+    OUT_OF_SERVICE = "out_of_service"
+
+class TransactionType(Enum):
+    BALANCE_INQUIRY = "balance_inquiry"
+    WITHDRAWAL = "withdrawal"
+    DEPOSIT = "deposit"
+    TRANSFER = "transfer"
+
+class CashDenomination(Enum):
+    """Available bill denominations."""
+    HUNDRED = 100
+    FIFTY = 50
+    TWENTY = 20
+    TEN = 10
+    FIVE = 5
+    ONE = 1
+
+@dataclass
+class Card:
+    card_number: str
+    pin_hash: str  # always hashed, never plaintext
+    account_id: str
+    holder_name: str</code></pre>
+
+<h3>Design Patterns Used</h3>
+
+<ul>
+  <li><strong>State</strong> -- The ATM transitions through: Idle -> CardInserted -> PINEntered -> TransactionSelected -> Processing -> Dispensing -> Idle. Each state class defines what operations are valid. Idle only allows insertCard(). CardInserted only allows enterPIN(). Invalid operations raise clear error messages</li>
+  <li><strong>Chain of Responsibility</strong> -- Transaction validation chain: AuthHandler (verify PIN) -> BalanceCheckHandler (sufficient funds?) -> WithdrawalLimitHandler (within daily limit?). Each handler passes or rejects</li>
+  <li><strong>Command</strong> -- Each transaction (WithdrawCommand, DepositCommand, TransferCommand) implements a Transaction interface. This enables transaction logging and potential reversal</li>
+  <li><strong>Strategy</strong> -- Cash dispensing algorithm: GreedyDispenser uses the largest denominations first to minimize the number of bills, checking available stock. If exact amount cannot be dispensed, it raises an error</li>
+</ul>
+
+<h3>Key Components</h3>
+
+<pre><code class="language-python"># BankingService interface -- abstracts the bank backend
+class BankingService(ABC):
+    @abstractmethod
+    def verify_pin(self, card_number, pin) -> bool: pass
+
+    @abstractmethod
+    def get_balance(self, account_id) -> float: pass
+
+    @abstractmethod
+    def withdraw(self, account_id, amount) -> bool: pass
+
+    @abstractmethod
+    def deposit(self, account_id, amount) -> bool: pass
+
+    @abstractmethod
+    def transfer(self, from_id, to_id, amount) -> bool: pass
+
+
+# CashDispenser manages denomination stock
+class CashDispenser:
+    def __init__(self):
+        self._stock: Dict[CashDenomination, int] = {
+            d: 100 for d in CashDenomination
+        }
+
+    def dispense(self, amount: int) -> Dict[CashDenomination, int]:
+        # Greedy: largest denominations first
+        result = {}
+        remaining = amount
+        for denom in sorted(CashDenomination,
+                            key=lambda d: d.value, reverse=True):
+            count = min(remaining // denom.value, self._stock[denom])
+            if count > 0:
+                result[denom] = count
+                remaining -= count * denom.value
+        if remaining > 0:
+            raise ATMError("Cannot dispense exact amount")
+        return result</code></pre>
+
+<h3>Implementation Steps</h3>
+<ul>
+  <li>Define entities: ATM, Card, Account, Transaction, CashDenomination</li>
+  <li>Implement the ATM state machine with 7 states</li>
+  <li>Build the BankingService interface and an in-memory implementation</li>
+  <li>Create the CashDispenser with greedy denomination algorithm</li>
+  <li>Implement the validation chain for transactions</li>
+  <li>Build the ATMService that manages ATM instances and sessions</li>
+  <li>Add receipt generation and transaction logging</li>
+</ul>

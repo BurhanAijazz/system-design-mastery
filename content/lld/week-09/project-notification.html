@@ -1,0 +1,69 @@
+<h2>Project: Notification System</h2>
+
+<p>A full LLD implementation of a multi-channel notification system. This project uses Strategy for delivery channels, Template Method for notification formatting, Observer for event-driven notifications, Builder for construction, Factory for channel creation, and Chain of Responsibility for validation.</p>
+
+<h3>Requirements</h3>
+
+<p><strong>Functional:</strong></p>
+<ul>
+  <li>Send notifications via multiple channels (Email, SMS, Push, InApp)</li>
+  <li>User preferences: which channels to receive notifications on</li>
+  <li>Notification templates with variable substitution</li>
+  <li>Priority levels (low, normal, high, critical)</li>
+  <li>Rate limiting per user per channel</li>
+  <li>Deduplication (do not send the same notification twice)</li>
+  <li>Retry on failure</li>
+  <li>Event-driven: listen for events and auto-send notifications</li>
+</ul>
+
+<p><strong>Out of scope:</strong> Actual email/SMS sending, rich media, scheduled notifications.</p>
+
+<h3>Core Entities</h3>
+
+<pre><code class="language-python">class Channel(Enum):
+    EMAIL = "email"
+    SMS = "sms"
+    PUSH = "push"
+    IN_APP = "in_app"
+
+class Priority(Enum):
+    LOW = 0
+    NORMAL = 1
+    HIGH = 2
+    CRITICAL = 3
+
+class NotificationStatus(Enum):
+    PENDING = "pending"
+    SENT = "sent"
+    FAILED = "failed"
+    BLOCKED = "blocked"
+
+class ChannelPreference(Flag):
+    NONE = 0
+    EMAIL = auto()
+    SMS = auto()
+    PUSH = auto()
+    IN_APP = auto()
+    ALL = EMAIL | SMS | PUSH | IN_APP</code></pre>
+
+<h3>Design Patterns Used</h3>
+
+<ul>
+  <li><strong>Strategy</strong> -- DeliveryChannel implementations (EmailChannel, SMSChannel, PushChannel, InAppChannel) each handle sending through their specific medium</li>
+  <li><strong>Template Method</strong> -- NotificationTemplate defines the structure (subject, body) with variable placeholders like <code>{user_name}</code> that get substituted at send time</li>
+  <li><strong>Observer</strong> -- EventBus listens for domain events (OrderPlaced, PaymentReceived) and triggers the appropriate notification templates</li>
+  <li><strong>Builder</strong> -- NotificationBuilder provides a fluent API to construct notifications with recipient, channel, template, and priority</li>
+  <li><strong>Factory</strong> -- ChannelFactory creates the appropriate DeliveryChannel from a Channel enum value</li>
+  <li><strong>Chain of Responsibility</strong> -- Validation chain: PreferenceHandler (user wants this channel?) -> RateLimitHandler (too many recent sends?) -> DeduplicationHandler (already sent?) -> DeliveryHandler (actually send)</li>
+</ul>
+
+<h3>Implementation Steps</h3>
+<ul>
+  <li>Define entities: Notification, Channel, Priority, Template, UserPreference</li>
+  <li>Implement delivery channel strategies for each channel type</li>
+  <li>Build the template system with variable substitution</li>
+  <li>Create the validation chain (preference -> rate limit -> dedup -> delivery)</li>
+  <li>Build the NotificationService that orchestrates sending</li>
+  <li>Add the EventBus for event-driven notification triggers</li>
+  <li>Implement retry logic with exponential backoff</li>
+</ul>

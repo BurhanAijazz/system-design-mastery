@@ -1,0 +1,183 @@
+<h2>Board Representation Strategies</h2>
+
+<p>How you represent the board is one of the first design decisions in any game LLD. This lesson covers common approaches: 2D arrays, Cell objects, Piece hierarchies, Position value objects, and board display strategies.</p>
+
+<h3>Approach 1: Simple 2D Array</h3>
+
+<p>For simple games (Tic-Tac-Toe), a 2D list of strings works fine:</p>
+
+<pre><code class="language-python">def create_board(rows: int, cols: int) -> list[list[str]]:
+    return [[" "] * cols for _ in range(rows)]
+
+def display_board(board: list[list[str]]) -> None:
+    for i, row in enumerate(board):
+        print(" | ".join(row))
+        if i < len(board) - 1:
+            print("-" * (4 * len(row) - 1))
+
+board = create_board(3, 3)
+board[0][0] = "X"
+board[1][1] = "O"
+display_board(board)
+</code></pre>
+
+<p>Pros: Dead simple, minimal code. Cons: No type safety, no cell behavior, hard to extend. Best for: Tic-Tac-Toe, simple grid puzzles.</p>
+
+<h3>Approach 2: Position Value Object</h3>
+
+<p>Instead of passing (row, col) tuples everywhere, create a Position class for type safety and utility methods:</p>
+
+<pre><code class="language-python">from dataclasses import dataclass
+from typing import List
+
+@dataclass(frozen=True)
+class Position:
+    """Immutable position on a board."""
+    row: int
+    col: int
+
+    def is_within(self, rows: int, cols: int) -> bool:
+        return 0 <= self.row < rows and 0 <= self.col < cols
+
+    def neighbors(self) -> List["Position"]:
+        """Return 4 orthogonal neighbors."""
+        return [
+            Position(self.row - 1, self.col),
+            Position(self.row + 1, self.col),
+            Position(self.row, self.col - 1),
+            Position(self.row, self.col + 1),
+        ]
+
+    def diagonal_neighbors(self) -> List["Position"]:
+        """Return 4 diagonal neighbors."""
+        return [
+            Position(self.row - 1, self.col - 1),
+            Position(self.row - 1, self.col + 1),
+            Position(self.row + 1, self.col - 1),
+            Position(self.row + 1, self.col + 1),
+        ]
+
+    def all_neighbors(self) -> List["Position"]:
+        """Return all 8 neighbors."""
+        return self.neighbors() + self.diagonal_neighbors()
+</code></pre>
+
+<h3>Approach 3: Cell Objects</h3>
+
+<p>For games where cells have behavior (mines, special tiles), wrap each cell in an object:</p>
+
+<pre><code class="language-python">from typing import Optional
+from enum import Enum
+
+class CellType(Enum):
+    NORMAL = "normal"
+    OBSTACLE = "obstacle"
+    BONUS = "bonus"
+
+@dataclass
+class Cell:
+    position: Position
+    cell_type: CellType = CellType.NORMAL
+    piece: Optional["Piece"] = None
+
+    def is_empty(self) -> bool:
+        return self.piece is None
+
+    def place(self, piece: "Piece") -> bool:
+        if not self.is_empty():
+            return False
+        self.piece = piece
+        return True
+
+    def remove(self) -> Optional["Piece"]:
+        piece = self.piece
+        self.piece = None
+        return piece
+</code></pre>
+
+<h3>Approach 4: Piece Hierarchy (Chess-like Games)</h3>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+
+class Color(Enum):
+    WHITE = "white"
+    BLACK = "black"
+
+class Piece(ABC):
+    """Abstract piece for chess-like games."""
+
+    def __init__(self, color: Color, position: Position):
+        self.color = color
+        self.position = position
+
+    @abstractmethod
+    def valid_moves(self, board: "Board") -> List[Position]:
+        """Return all valid positions this piece can move to."""
+        pass
+
+    @abstractmethod
+    def symbol(self) -> str:
+        pass
+
+
+class Rook(Piece):
+    def valid_moves(self, board):
+        moves = []
+        # Move along rows and columns
+        for dr, dc in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+            r, c = self.position.row + dr, self.position.col + dc
+            while 0 <= r < 8 and 0 <= c < 8:
+                pos = Position(r, c)
+                cell = board.get_cell(pos)
+                if cell.is_empty():
+                    moves.append(pos)
+                elif cell.piece.color != self.color:
+                    moves.append(pos)  # capture
+                    break
+                else:
+                    break  # blocked by own piece
+                r, c = r + dr, c + dc
+        return moves
+
+    def symbol(self) -> str:
+        return "R" if self.color == Color.WHITE else "r"
+</code></pre>
+
+<h3>Board with Cell Grid</h3>
+
+<pre><code class="language-python">class Board:
+    def __init__(self, rows: int, cols: int):
+        self._rows = rows
+        self._cols = cols
+        self._grid: List[List[Cell]] = [
+            [Cell(Position(r, c)) for c in range(cols)]
+            for r in range(rows)
+        ]
+
+    def get_cell(self, pos: Position) -> Cell:
+        return self._grid[pos.row][pos.col]
+
+    def place_piece(self, piece: Piece, pos: Position) -> bool:
+        cell = self.get_cell(pos)
+        if cell.place(piece):
+            piece.position = pos
+            return True
+        return False
+
+    def move_piece(self, from_pos: Position, to_pos: Position) -> bool:
+        from_cell = self.get_cell(from_pos)
+        piece = from_cell.remove()
+        if piece:
+            return self.place_piece(piece, to_pos)
+        return False
+</code></pre>
+
+<h3>Choosing the Right Approach</h3>
+
+<ul>
+    <li><strong>Simple 2D array</strong>: Tic-Tac-Toe, Connect Four</li>
+    <li><strong>Position value object</strong>: any game where positions are passed around frequently</li>
+    <li><strong>Cell objects</strong>: Minesweeper, games with special tiles</li>
+    <li><strong>Piece hierarchy</strong>: Chess, Checkers, any game with different piece types</li>
+    <li><strong>Combination</strong>: Chess uses all four -- Position, Cell, Piece hierarchy, and a Board grid</li>
+</ul>

@@ -1,0 +1,77 @@
+<h2>Distributed Rate Limiter Design</h2>
+
+<p>A rate limiter controls the number of requests a client can send within a time window. The challenge is making it work correctly across multiple API server nodes while adding less than 1ms of latency to every request.</p>
+
+<h3>Define: Requirements</h3>
+
+<ul>
+  <li><strong>Functional:</strong> Limit requests per user/IP/API-key within a time window; return 429 when exceeded; support tiered limits (free: 100/min, pro: 1000/min); provide rate limit headers</li>
+  <li><strong>Non-Functional:</strong> Low latency (&lt;1ms), high availability (fail-open if limiter fails), accurate counting in distributed mode, handle 100K+ checks/sec</li>
+  <li><strong>Placement:</strong> API Gateway (most common), per-service, or client-side (advisory only)</li>
+</ul>
+
+<h3>Estimate</h3>
+
+<pre><code class="language-python"># 10M unique users, ~100 requests/min each
+# Total: ~12,000 QPS average, ~36,000 peak
+# Each rate check: ~200 bytes (request + response)
+# Redis: 10M users x 100 bytes = 1 GB (single instance)
+# Bandwidth: 36K QPS x 200B = 7.2 MB/s (trivial)</code></pre>
+
+<h3>Rate Limiting Algorithms</h3>
+
+<p>Five main algorithms, each with different trade-offs:</p>
+
+<h3>1. Token Bucket</h3>
+
+<pre><code class="language-python">class TokenBucket:
+    """Tokens refill at fixed rate, each request consumes one."""
+    def __init__(self, capacity: int, refill_rate: float):
+        self.capacity = capacity
+        self.tokens = capacity
+        self.refill_rate = refill_rate  # tokens per second
+        self.last_refill = time.time()
+
+    def allow(self) -> bool:
+        now = time.time()
+        elapsed = now - self.last_refill
+        self.tokens = min(self.capacity,
+                          self.tokens + elapsed * self.refill_rate)
+        self.last_refill = now
+        if self.tokens >= 1:
+            self.tokens -= 1
+            return True
+        return False</code></pre>
+
+<p><strong>Pros:</strong> Allows bursts up to capacity, smooth rate over time. <strong>Cons:</strong> Two parameters to tune (capacity and refill rate).</p>
+
+<h3>2. Fixed Window Counter</h3>
+
+<p>Count requests in fixed time windows (e.g., per minute). Simple but has a boundary problem: a user can send 2x the limit at the window boundary.</p>
+
+<h3>3. Sliding Window Counter (Recommended)</h3>
+
+<pre><code class="language-python"># Hybrid approach - best overall:
+# Weighted count = (prev_window_count * overlap%) + curr_window_count
+# Example: limit 100/min, at 0:01:15 (25% into current window)
+#   prev window had 80 requests, current has 30
+#   weighted = 80 * 0.75 + 30 = 90 -> ALLOW (under 100)</code></pre>
+
+<p><strong>Pros:</strong> Smooth, no boundary spikes, memory efficient. <strong>Cons:</strong> Approximate (but very close to exact).</p>
+
+<h3>Distributed Architecture</h3>
+
+<ul>
+  <li><strong>Centralized Redis:</strong> All API servers check a shared Redis instance. Simple, consistent, but adds network hop.</li>
+  <li><strong>Local + Sync:</strong> Each node tracks locally, periodically syncs to central store. Faster but may over-count temporarily.</li>
+  <li><strong>Fail-open policy:</strong> If Redis is unreachable, allow the request rather than blocking all traffic.</li>
+</ul>
+
+<h3>Key Design Decisions</h3>
+
+<ul>
+  <li><strong>Rate limit headers:</strong> X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset help clients self-throttle</li>
+  <li><strong>Tiered limits:</strong> Store per-user tier in cache, look up rate limit configuration by tier</li>
+  <li><strong>Race conditions:</strong> Use Redis INCR (atomic) or Lua scripts for check-and-increment atomicity</li>
+  <li><strong>Monitoring:</strong> Track how many requests are being rate-limited to detect abuse or misconfigured limits</li>
+</ul>

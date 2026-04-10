@@ -1,0 +1,89 @@
+<h2>Ticketmaster / Event Booking System Design</h2>
+
+<p>Ticketmaster is the hardest booking problem in tech: millions of users simultaneously trying to book a limited number of tickets for the same event. The core challenge is extreme write contention on a single resource -- a hot partition problem on steroids.</p>
+
+<h3>Define: Requirements</h3>
+
+<ul>
+  <li><strong>Functional:</strong> Browse events, view available seats, select and hold seats temporarily (5 min), complete purchase within hold period, release tickets if payment fails/times out, prevent double-booking</li>
+  <li><strong>Non-Functional:</strong> Handle 10M+ concurrent users for hot events, fairness (first-come-first-served or lottery), seat hold &lt;500ms, strong consistency for inventory, graceful degradation under load</li>
+</ul>
+
+<h3>The Core Challenge</h3>
+
+<pre><code class="language-python"># Taylor Swift concert: 70,000 seats, 14 MILLION users
+# That's 200 users per seat, all clicking at the same second
+# This is a HOT PARTITION problem on steroids.
+
+# Normal DB: ~5K writes/sec per partition -> instant bottleneck
+# All 33K QPS target the SAME event</code></pre>
+
+<h3>Estimate</h3>
+
+<pre><code class="language-python"># Mega event (first 10 minutes):
+#   Page views: 2M concurrent x 10 refreshes = 20M requests
+#   QPS peak: 20M / 600s = ~33K QPS on ONE event
+#   Seat hold attempts: 2M users -> 500K/min -> 8.3K/sec
+#   Payment: 70K successful in 10-30 min
+
+# Storage is NOT the problem:
+#   Event metadata: 500 events x 10 KB = 5 MB
+#   Seat inventory: 70K seats x 200 bytes = 14 MB
+#   Booking records: 70K x 1 KB = 70 MB
+
+# The real challenge is CONCURRENCY, not storage.</code></pre>
+
+<h3>Architecture: Virtual Waiting Room</h3>
+
+<ul>
+  <li><strong>Queue-based admission:</strong> Instead of letting all 14M users hit the booking system, place them in a virtual queue</li>
+  <li><strong>Controlled admission rate:</strong> Release users from the queue at a rate the booking system can handle (e.g., 5K/sec)</li>
+  <li><strong>Position tracking:</strong> Each user sees their queue position and estimated wait time</li>
+  <li><strong>Fairness:</strong> Queue position assigned randomly or by arrival time</li>
+</ul>
+
+<h3>Seat Inventory Management</h3>
+
+<pre><code class="language-python"># Approach: Pre-partition the seat inventory
+#
+# Stadium has 5 sections of 14K seats each
+# Each section managed by a separate service instance
+# User hash determines which section they can browse first
+#
+# Within each section:
+# 1. Seat HOLD: 5-minute temporary reservation
+#    Uses Redis with TTL for automatic expiry
+# 2. Seat PURCHASE: convert hold to confirmed booking
+#    Uses DB transaction with optimistic locking
+# 3. Seat RELEASE: TTL expires or explicit cancel
+#    Seat returns to available pool
+
+# This distributes the hot partition:
+# Instead of 8.3K writes/sec on one partition,
+# 5 partitions handle 1.66K writes/sec each</code></pre>
+
+<h3>Handling Extreme Concurrency</h3>
+
+<ul>
+  <li><strong>Read path (seat map):</strong> Cache aggressively. Seat map updates every few seconds, not real-time. "Approximately N seats available" is acceptable.</li>
+  <li><strong>Write path (seat hold):</strong> Optimistic locking with retries. If two users try the same seat, one succeeds, one retries on a different seat.</li>
+  <li><strong>Payment timeout:</strong> 5-minute hold with automatic release. If payment takes too long, seat returns to pool.</li>
+  <li><strong>Oversell prevention:</strong> The seat hold is the single source of truth. Only one hold can exist per seat at any time.</li>
+</ul>
+
+<h3>Lottery vs First-Come-First-Served</h3>
+
+<ul>
+  <li><strong>FCFS:</strong> Advantages early arrivals, penalizes slow connections. Creates server stampede.</li>
+  <li><strong>Lottery:</strong> Registration window (e.g., 48 hours), random selection, winners get purchase window. Fairer, reduces peak load.</li>
+  <li><strong>Hybrid:</strong> Presale for fan club members (FCFS within smaller group), general sale with lottery.</li>
+</ul>
+
+<h3>Key Design Decisions</h3>
+
+<ul>
+  <li><strong>Virtual queue is essential:</strong> Without it, the booking system would collapse under load</li>
+  <li><strong>Temporary holds with TTL:</strong> Prevents seat hoarding; automatic cleanup without manual intervention</li>
+  <li><strong>Approximate availability:</strong> Showing real-time exact seat counts is impossible under contention; approximate is sufficient</li>
+  <li><strong>Graceful degradation:</strong> If system is overloaded, show "high demand" page rather than error pages</li>
+</ul>

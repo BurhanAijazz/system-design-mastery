@@ -1,0 +1,66 @@
+<h2>Design: LFU Cache</h2>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Support <code>get(key)</code> and <code>put(key, value)</code> in O(1)</li>
+  <li>Evict the <strong>least frequently used</strong> key when at capacity</li>
+  <li>Ties broken by least recently used among same-frequency keys</li>
+  <li>Frequency increments on every get or put (existing key)</li>
+</ul>
+
+<h3>Approach</h3>
+<ul>
+  <li>Three maps: <code>key_to_val</code>, <code>key_to_freq</code>, <code>freq_to_keys</code></li>
+  <li><code>freq_to_keys[f]</code> is an <strong>OrderedDict</strong> preserving insertion order (LRU within frequency)</li>
+  <li>Track <code>min_freq</code> to locate the eviction bucket in O(1)</li>
+  <li>On access: move key from freq bucket f to f+1; update min_freq if bucket f is now empty</li>
+</ul>
+
+<h3>Key Code</h3>
+<pre><code class="language-python">from collections import defaultdict, OrderedDict
+
+class LFUCache:
+    def __init__(self, capacity: int):
+        self.cap = capacity
+        self.min_freq = 0
+        self.key_val  = {}
+        self.key_freq = {}
+        self.freq_keys = defaultdict(OrderedDict)
+
+    def _update(self, key):
+        f = self.key_freq[key]
+        del self.freq_keys[f][key]
+        if not self.freq_keys[f] and f == self.min_freq:
+            self.min_freq += 1
+        self.key_freq[key] = f + 1
+        self.freq_keys[f + 1][key] = None
+
+    def get(self, key):
+        if key not in self.key_val:
+            return -1
+        self._update(key)
+        return self.key_val[key]
+
+    def put(self, key, value):
+        if self.cap <= 0:
+            return
+        if key in self.key_val:
+            self.key_val[key] = value
+            self._update(key)
+            return
+        if len(self.key_val) >= self.cap:
+            evict, _ = self.freq_keys[self.min_freq].popitem(last=False)
+            del self.key_val[evict], self.key_freq[evict]
+        self.key_val[key] = value
+        self.key_freq[key] = 1
+        self.freq_keys[1][key] = None
+        self.min_freq = 1
+</code></pre>
+
+<h3>Takeaways</h3>
+<ul>
+  <li>OrderedDict gives O(1) LRU eviction within each frequency bucket</li>
+  <li>Tracking <code>min_freq</code> avoids scanning all frequency buckets</li>
+  <li>More complex than LRU but handles skewed access patterns better</li>
+  <li>Used in CPU caches and CDN eviction policies</li>
+</ul>

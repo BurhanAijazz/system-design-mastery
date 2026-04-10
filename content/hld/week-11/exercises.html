@@ -1,0 +1,78 @@
+<h2>Week 11 Exercises: Commerce and Platforms</h2>
+
+<p>These exercises explore e-commerce flash sales, geospatial matching, and booking systems covered this week.</p>
+
+<h3>Exercise 1: Flash Sale Inventory System</h3>
+
+<p>Design the inventory management system for an Amazon Prime Day-style flash sale where 1 million users try to buy 10,000 units of a single product within 60 seconds.</p>
+
+<ul>
+  <li>No overselling: exactly 10,000 orders, not 10,001</li>
+  <li>Fairness: first-come-first-served ordering</li>
+  <li>Graceful failure: users who do not get the product see a clear "sold out" message</li>
+</ul>
+
+<p><strong>Tasks:</strong></p>
+<ul>
+  <li>Calculate the QPS: 1M users / 60 seconds with 10 requests each = ? How does this compare to normal operations?</li>
+  <li>Design the inventory counter: single Redis counter vs pre-partitioned counters (1,000 units x 10 partitions). What are the trade-offs?</li>
+  <li>How do you prevent users from adding to cart after stock reaches zero? Where in the stack does the check happen?</li>
+  <li>Design the queueing mechanism: virtual waiting room that admits users gradually</li>
+</ul>
+
+<pre><code class="language-python"># Pre-partitioned inventory approach:
+# Split 10,000 units into 10 partitions of 1,000 each
+# Each partition handled by a separate Redis instance
+# User hash determines which partition they check
+# When a partition exhausts, overflow to others
+
+# This distributes the hot partition problem:
+# Single counter: 166K writes/sec on ONE key
+# 10 partitions: 16.6K writes/sec per key (manageable)</code></pre>
+
+<h3>Exercise 2: Ride Matching Optimization</h3>
+
+<p>Improve the basic nearest-driver matching algorithm for Uber by incorporating multiple factors:</p>
+
+<ul>
+  <li>Distance to pickup (primary factor)</li>
+  <li>Driver rating (prefer higher-rated drivers)</li>
+  <li>Driver acceptance rate (prefer drivers who accept more rides)</li>
+  <li>Estimated time in traffic (not just straight-line distance)</li>
+</ul>
+
+<p><strong>Tasks:</strong></p>
+<ul>
+  <li>Design a scoring function that weights these factors. How do you normalize different scales (km vs rating vs percentage)?</li>
+  <li>Implement the geohash-based candidate search: query the target cell plus 8 neighbors</li>
+  <li>How do you handle the case where no drivers are available in nearby cells? Expanding ring search?</li>
+  <li>Benchmark: how many geohash lookups per match request? At 700 QPS, is this sustainable?</li>
+</ul>
+
+<h3>Exercise 3: Booking Calendar Stress Test</h3>
+
+<p>Simulate 100 concurrent booking attempts for overlapping dates on the same property.</p>
+
+<pre><code class="language-python"># Scenario:
+# Property "Beach Villa" available Dec 24-31
+# 100 guests simultaneously try to book Dec 25-27
+# Only ONE should succeed. The rest should get
+# "dates unavailable" without any race condition.
+
+# Test with different locking strategies:
+# 1. Pessimistic lock (lock dates first, then pay)
+# 2. Optimistic lock (check-and-set with version number)
+# 3. Queue-based (serialize all requests through a queue)
+
+# Measure for each:
+# - Correctness: exactly 1 booking succeeds?
+# - Latency: how long does the winning user wait?
+# - Fairness: does the first requester always win?</code></pre>
+
+<p><strong>Tasks:</strong></p>
+<ul>
+  <li>Implement pessimistic and optimistic locking strategies</li>
+  <li>Run the simulation 1,000 times and verify zero double-bookings</li>
+  <li>Compare average latency for the successful booking under each strategy</li>
+  <li>Which strategy degrades most gracefully under extreme contention (1,000 concurrent requests)?</li>
+</ul>

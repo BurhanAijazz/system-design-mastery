@@ -1,0 +1,344 @@
+<h2>Week 1 Exercises: SOLID Principles</h2>
+
+<p>
+  These exercises test your understanding of all five SOLID principles. Try to solve
+  each one on your own before revealing the answer. Focus on identifying violations
+  and applying the correct principle to fix them.
+</p>
+
+<h3>Exercise 1: Identify and Fix the SRP &amp; OCP Violations</h3>
+
+<p>
+  The following <code>ReportGenerator</code> class handles data fetching, formatting,
+  and delivery. It also uses if/elif chains for format selection. Refactor it to
+  follow SRP and OCP.
+</p>
+
+<pre><code class="language-python"># PROBLEM CODE: Identify the violations and refactor
+
+class ReportGenerator:
+    def __init__(self, db_connection):
+        self.db = db_connection
+
+    def generate(self, report_type: str, format: str, delivery: str):
+        # Fetch data
+        if report_type == "sales":
+            data = self.db.query("SELECT * FROM sales")
+        elif report_type == "inventory":
+            data = self.db.query("SELECT * FROM inventory")
+        elif report_type == "employees":
+            data = self.db.query("SELECT * FROM employees")
+
+        # Format report
+        if format == "pdf":
+            output = self._to_pdf(data)
+        elif format == "csv":
+            output = self._to_csv(data)
+        elif format == "html":
+            output = self._to_html(data)
+
+        # Deliver report
+        if delivery == "email":
+            self._send_email(output)
+        elif delivery == "s3":
+            self._upload_to_s3(output)
+        elif delivery == "print":
+            self._send_to_printer(output)
+
+    def _to_pdf(self, data): ...
+    def _to_csv(self, data): ...
+    def _to_html(self, data): ...
+    def _send_email(self, output): ...
+    def _upload_to_s3(self, output): ...
+    def _send_to_printer(self, output): ...
+</code></pre>
+
+<div class="reveal-answer" style="margin-top: 1rem;">
+  <button onclick="this.nextElementSibling.style.display='block'; this.style.display='none';"
+          style="padding: 8px 16px; cursor: pointer; background: #2563eb; color: white; border: none; border-radius: 4px;">
+    Reveal Solution
+  </button>
+  <div style="display: none;">
+    <h4>Solution</h4>
+    <pre><code class="language-python">from abc import ABC, abstractmethod
+
+
+# --- SRP: Separate each concern into its own class ---
+
+class DataFetcher(ABC):
+    @abstractmethod
+    def fetch(self) -> list[dict]:
+        pass
+
+class SalesDataFetcher(DataFetcher):
+    def __init__(self, db):
+        self._db = db
+    def fetch(self) -> list[dict]:
+        return self._db.query("SELECT * FROM sales")
+
+class InventoryDataFetcher(DataFetcher):
+    def __init__(self, db):
+        self._db = db
+    def fetch(self) -> list[dict]:
+        return self._db.query("SELECT * FROM inventory")
+
+
+# --- OCP: Strategy pattern for formatting ---
+
+class ReportFormatter(ABC):
+    @abstractmethod
+    def format(self, data: list[dict]) -> bytes:
+        pass
+
+class PDFFormatter(ReportFormatter):
+    def format(self, data: list[dict]) -> bytes:
+        # PDF generation logic
+        return b"PDF content"
+
+class CSVFormatter(ReportFormatter):
+    def format(self, data: list[dict]) -> bytes:
+        return b"CSV content"
+
+
+# --- OCP: Strategy pattern for delivery ---
+
+class DeliveryMethod(ABC):
+    @abstractmethod
+    def deliver(self, output: bytes) -> None:
+        pass
+
+class EmailDelivery(DeliveryMethod):
+    def deliver(self, output: bytes) -> None:
+        print("Sending via email...")
+
+class S3Delivery(DeliveryMethod):
+    def deliver(self, output: bytes) -> None:
+        print("Uploading to S3...")
+
+
+# --- Clean orchestrator ---
+
+class ReportGenerator:
+    def __init__(self, fetcher: DataFetcher, formatter: ReportFormatter, delivery: DeliveryMethod):
+        self._fetcher = fetcher
+        self._formatter = formatter
+        self._delivery = delivery
+
+    def generate(self):
+        data = self._fetcher.fetch()
+        output = self._formatter.format(data)
+        self._delivery.deliver(output)
+</code></pre>
+    <p>
+      Each axis of change (data source, format, delivery) is now independent.
+      Adding a new format or delivery method requires only a new class.
+    </p>
+  </div>
+</div>
+
+<h3>Exercise 2: Fix the LSP Violation</h3>
+
+<p>
+  The following code has a bird hierarchy where <code>Penguin</code> inherits
+  from <code>Bird</code> but cannot fly. Functions that accept a <code>Bird</code>
+  will break with a Penguin. Fix this LSP violation.
+</p>
+
+<pre><code class="language-python"># PROBLEM CODE
+
+class Bird:
+    def __init__(self, name: str):
+        self.name = name
+
+    def fly(self, altitude: float) -> str:
+        return f"{self.name} flying at {altitude}m"
+
+    def eat(self, food: str) -> str:
+        return f"{self.name} eating {food}"
+
+
+class Penguin(Bird):
+    def fly(self, altitude: float) -> str:
+        raise NotImplementedError("Penguins can't fly!")
+
+
+def migrate_birds(birds: list[Bird], altitude: float):
+    """Move all birds to their migration altitude."""
+    for bird in birds:
+        print(bird.fly(altitude))  # Crashes on Penguin!
+</code></pre>
+
+<div class="reveal-answer" style="margin-top: 1rem;">
+  <button onclick="this.nextElementSibling.style.display='block'; this.style.display='none';"
+          style="padding: 8px 16px; cursor: pointer; background: #2563eb; color: white; border: none; border-radius: 4px;">
+    Reveal Solution
+  </button>
+  <div style="display: none;">
+    <h4>Solution</h4>
+    <pre><code class="language-python">from abc import ABC, abstractmethod
+
+
+class Bird(ABC):
+    def __init__(self, name: str):
+        self.name = name
+
+    @abstractmethod
+    def eat(self, food: str) -> str:
+        pass
+
+
+class FlyingBird(Bird):
+    @abstractmethod
+    def fly(self, altitude: float) -> str:
+        pass
+
+
+class Eagle(FlyingBird):
+    def fly(self, altitude: float) -> str:
+        return f"{self.name} soaring at {altitude}m"
+
+    def eat(self, food: str) -> str:
+        return f"{self.name} eating {food}"
+
+
+class Penguin(Bird):
+    def swim(self, depth: float) -> str:
+        return f"{self.name} diving to {depth}m"
+
+    def eat(self, food: str) -> str:
+        return f"{self.name} eating {food}"
+
+
+def migrate_flying_birds(birds: list[FlyingBird], altitude: float):
+    """Only accepts FlyingBird, so Penguin cannot be passed."""
+    for bird in birds:
+        print(bird.fly(altitude))
+</code></pre>
+    <p>
+      By splitting the hierarchy, <code>Penguin</code> never promises to fly.
+      The <code>migrate_flying_birds</code> function only accepts birds that can actually fly.
+    </p>
+  </div>
+</div>
+
+<h3>Exercise 3: Apply DIP to This Tightly-Coupled Logger</h3>
+
+<p>
+  The <code>OrderTracker</code> directly creates a file-based logger. Refactor it
+  so that the logging mechanism is injected, making it easy to swap in console
+  logging, cloud logging, or a test spy.
+</p>
+
+<pre><code class="language-python"># PROBLEM CODE
+
+class OrderTracker:
+    def __init__(self):
+        # DIP violation: directly depends on file system
+        self.log_file = open("orders.log", "a")
+
+    def track(self, order_id: str, status: str):
+        message = f"[{order_id}] Status changed to: {status}"
+        self.log_file.write(message + "\n")
+        self.log_file.flush()
+
+        if status == "failed":
+            # DIP violation: directly sends alert via hardcoded mechanism
+            import requests
+            requests.post("https://alerts.example.com/webhook", json={"msg": message})
+</code></pre>
+
+<div class="reveal-answer" style="margin-top: 1rem;">
+  <button onclick="this.nextElementSibling.style.display='block'; this.style.display='none';"
+          style="padding: 8px 16px; cursor: pointer; background: #2563eb; color: white; border: none; border-radius: 4px;">
+    Reveal Solution
+  </button>
+  <div style="display: none;">
+    <h4>Solution</h4>
+    <pre><code class="language-python">from abc import ABC, abstractmethod
+
+
+class Logger(ABC):
+    @abstractmethod
+    def log(self, message: str) -> None:
+        pass
+
+
+class AlertService(ABC):
+    @abstractmethod
+    def send_alert(self, message: str) -> None:
+        pass
+
+
+class FileLogger(Logger):
+    def __init__(self, path: str):
+        self._file = open(path, "a")
+
+    def log(self, message: str) -> None:
+        self._file.write(message + "\n")
+        self._file.flush()
+
+
+class ConsoleLogger(Logger):
+    def log(self, message: str) -> None:
+        print(f"[LOG] {message}")
+
+
+class WebhookAlertService(AlertService):
+    def __init__(self, url: str):
+        self._url = url
+
+    def send_alert(self, message: str) -> None:
+        import requests
+        requests.post(self._url, json={"msg": message})
+
+
+class OrderTracker:
+    def __init__(self, logger: Logger, alert_service: AlertService):
+        self._logger = logger
+        self._alert = alert_service
+
+    def track(self, order_id: str, status: str):
+        message = f"[{order_id}] Status changed to: {status}"
+        self._logger.log(message)
+
+        if status == "failed":
+            self._alert.send_alert(message)
+
+
+# Easy to test
+class SpyLogger(Logger):
+    def __init__(self):
+        self.messages = []
+    def log(self, message: str):
+        self.messages.append(message)
+
+class SpyAlertService(AlertService):
+    def __init__(self):
+        self.alerts = []
+    def send_alert(self, message: str):
+        self.alerts.append(message)
+
+def test_failed_order_sends_alert():
+    logger = SpyLogger()
+    alerts = SpyAlertService()
+    tracker = OrderTracker(logger, alerts)
+
+    tracker.track("ORD-001", "failed")
+
+    assert len(alerts.alerts) == 1
+    assert "ORD-001" in alerts.alerts[0]
+</code></pre>
+    <p>
+      The <code>OrderTracker</code> now depends only on abstractions. Testing
+      is trivial with spy implementations that record calls without side effects.
+    </p>
+  </div>
+</div>
+
+<h3>Bonus Challenge</h3>
+
+<p>
+  Take one of the solutions above and write a full test suite using <code>pytest</code>.
+  Verify that the refactored code is fully testable without any real infrastructure
+  (no files, no network, no database).
+</p>

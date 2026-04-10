@@ -1,0 +1,197 @@
+<h2>Turn-Based Architecture</h2>
+
+<p>Most board games are turn-based. This lesson covers the components needed to manage turns: player cycling, move history, undo support, win condition checking, and the generic TurnBasedGame abstract class.</p>
+
+<h3>Turn Manager</h3>
+
+<p>A TurnManager cycles through players in order, tracks whose turn it is, and provides methods to advance, skip, or reverse turn order:</p>
+
+<pre><code class="language-python">from typing import List
+
+class Player:
+    def __init__(self, name: str, symbol: str):
+        self.name = name
+        self.symbol = symbol
+
+    def __repr__(self) -> str:
+        return f"Player({self.name}, {self.symbol})"
+
+
+class TurnManager:
+    """Manages player turn order."""
+
+    def __init__(self, players: List[Player]):
+        if len(players) < 2:
+            raise ValueError("Need at least 2 players")
+        self._players = players
+        self._current_index = 0
+        self._turn_number = 0
+
+    @property
+    def current_player(self) -> Player:
+        return self._players[self._current_index]
+
+    @property
+    def turn_number(self) -> int:
+        return self._turn_number
+
+    def next_turn(self) -> Player:
+        """Advance to the next player."""
+        self._current_index = (self._current_index + 1) % len(self._players)
+        self._turn_number += 1
+        return self.current_player
+
+    def previous_turn(self) -> Player:
+        """Go back one turn (for undo)."""
+        self._current_index = (self._current_index - 1) % len(self._players)
+        self._turn_number -= 1
+        return self.current_player
+
+    def skip_turn(self) -> Player:
+        """Skip the current player's turn."""
+        return self.next_turn()
+
+    def reset(self) -> None:
+        self._current_index = 0
+        self._turn_number = 0
+</code></pre>
+
+<h3>Move History</h3>
+
+<p>Track every move for replay, analysis, and undo support:</p>
+
+<pre><code class="language-python">from dataclasses import dataclass
+from typing import Optional
+from datetime import datetime
+
+@dataclass
+class Move:
+    """Records a single move."""
+    player: Player
+    position: tuple  # (row, col)
+    turn_number: int
+    timestamp: datetime
+
+    def __repr__(self) -> str:
+        return f"Move({self.player.symbol} -> {self.position})"
+
+
+class MoveHistory:
+    """Tracks all moves in a game."""
+
+    def __init__(self):
+        self._moves: list[Move] = []
+
+    def record(self, move: Move) -> None:
+        self._moves.append(move)
+
+    def undo_last(self) -> Optional[Move]:
+        if self._moves:
+            return self._moves.pop()
+        return None
+
+    def get_all(self) -> list[Move]:
+        return list(self._moves)
+
+    def get_by_player(self, player: Player) -> list[Move]:
+        return [m for m in self._moves if m.player == player]
+
+    @property
+    def count(self) -> int:
+        return len(self._moves)
+</code></pre>
+
+<h3>Move as Command (Undo Support)</h3>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+
+class GameCommand(ABC):
+    @abstractmethod
+    def execute(self) -> None: pass
+    @abstractmethod
+    def undo(self) -> None: pass
+
+
+class PlacePieceCommand(GameCommand):
+    def __init__(self, board, row: int, col: int, symbol: str):
+        self._board = board
+        self._row = row
+        self._col = col
+        self._symbol = symbol
+        self._previous = board[row][col]
+
+    def execute(self) -> None:
+        self._board[self._row][self._col] = self._symbol
+
+    def undo(self) -> None:
+        self._board[self._row][self._col] = self._previous
+</code></pre>
+
+<h3>Generic Turn-Based Game</h3>
+
+<pre><code class="language-python">class TurnBasedGame(ABC):
+    """Abstract base class for any turn-based game."""
+
+    def __init__(self, players: List[Player]):
+        self._turn_mgr = TurnManager(players)
+        self._history = MoveHistory()
+        self._game_over = False
+        self._winner: Optional[Player] = None
+
+    def play_game(self):
+        """Main game loop."""
+        self.setup_board()
+        while not self._game_over:
+            self.display()
+            player = self._turn_mgr.current_player
+            move = self.get_player_move(player)
+
+            if not self.is_valid_move(move):
+                print("Invalid move, try again.")
+                continue
+
+            self.apply_move(move, player)
+            self._history.record(Move(
+                player=player, position=move,
+                turn_number=self._turn_mgr.turn_number,
+                timestamp=datetime.now()
+            ))
+
+            if self.check_win(player):
+                self._winner = player
+                self._game_over = True
+            elif self.check_draw():
+                self._game_over = True
+            else:
+                self._turn_mgr.next_turn()
+
+        self.display()
+        self.announce_result()
+
+    @abstractmethod
+    def setup_board(self): pass
+    @abstractmethod
+    def display(self): pass
+    @abstractmethod
+    def get_player_move(self, player) -> tuple: pass
+    @abstractmethod
+    def is_valid_move(self, move) -> bool: pass
+    @abstractmethod
+    def apply_move(self, move, player): pass
+    @abstractmethod
+    def check_win(self, player) -> bool: pass
+    @abstractmethod
+    def check_draw(self) -> bool: pass
+    @abstractmethod
+    def announce_result(self): pass
+</code></pre>
+
+<h3>Design Considerations</h3>
+
+<ul>
+    <li><strong>Player abstraction</strong> allows mixing human and AI players</li>
+    <li><strong>Move history</strong> enables replay, analysis, and undo</li>
+    <li><strong>TurnManager</strong> handles multi-player rotation cleanly</li>
+    <li><strong>Template Method</strong> (TurnBasedGame) defines the game loop once, subclasses customize per game</li>
+    <li><strong>Command pattern</strong> for moves enables undo/redo</li>
+</ul>

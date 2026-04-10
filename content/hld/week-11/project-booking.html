@@ -1,0 +1,126 @@
+<h2>Project: Booking System Prototype</h2>
+
+<p>This project implements a calendar-based booking system with per-listing per-date availability, double-booking prevention via pessimistic locking, a booking saga (lock -> pay -> confirm), dynamic pricing, search with date filtering, and cancellation policies with refunds.</p>
+
+<h3>Core Data Structures</h3>
+
+<pre><code class="language-python">from enum import Enum
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Set
+from datetime import date, timedelta
+
+class BookingStatus(Enum):
+    PENDING = "pending"
+    LOCKED = "locked"
+    CONFIRMED = "confirmed"
+    CANCELLED = "cancelled"
+    COMPLETED = "completed"
+
+class CancellationPolicy(Enum):
+    FLEXIBLE = "flexible"    # Full refund until 24h before
+    MODERATE = "moderate"    # Full refund until 5 days before
+    STRICT = "strict"        # 50% refund until 7 days before
+
+@dataclass
+class Listing:
+    listing_id: int
+    host_id: int
+    title: str
+    city: str
+    base_price: float
+    max_guests: int
+    amenities: Set[str]
+    cancellation_policy: CancellationPolicy
+
+@dataclass
+class Booking:
+    booking_id: int
+    guest_id: int
+    listing_id: int
+    check_in: date
+    check_out: date
+    nightly_prices: List[float] = field(default_factory=list)
+    total_price: float = 0.0
+    platform_fee: float = 0.0
+    host_payout: float = 0.0
+    status: BookingStatus = BookingStatus.PENDING
+    saga_steps: List[str] = field(default_factory=list)</code></pre>
+
+<h3>Calendar Service with Pessimistic Locking</h3>
+
+<pre><code class="language-python">class CalendarService:
+    """Manages availability with pessimistic locking."""
+    LOCK_TTL_SEC = 600  # 10 minute lock timeout
+
+    def __init__(self):
+        self.calendar = {}  # (listing_id, date) -> DaySlot
+
+    def check_availability(self, listing_id, check_in, check_out):
+        """Check if all dates in range are available."""
+        current = check_in
+        while current < check_out:
+            slot = self.calendar.get((listing_id, current))
+            if slot and (not slot.available or slot.locked_by):
+                return False
+            current += timedelta(days=1)
+        return True
+
+    def lock_dates(self, listing_id, check_in, check_out, booking_id):
+        """Acquire locks on date range. Atomic operation."""
+        # First verify all dates are lockable
+        if not self.check_availability(listing_id, check_in, check_out):
+            return False
+        # Lock all dates
+        current = check_in
+        while current < check_out:
+            slot = self.calendar.setdefault(
+                (listing_id, current), DaySlot())
+            slot.locked_by = booking_id
+            current += timedelta(days=1)
+        return True</code></pre>
+
+<h3>Booking Saga</h3>
+
+<p>The booking process follows a saga pattern with compensating transactions:</p>
+
+<ul>
+  <li><strong>Step 1 - Lock:</strong> Acquire date locks (10-minute TTL). If any date is taken, fail immediately.</li>
+  <li><strong>Step 2 - Pay:</strong> Process payment. If payment fails, release all locks (compensate step 1).</li>
+  <li><strong>Step 3 - Confirm:</strong> Mark dates as booked, finalize booking record. If this fails, refund payment and release locks.</li>
+</ul>
+
+<h3>Dynamic Pricing</h3>
+
+<ul>
+  <li><strong>Weekend premium:</strong> Friday and Saturday nights 20-30% above base price</li>
+  <li><strong>Seasonal pricing:</strong> Peak season (summer, holidays) multiplier up to 2x</li>
+  <li><strong>Demand-based:</strong> High occupancy in the area increases suggested price</li>
+  <li><strong>Last-minute discount:</strong> Unfilled dates within 48 hours may get reduced pricing</li>
+</ul>
+
+<h3>Cancellation and Refund Logic</h3>
+
+<pre><code class="language-python"># Refund calculation based on policy:
+# FLEXIBLE:  100% refund if > 24 hours before check-in
+# MODERATE:  100% if > 5 days, 50% if > 24 hours, 0% otherwise
+# STRICT:    50% if > 7 days, 0% otherwise
+
+# Platform fee is non-refundable in all cases
+# Host payout adjusted based on refund amount</code></pre>
+
+<h3>Search with Availability</h3>
+
+<ul>
+  <li>First pass: filter by city, capacity, amenities, and price range</li>
+  <li>Second pass: for each candidate listing, check calendar availability for requested dates</li>
+  <li>Return only listings that are both matching filters AND available for the full date range</li>
+</ul>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>Pessimistic locking prevents double-booking with deterministic behavior under contention</li>
+  <li>Lock TTL prevents orphaned locks when users abandon the booking flow</li>
+  <li>The saga pattern with compensating transactions ensures consistency across calendar, payment, and booking services</li>
+  <li>Dynamic pricing requires balancing host revenue optimization with guest price sensitivity</li>
+</ul>

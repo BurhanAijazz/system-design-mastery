@@ -1,0 +1,82 @@
+<h2>Indexing and Query Optimization</h2>
+
+<p>Indexes are the difference between a query taking 5ms and 5 minutes. An index trades <strong>write speed and storage</strong> for <strong>read speed</strong>. Every index you create slows down inserts and updates. The art is creating the right indexes for your query patterns.</p>
+
+<h3>What Is an Index?</h3>
+<p>An index is a separate data structure that speeds up data retrieval -- like the index at the back of a textbook.</p>
+
+<pre><code class="language-python"># WITHOUT INDEX: full table scan -- O(n)
+# Query: SELECT * FROM users WHERE email = 'alice@example.com'
+# Database scans ALL 10 million rows, checks each email.
+
+# WITH INDEX: B-tree lookup -- O(log n)
+# B-tree depth for 10M rows: ~3-4 levels
+# That's 3-4 disk reads vs 10 million. Massive difference.
+
+import bisect
+
+class BTreeIndex:
+    """Simplified B-tree index simulation."""
+    def __init__(self):
+        self.keys = []      # sorted keys
+        self.pointers = {}  # key -> row pointer
+
+    def insert(self, key, row_id):
+        bisect.insort(self.keys, key)
+        self.pointers[key] = row_id
+
+    def lookup(self, key):
+        """O(log n) lookup using binary search."""
+        idx = bisect.bisect_left(self.keys, key)
+        if idx < len(self.keys) and self.keys[idx] == key:
+            return self.pointers[key]
+        return None
+</code></pre>
+
+<h3>Index Types</h3>
+<ul>
+  <li><strong>B-tree</strong>: The default. Great for equality and range queries. Used by PostgreSQL, MySQL</li>
+  <li><strong>Hash</strong>: O(1) equality lookups only. No range queries. Used for in-memory caches</li>
+  <li><strong>Bitmap</strong>: Efficient for low-cardinality columns (status, gender). Great for data warehouses</li>
+  <li><strong>GiST/GIN</strong>: Specialized indexes for full-text search, geometric, and JSON data</li>
+</ul>
+
+<h3>Composite Indexes and the Leftmost Prefix Rule</h3>
+<p>A composite index on (country, city, name) can serve queries on:</p>
+<ul>
+  <li><code>WHERE country = 'US'</code> -- uses index</li>
+  <li><code>WHERE country = 'US' AND city = 'NYC'</code> -- uses index</li>
+  <li><code>WHERE country = 'US' AND city = 'NYC' AND name = 'Alice'</code> -- uses index</li>
+  <li><code>WHERE city = 'NYC'</code> -- <strong>cannot use index</strong> (skipped leftmost column)</li>
+</ul>
+
+<h3>Covering Indexes (Index-Only Scans)</h3>
+<p>If the index contains all columns the query needs, the database never reads the table at all. This is called a "covering index" or "index-only scan."</p>
+
+<pre><code class="language-python"># CREATE INDEX idx_email_name ON users(email, name);
+# SELECT name FROM users WHERE email = 'alice@example.com';
+# -> Index-only scan: the answer is IN the index. No table access.
+</code></pre>
+
+<h3>When NOT to Index</h3>
+<ul>
+  <li>Tables with fewer than ~1,000 rows (full scan is fast enough)</li>
+  <li>Columns that are rarely queried in WHERE clauses</li>
+  <li>Write-heavy tables where index maintenance costs outweigh read gains</li>
+  <li>Low-selectivity columns (e.g., boolean "active" with 50/50 split)</li>
+</ul>
+
+<h3>The N+1 Query Problem</h3>
+<pre><code class="language-python"># BAD: N+1 queries
+users = db.query("SELECT * FROM users LIMIT 100")  # 1 query
+for user in users:
+    orders = db.query(f"SELECT * FROM orders WHERE user_id = {user.id}")  # 100 queries!
+# Total: 101 queries
+
+# GOOD: JOIN or batch fetch
+results = db.query("""
+    SELECT u.*, o.* FROM users u
+    LEFT JOIN orders o ON u.id = o.user_id
+    LIMIT 100
+""")  # 1 query
+</code></pre>

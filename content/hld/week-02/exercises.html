@@ -1,0 +1,362 @@
+<h2>Week 2 Exercises: Networking and API Infrastructure</h2>
+
+<p>
+  These exercises test your understanding of DNS, CDN, load balancing, API protocols,
+  real-time communication, and API gateway design. Work through each problem before
+  checking the solution.
+</p>
+
+<h3>Exercise 1: Design a CDN Caching Strategy</h3>
+
+<p>
+  You are building an e-commerce platform that serves product pages, product images,
+  user-specific recommendations, and a shopping cart API. For each type of content,
+  design a caching strategy specifying: whether to cache on CDN, the TTL, the
+  Cache-Control header, and the cache invalidation approach.
+</p>
+
+<pre><code class="language-python"># For each content type, determine:
+# 1. Should it be cached on CDN? (yes/no and why)
+# 2. What TTL? (seconds/minutes/hours/days)
+# 3. Cache-Control header value
+# 4. Invalidation strategy (TTL expiry, purge API, versioned URLs)
+
+content_types = [
+    "Product page HTML (/products/widget-abc)",
+    "Product images (/images/widget-abc-front.jpg)",
+    "CSS/JS bundles (/assets/app.js)",
+    "User recommendations API (/api/recommendations?user=alice)",
+    "Shopping cart API (/api/cart)",
+    "Product search results (/api/search?q=widget)",
+]
+
+# Your analysis for each:
+# ...
+</code></pre>
+
+<div class="reveal-answer" style="margin-top: 1rem;">
+  <button onclick="this.nextElementSibling.style.display='block'; this.style.display='none';"
+          style="padding: 8px 16px; cursor: pointer; background: #2563eb; color: white; border: none; border-radius: 4px;">
+    Reveal Solution
+  </button>
+  <div style="display: none;">
+    <h4>Solution</h4>
+    <pre><code class="language-python">caching_strategy = {
+    "Product page HTML": {
+        "cdn_cache": True,
+        "ttl": "5 minutes",
+        "cache_control": "public, max-age=300, stale-while-revalidate=60",
+        "invalidation": "TTL expiry + CDN purge API on product updates",
+        "reasoning": (
+            "Product pages change occasionally (price updates, stock). "
+            "Short TTL ensures freshness. stale-while-revalidate serves "
+            "stale content while fetching fresh in background."
+        ),
+    },
+    "Product images": {
+        "cdn_cache": True,
+        "ttl": "1 year",
+        "cache_control": "public, max-age=31536000, immutable",
+        "invalidation": "Versioned URLs (widget-abc-front-v2.jpg or content hash)",
+        "reasoning": (
+            "Images rarely change. Use content-hashed filenames so new "
+            "images get new URLs. Old URLs stay cached forever."
+        ),
+    },
+    "CSS/JS bundles": {
+        "cdn_cache": True,
+        "ttl": "1 year",
+        "cache_control": "public, max-age=31536000, immutable",
+        "invalidation": "Content hash in filename (app.a1b2c3.js)",
+        "reasoning": (
+            "Build tools generate unique filenames per version. "
+            "Immutable caching is safe because the filename changes on every deploy."
+        ),
+    },
+    "User recommendations API": {
+        "cdn_cache": False,
+        "ttl": "N/A",
+        "cache_control": "private, no-store",
+        "invalidation": "N/A",
+        "reasoning": (
+            "Personalized content varies per user. CDN cannot cache it "
+            "without leaking one user's data to another. "
+            "Cache in the application layer (Redis) instead, keyed by user ID."
+        ),
+    },
+    "Shopping cart API": {
+        "cdn_cache": False,
+        "ttl": "N/A",
+        "cache_control": "private, no-store, no-cache",
+        "invalidation": "N/A",
+        "reasoning": (
+            "Cart is user-specific, frequently mutated, and must always "
+            "show the latest state. Never cache on CDN or browser."
+        ),
+    },
+    "Product search results": {
+        "cdn_cache": True,
+        "ttl": "1 minute",
+        "cache_control": "public, max-age=60, s-maxage=60",
+        "invalidation": "TTL expiry (search results are best-effort fresh)",
+        "reasoning": (
+            "Popular searches can be cached briefly. A 1-minute TTL "
+            "reduces origin load significantly while keeping results fresh enough. "
+            "Vary by query parameters."
+        ),
+    },
+}
+</code></pre>
+  </div>
+</div>
+
+<h3>Exercise 2: Choose the Right Real-Time Protocol</h3>
+
+<p>
+  For each scenario below, choose the best real-time communication protocol
+  (WebSocket, SSE, or Long Polling) and justify your choice. Consider bidirectionality,
+  update frequency, browser support, and infrastructure constraints.
+</p>
+
+<pre><code class="language-python"># Scenario A: Live auction platform
+# - Users place bids in real time
+# - All participants see bids instantly
+# - Auction has countdown timer synced across clients
+# - ~500 concurrent users per auction
+
+# Scenario B: DevOps deployment dashboard
+# - Shows log output from CI/CD pipeline
+# - Server streams log lines as they happen
+# - User does not send data back
+# - Corporate network with strict proxy/firewall
+
+# Scenario C: Social media notification bell
+# - Notify users of new likes, comments, follows
+# - Average 1-2 notifications per minute per user
+# - Must work on old browsers and mobile web
+# - 10 million concurrent users
+
+# Scenario D: Collaborative document editor (like Google Docs)
+# - Multiple users type simultaneously
+# - Cursor positions and text changes sync in real time
+# - Operational transform or CRDT-based
+# - ~50 concurrent editors per document
+
+# For each: Which protocol? Why? What are the trade-offs?
+</code></pre>
+
+<div class="reveal-answer" style="margin-top: 1rem;">
+  <button onclick="this.nextElementSibling.style.display='block'; this.style.display='none';"
+          style="padding: 8px 16px; cursor: pointer; background: #2563eb; color: white; border: none; border-radius: 4px;">
+    Reveal Solution
+  </button>
+  <div style="display: none;">
+    <h4>Solution</h4>
+    <pre><code class="language-python">scenarios = {
+    "A: Live auction": {
+        "protocol": "WebSocket",
+        "reasoning": (
+            "Bidirectional: users send bids AND receive bid updates. "
+            "Low latency is critical - a 500ms delay can mean losing a bid. "
+            "500 concurrent users per auction is manageable for WebSocket servers. "
+            "Timer sync requires server-push capability."
+        ),
+        "trade_off": "More complex server infrastructure, sticky sessions needed.",
+    },
+    "B: CI/CD log streaming": {
+        "protocol": "SSE (Server-Sent Events)",
+        "reasoning": (
+            "Unidirectional: server streams logs to client, no client-to-server needed. "
+            "SSE works over standard HTTP, which is important in corporate networks "
+            "where WebSocket upgrades might be blocked by proxies. "
+            "Built-in reconnection handles network interruptions gracefully. "
+            "Log frequency (lines/sec) is well within SSE capabilities."
+        ),
+        "trade_off": "Text-only (fine for logs). 6-connection limit in HTTP/1.1.",
+    },
+    "C: Social media notifications": {
+        "protocol": "Long Polling (or SSE)",
+        "reasoning": (
+            "Low frequency (1-2/min) means WebSocket overhead is not justified. "
+            "Long Polling is the most compatible option for old browsers. "
+            "At 10M concurrent users, simpler protocols reduce server complexity. "
+            "SSE is preferred if old browser support is not required. "
+            "The notification is not time-critical - a few seconds delay is acceptable."
+        ),
+        "trade_off": (
+            "Long Polling: higher latency, more HTTP overhead. "
+            "SSE: better efficiency but may not work on all old browsers."
+        ),
+    },
+    "D: Collaborative document editor": {
+        "protocol": "WebSocket",
+        "reasoning": (
+            "Bidirectional: every keystroke must be sent to server AND received by peers. "
+            "Very high frequency (multiple updates per second per user). "
+            "Low latency is essential for real-time collaboration feel. "
+            "Binary data support useful for operational transforms. "
+            "50 users/document is manageable; total system scale handled by sharding."
+        ),
+        "trade_off": "Complex conflict resolution logic, stateful connections.",
+    },
+}
+
+for scenario, info in scenarios.items():
+    print(f"\n{scenario}")
+    print(f"  Protocol: {info['protocol']}")
+    print(f"  Reasoning: {info['reasoning']}")
+    print(f"  Trade-off: {info['trade_off']}")
+</code></pre>
+  </div>
+</div>
+
+<h3>Exercise 3: Design an API Gateway Configuration</h3>
+
+<p>
+  You are setting up an API Gateway for a microservices-based food delivery platform.
+  The platform has these backend services: User Service, Restaurant Service, Order Service,
+  Payment Service, and Delivery Tracking Service. Design the gateway configuration
+  including routing rules, rate limits, authentication requirements, and caching policies.
+</p>
+
+<pre><code class="language-python"># Design the gateway configuration for these endpoints:
+#
+# Public endpoints (no auth):
+#   GET /api/restaurants           - List restaurants
+#   GET /api/restaurants/{id}      - Restaurant details
+#   GET /api/restaurants/{id}/menu - Restaurant menu
+#
+# Authenticated endpoints:
+#   POST /api/orders               - Place an order
+#   GET  /api/orders/{id}          - Order status
+#   GET  /api/orders/{id}/track    - Real-time delivery tracking
+#   POST /api/payments             - Process payment
+#   GET  /api/users/me             - Current user profile
+#   PUT  /api/users/me             - Update profile
+#
+# Admin endpoints:
+#   GET  /api/admin/orders         - All orders
+#   PUT  /api/admin/restaurants/{id} - Update restaurant
+#
+# For each endpoint/group, specify:
+# 1. Backend service to route to
+# 2. Authentication requirement (none, user, admin)
+# 3. Rate limit (requests per minute)
+# 4. Caching policy
+# 5. Any special handling (WebSocket upgrade, request transformation, etc.)
+</code></pre>
+
+<div class="reveal-answer" style="margin-top: 1rem;">
+  <button onclick="this.nextElementSibling.style.display='block'; this.style.display='none';"
+          style="padding: 8px 16px; cursor: pointer; background: #2563eb; color: white; border: none; border-radius: 4px;">
+    Reveal Solution
+  </button>
+  <div style="display: none;">
+    <h4>Solution</h4>
+    <pre><code class="language-python">gateway_config = {
+    "routes": [
+        {
+            "path": "/api/restaurants",
+            "methods": ["GET"],
+            "backend": "restaurant-service",
+            "auth": "none",
+            "rate_limit": "100 req/min per IP",
+            "cache": "CDN: 2 min, Vary: Accept-Language, geo-location",
+            "notes": "High traffic, public. Aggressive caching reduces DB load.",
+        },
+        {
+            "path": "/api/restaurants/{id}",
+            "methods": ["GET"],
+            "backend": "restaurant-service",
+            "auth": "none",
+            "rate_limit": "100 req/min per IP",
+            "cache": "CDN: 5 min, ETag-based revalidation",
+            "notes": "Cache individual restaurant pages. Purge on update.",
+        },
+        {
+            "path": "/api/restaurants/{id}/menu",
+            "methods": ["GET"],
+            "backend": "restaurant-service",
+            "auth": "none",
+            "rate_limit": "100 req/min per IP",
+            "cache": "CDN: 1 min (menus change with availability)",
+            "notes": "Short TTL because item availability changes frequently.",
+        },
+        {
+            "path": "/api/orders",
+            "methods": ["POST"],
+            "backend": "order-service",
+            "auth": "user (JWT)",
+            "rate_limit": "10 req/min per user (prevent spam orders)",
+            "cache": "none",
+            "notes": "Strict rate limit. Validate payment method before forwarding.",
+        },
+        {
+            "path": "/api/orders/{id}",
+            "methods": ["GET"],
+            "backend": "order-service",
+            "auth": "user (JWT, owner only)",
+            "rate_limit": "60 req/min per user",
+            "cache": "none (status changes frequently)",
+            "notes": "Gateway verifies user owns this order (authz check).",
+        },
+        {
+            "path": "/api/orders/{id}/track",
+            "methods": ["GET"],
+            "backend": "delivery-tracking-service",
+            "auth": "user (JWT, owner only)",
+            "rate_limit": "120 req/min per user",
+            "cache": "none",
+            "notes": "Upgrade to WebSocket or SSE for real-time tracking.",
+            "special": "WebSocket upgrade supported for real-time location stream.",
+        },
+        {
+            "path": "/api/payments",
+            "methods": ["POST"],
+            "backend": "payment-service",
+            "auth": "user (JWT)",
+            "rate_limit": "5 req/min per user",
+            "cache": "none",
+            "notes": "Most restrictive rate limit. Add idempotency key header.",
+            "special": "Require X-Idempotency-Key header to prevent double charges.",
+        },
+        {
+            "path": "/api/users/me",
+            "methods": ["GET", "PUT"],
+            "backend": "user-service",
+            "auth": "user (JWT)",
+            "rate_limit": "30 req/min per user",
+            "cache": "none (private, user-specific)",
+            "notes": "Gateway extracts user ID from JWT and passes as X-User-ID.",
+        },
+        {
+            "path": "/api/admin/*",
+            "methods": ["GET", "PUT", "POST", "DELETE"],
+            "backend": "varies by sub-path",
+            "auth": "admin (JWT with admin role)",
+            "rate_limit": "60 req/min per admin",
+            "cache": "none",
+            "notes": "Admin endpoints on separate BFF. IP whitelist recommended.",
+        },
+    ],
+    "global_settings": {
+        "ssl_termination": True,
+        "cors_origins": ["https://app.fooddelivery.com", "https://admin.fooddelivery.com"],
+        "request_size_limit": "10 MB",
+        "timeout": "30 seconds",
+        "health_check_path": "/health",
+        "logging": "All requests logged with request ID, latency, status code",
+    },
+}
+</code></pre>
+  </div>
+</div>
+
+<h3>Bonus Challenge</h3>
+
+<p>
+  Design a DNS failover strategy for your food delivery platform. The primary deployment
+  is in US-East, with a failover region in US-West. How would you configure DNS to
+  automatically route traffic to US-West if US-East goes down? What is the maximum
+  failover time and how can you minimize it?
+</p>

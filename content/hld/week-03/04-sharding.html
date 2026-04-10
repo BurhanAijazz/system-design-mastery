@@ -1,0 +1,64 @@
+<h2>Sharding Strategies</h2>
+
+<p>When a single database cannot handle your write load or data volume, you <strong>split the data across multiple database instances</strong>. This is sharding. Replication scales reads; sharding scales <strong>writes and storage</strong>.</p>
+
+<h3>When to Shard</h3>
+<p>Sharding is hard. Avoid it as long as possible by following this progression:</p>
+<ul>
+  <li>First: optimize queries and add indexes</li>
+  <li>Then: add read replicas for read scaling</li>
+  <li>Then: add a caching layer (Redis)</li>
+  <li>Finally: shard when you truly must (write bottleneck or data too big)</li>
+</ul>
+
+<h3>Sharding Strategies</h3>
+
+<h3>Range-Based Sharding</h3>
+<p>Split by value ranges of the shard key. Simple but can create hot partitions.</p>
+<pre><code class="language-python">def range_shard(user_id: int, shard_ranges: list) -> str:
+    """Route to shard based on ID range."""
+    # shard_ranges = [(0, 250000, "shard-0"), (250001, 500000, "shard-1"), ...]
+    for low, high, shard_name in shard_ranges:
+        if low <= user_id <= high:
+            return shard_name
+    return "shard-overflow"
+</code></pre>
+
+<h3>Hash-Based Sharding</h3>
+<p>Hash the shard key and mod by number of shards. Even distribution but no range queries.</p>
+<pre><code class="language-python">import hashlib
+
+def hash_shard(key: str, num_shards: int) -> int:
+    """Route to shard using hash of key."""
+    h = int(hashlib.md5(key.encode()).hexdigest(), 16)
+    return h % num_shards
+
+# Even distribution across 4 shards
+for user_id in range(1000):
+    shard = hash_shard(f"user:{user_id}", num_shards=4)
+</code></pre>
+
+<h3>Directory-Based Sharding</h3>
+<p>A lookup table maps each key to its shard. Most flexible but the directory is a single point of failure.</p>
+
+<h3>Geographic Sharding</h3>
+<p>Route by region for data locality. EU users go to EU shard, US users to US shard.</p>
+
+<h3>Shard Key Selection</h3>
+<p>The shard key is the <strong>most important decision</strong> in sharding. A bad key leads to hot partitions and cross-shard queries.</p>
+<ul>
+  <li><strong>High cardinality</strong>: many unique values for even distribution</li>
+  <li><strong>Even distribution</strong>: avoids hot partitions where one shard gets all traffic</li>
+  <li><strong>Query alignment</strong>: most queries should hit a single shard</li>
+  <li><strong>Bad keys</strong>: timestamp (all new writes go to one shard), country (uneven population)</li>
+  <li><strong>Good keys</strong>: user_id, order_id (high cardinality, even distribution)</li>
+</ul>
+
+<h3>Cross-Shard Queries</h3>
+<p>JOINs across shards are expensive -- they require scatter-gather across all shards. Design your shard key so most queries hit a single shard.</p>
+
+<h3>The Hot Partition Problem</h3>
+<p>Even with hash-based sharding, a single hot key (celebrity user, viral post) can overwhelm one shard. Solutions include further splitting the hot key or adding a caching layer in front.</p>
+
+<h3>Resharding</h3>
+<p>Adding or removing shards with hash-based sharding reshuffles most keys. Use <strong>consistent hashing</strong> to minimize data movement when the number of shards changes.</p>

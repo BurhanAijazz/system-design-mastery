@@ -1,0 +1,73 @@
+<h2>Netflix / Streaming Service Design</h2>
+
+<p>Netflix differs fundamentally from YouTube: it has a curated catalog of ~15,000 titles (not billions of user-uploaded videos), a subscription model, and content is pre-positioned at ISP-level CDN nodes. The challenge is bandwidth, not storage.</p>
+
+<h3>Define: Requirements</h3>
+
+<ul>
+  <li><strong>Functional:</strong> Browse catalog, stream video with adaptive quality, personalized recommendations, user profiles, continue watching, download for offline, parental controls</li>
+  <li><strong>Non-Functional:</strong> Playback within 2 seconds, zero buffering (adaptive quality over stalling), 99.99% availability globally, 200M+ concurrent streams</li>
+</ul>
+
+<h3>How Netflix Differs from YouTube</h3>
+
+<ul>
+  <li><strong>YouTube:</strong> User-generated, billions of videos, long tail distribution, upload pipeline critical, ad-supported</li>
+  <li><strong>Netflix:</strong> Curated catalog (~15K titles), content pre-transcoded hours before release, every title gets many views, subscription model, content pre-positioned at ISP CDN nodes</li>
+</ul>
+
+<h3>Estimate</h3>
+
+<pre><code class="language-python"># 250M subscribers, 100M DAU
+# Average session: 2 hours
+
+# CONCURRENT STREAMS:
+#   100M / 24 x 2 hrs avg = ~8M concurrent average
+#   Peak (7-11 PM): ~20M concurrent
+#   20M x 5 Mbps avg = 100 Tbps peak bandwidth!
+
+# STORAGE:
+#   15,000 titles x 100 GB (all resolutions + codecs + languages)
+#   Total: 1.5 PB catalog
+#   Small compared to YouTube! Challenge is BANDWIDTH, not storage.
+
+# METADATA:
+#   15K titles x 50 KB = 750 MB (tiny!)
+#   250M user profiles x 5 KB = 1.25 TB
+#   Watch history: 250M x 200 entries x 100B = 5 TB</code></pre>
+
+<h3>Open Connect: Netflix's Custom CDN</h3>
+
+<p>Netflix built its own CDN called Open Connect because commercial CDNs cannot handle 100+ Tbps cost-effectively:</p>
+
+<ul>
+  <li><strong>ISP-embedded appliances:</strong> Custom hardware boxes placed inside ISP data centers</li>
+  <li><strong>Pre-positioned content:</strong> Popular titles pushed to ISP nodes before prime time</li>
+  <li><strong>95%+ traffic served from ISP edge:</strong> Traffic never reaches Netflix's origin servers</li>
+  <li><strong>Cost savings:</strong> Reduces bandwidth cost by 10-100x vs commercial CDN</li>
+</ul>
+
+<h3>Architecture</h3>
+
+<ul>
+  <li><strong>Control Plane (AWS):</strong> API, authentication, recommendation engine, user profiles, billing -- all non-video services run on AWS microservices</li>
+  <li><strong>Data Plane (Open Connect):</strong> Video streaming traffic flows entirely through ISP-embedded CDN nodes</li>
+  <li><strong>Content Pipeline:</strong> Ingest master copy, transcode to 10+ resolution/codec combinations, distribute to Open Connect nodes worldwide</li>
+</ul>
+
+<h3>Recommendation Engine</h3>
+
+<ul>
+  <li>The home screen IS the product -- users decide what to watch based on recommendations</li>
+  <li>Pre-computed offline (batch ML pipeline), personalized per profile</li>
+  <li>A/B testing is core to Netflix culture -- every UI change is tested on user segments</li>
+</ul>
+
+<h3>Key Design Decisions</h3>
+
+<ul>
+  <li><strong>Pre-transcode everything:</strong> Unlike YouTube (on-demand transcoding), Netflix transcodes all content ahead of time in every resolution and codec combination</li>
+  <li><strong>Adaptive bitrate:</strong> Client dynamically switches quality based on bandwidth; prioritizes smooth playback over resolution</li>
+  <li><strong>Microservices architecture:</strong> Netflix pioneered microservices at scale (800+ services); each independently deployable and scalable</li>
+  <li><strong>Chaos engineering:</strong> Netflix invented Chaos Monkey to randomly kill services and verify resilience</li>
+</ul>

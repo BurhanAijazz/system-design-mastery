@@ -1,0 +1,366 @@
+<h2>Project: Smart Home System</h2>
+
+<p>
+  In this project, you will build a smart home management system that combines multiple
+  structural design patterns: Adapter, Facade, Proxy, and Composite. The system manages
+  heterogeneous IoT devices from different manufacturers through a unified interface.
+</p>
+
+<h3>Project Overview</h3>
+
+<ul>
+  <li><strong>Goal:</strong> Build a smart home controller that manages devices from multiple vendors.</li>
+  <li><strong>Patterns used:</strong> Adapter, Facade, Proxy, Composite</li>
+  <li><strong>Estimated time:</strong> 3-4 hours</li>
+  <li><strong>Deliverable:</strong> Working Python package with tests and a CLI demo</li>
+</ul>
+
+<h3>Architecture Overview</h3>
+
+<p>
+  The system has four layers, each using a different pattern:
+</p>
+
+<ul>
+  <li><strong>Adapter layer:</strong> Wraps vendor-specific device APIs into a common <code>SmartDevice</code> interface.</li>
+  <li><strong>Composite layer:</strong> Groups devices into rooms, floors, and the whole house hierarchy.</li>
+  <li><strong>Proxy layer:</strong> Adds access control and logging around device operations.</li>
+  <li><strong>Facade layer:</strong> Provides simple high-level operations (scenes) to end users.</li>
+</ul>
+
+<h3>Step 1: Common Device Interface</h3>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from enum import Enum
+from datetime import datetime
+
+
+class DeviceStatus(Enum):
+    ON = "on"
+    OFF = "off"
+    ERROR = "error"
+    STANDBY = "standby"
+
+
+@dataclass
+class DeviceInfo:
+    id: str
+    name: str
+    device_type: str
+    manufacturer: str
+    status: DeviceStatus
+    properties: dict = field(default_factory=dict)
+
+
+class SmartDevice(ABC):
+    """Common interface for all smart home devices."""
+
+    @abstractmethod
+    def get_info(self) -> DeviceInfo:
+        pass
+
+    @abstractmethod
+    def turn_on(self) -> bool:
+        pass
+
+    @abstractmethod
+    def turn_off(self) -> bool:
+        pass
+
+    @abstractmethod
+    def get_status(self) -> DeviceStatus:
+        pass
+
+
+class Dimmable(ABC):
+    @abstractmethod
+    def set_brightness(self, level: int) -> None:
+        """Set brightness 0-100."""
+        pass
+
+
+class TemperatureControllable(ABC):
+    @abstractmethod
+    def set_temperature(self, celsius: float) -> None:
+        pass
+
+    @abstractmethod
+    def get_temperature(self) -> float:
+        pass
+</code></pre>
+
+<h3>Step 2: Vendor-Specific Devices (to be Adapted)</h3>
+
+<pre><code class="language-python"># --- Philips Hue API (cannot be modified) ---
+
+class PhilipsHueBulb:
+    def __init__(self, bulb_id: str, name: str):
+        self.bulb_id = bulb_id
+        self.name = name
+        self._state = False
+        self._brightness = 254  # Hue uses 0-254 scale
+
+    def set_state(self, on: bool) -> dict:
+        self._state = on
+        return {"success": True, "state": {"on": on}}
+
+    def set_bri(self, brightness: int) -> dict:
+        """Brightness on 0-254 scale."""
+        self._brightness = max(0, min(254, brightness))
+        return {"success": True, "bri": self._brightness}
+
+    def get_state(self) -> dict:
+        return {"on": self._state, "bri": self._brightness, "reachable": True}
+
+
+# --- Nest Thermostat API (cannot be modified) ---
+
+class NestThermostat:
+    def __init__(self, device_id: str, label: str):
+        self.device_id = device_id
+        self.label = label
+        self._target_temp_f = 72.0  # Nest uses Fahrenheit
+        self._is_active = False
+        self._mode = "off"
+
+    def set_target_temperature_f(self, temp_f: float):
+        self._target_temp_f = temp_f
+        self._is_active = True
+        self._mode = "heat" if temp_f > 68 else "cool"
+
+    def get_status_report(self) -> dict:
+        return {
+            "device_id": self.device_id,
+            "target_temp_f": self._target_temp_f,
+            "hvac_mode": self._mode,
+            "is_online": True,
+        }
+
+    def shutdown(self):
+        self._is_active = False
+        self._mode = "off"
+
+
+# --- Generic WiFi Plug API (cannot be modified) ---
+
+class TuyaSmartPlug:
+    def __init__(self, ip: str, device_name: str):
+        self.ip = ip
+        self.device_name = device_name
+        self._powered = False
+
+    def send_command(self, command: str) -> str:
+        if command == "POWER_ON":
+            self._powered = True
+            return "OK"
+        elif command == "POWER_OFF":
+            self._powered = False
+            return "OK"
+        elif command == "STATUS":
+            return "ON" if self._powered else "OFF"
+        return "ERR_UNKNOWN_CMD"
+</code></pre>
+
+<h3>Step 3: Write Adapters</h3>
+
+<p>
+  Create adapter classes that wrap each vendor device into the <code>SmartDevice</code>
+  interface. Here is the Philips Hue adapter as an example:
+</p>
+
+<pre><code class="language-python">class PhilipsHueAdapter(SmartDevice, Dimmable):
+    """Adapts PhilipsHueBulb to SmartDevice + Dimmable interfaces."""
+
+    def __init__(self, bulb: PhilipsHueBulb):
+        self._bulb = bulb
+
+    def get_info(self) -> DeviceInfo:
+        state = self._bulb.get_state()
+        return DeviceInfo(
+            id=self._bulb.bulb_id,
+            name=self._bulb.name,
+            device_type="light",
+            manufacturer="Philips",
+            status=DeviceStatus.ON if state["on"] else DeviceStatus.OFF,
+            properties={"brightness": round(state["bri"] / 254 * 100)},
+        )
+
+    def turn_on(self) -> bool:
+        result = self._bulb.set_state(True)
+        return result.get("success", False)
+
+    def turn_off(self) -> bool:
+        result = self._bulb.set_state(False)
+        return result.get("success", False)
+
+    def get_status(self) -> DeviceStatus:
+        state = self._bulb.get_state()
+        if not state.get("reachable"):
+            return DeviceStatus.ERROR
+        return DeviceStatus.ON if state["on"] else DeviceStatus.OFF
+
+    def set_brightness(self, level: int) -> None:
+        """Convert 0-100 scale to 0-254 Hue scale."""
+        hue_level = round(level / 100 * 254)
+        self._bulb.set_bri(hue_level)
+</code></pre>
+
+<p>
+  <strong>Your task:</strong> Write <code>NestThermostatAdapter</code> (SmartDevice + TemperatureControllable)
+  and <code>TuyaPlugAdapter</code> (SmartDevice) following the same pattern. Convert Fahrenheit
+  to Celsius for the thermostat.
+</p>
+
+<h3>Step 4: Composite for Device Groups</h3>
+
+<pre><code class="language-python">class DeviceGroup:
+    """Composite: a named group of devices (room, floor, house)."""
+
+    def __init__(self, name: str):
+        self.name = name
+        self._devices: list[SmartDevice] = []
+        self._subgroups: list["DeviceGroup"] = []
+
+    def add_device(self, device: SmartDevice):
+        self._devices.append(device)
+
+    def add_subgroup(self, group: "DeviceGroup"):
+        self._subgroups.append(group)
+
+    def all_devices(self) -> list[SmartDevice]:
+        """Recursively get all devices in this group and subgroups."""
+        devices = list(self._devices)
+        for sub in self._subgroups:
+            devices.extend(sub.all_devices())
+        return devices
+
+    def turn_all_on(self) -> dict[str, bool]:
+        results = {}
+        for device in self.all_devices():
+            info = device.get_info()
+            results[info.name] = device.turn_on()
+        return results
+
+    def turn_all_off(self) -> dict[str, bool]:
+        results = {}
+        for device in self.all_devices():
+            info = device.get_info()
+            results[info.name] = device.turn_off()
+        return results
+
+    def status_report(self) -> list[dict]:
+        report = []
+        for device in self.all_devices():
+            info = device.get_info()
+            report.append({
+                "name": info.name,
+                "type": info.device_type,
+                "status": info.status.value,
+                "properties": info.properties,
+            })
+        return report
+</code></pre>
+
+<h3>Step 5: Protection Proxy</h3>
+
+<pre><code class="language-python">class DeviceAccessProxy(SmartDevice):
+    """Protection proxy: restricts access based on user role."""
+
+    def __init__(self, device: SmartDevice, user_role: str):
+        self._device = device
+        self._role = user_role
+        self._log: list[dict] = []
+
+    def _check_and_log(self, action: str, min_role: str = "user"):
+        roles = {"guest": 0, "user": 1, "admin": 2}
+        self._log.append({
+            "action": action,
+            "role": self._role,
+            "device": self._device.get_info().name,
+            "timestamp": datetime.now().isoformat(),
+        })
+        if roles.get(self._role, 0) < roles.get(min_role, 0):
+            raise PermissionError(f"Role '{self._role}' cannot perform '{action}'")
+
+    def get_info(self) -> DeviceInfo:
+        return self._device.get_info()
+
+    def turn_on(self) -> bool:
+        self._check_and_log("turn_on", "user")
+        return self._device.turn_on()
+
+    def turn_off(self) -> bool:
+        self._check_and_log("turn_off", "user")
+        return self._device.turn_off()
+
+    def get_status(self) -> DeviceStatus:
+        self._check_and_log("get_status", "guest")
+        return self._device.get_status()
+
+    @property
+    def audit_log(self) -> list[dict]:
+        return self._log.copy()
+</code></pre>
+
+<h3>Step 6: Smart Home Facade</h3>
+
+<pre><code class="language-python">class SmartHomeFacade:
+    """Facade: provides simple scene-based control over the entire home."""
+
+    def __init__(self, house: DeviceGroup):
+        self._house = house
+
+    def good_morning(self):
+        """Turn on lights, set thermostat to comfortable temp."""
+        print("Scene: Good Morning")
+        for device in self._house.all_devices():
+            info = device.get_info()
+            if info.device_type == "light":
+                device.turn_on()
+                if isinstance(device, Dimmable):
+                    device.set_brightness(80)
+            elif info.device_type == "thermostat":
+                if isinstance(device, TemperatureControllable):
+                    device.set_temperature(22.0)
+
+    def good_night(self):
+        """Turn off all lights, lower thermostat."""
+        print("Scene: Good Night")
+        for device in self._house.all_devices():
+            info = device.get_info()
+            if info.device_type == "light":
+                device.turn_off()
+            elif info.device_type == "thermostat":
+                if isinstance(device, TemperatureControllable):
+                    device.set_temperature(18.0)
+
+    def leaving_home(self):
+        """Turn everything off."""
+        print("Scene: Leaving Home")
+        self._house.turn_all_off()
+
+    def status(self) -> list[dict]:
+        return self._house.status_report()
+</code></pre>
+
+<h3>Requirements Checklist</h3>
+
+<ul>
+  <li>Implement all three adapters (Philips, Nest, Tuya).</li>
+  <li>Build a composite hierarchy: House > Floors > Rooms > Devices.</li>
+  <li>Wrap at least two devices with the protection proxy.</li>
+  <li>Implement the facade with at least 4 scenes.</li>
+  <li>Write unit tests for each adapter (verify interface translation).</li>
+  <li>Write integration tests for the facade scenes.</li>
+  <li>All tests must pass without any real hardware or network calls.</li>
+</ul>
+
+<h3>Stretch Goals</h3>
+
+<ul>
+  <li>Add a <code>ScheduledProxy</code> that only allows device control during certain hours.</li>
+  <li>Add an <code>EnergyMonitor</code> composite that calculates total power consumption across all devices.</li>
+  <li>Implement a CLI using <code>argparse</code> that lets users trigger scenes and view status.</li>
+  <li>Add a new vendor (e.g., Ring doorbell) by writing only an adapter &mdash; no other code changes.</li>
+</ul>

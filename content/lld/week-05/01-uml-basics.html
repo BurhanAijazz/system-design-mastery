@@ -1,0 +1,148 @@
+<h2>UML Class Diagram Basics</h2>
+
+<p>UML (Unified Modeling Language) class diagrams show the structure of a system: classes, their attributes, methods, and relationships. In LLD interviews, you often sketch class diagrams on a whiteboard. You do not need perfect UML, but you need to communicate structure clearly.</p>
+
+<h3>UML Class Notation</h3>
+
+<p>A UML class is drawn as a box with three sections:</p>
+
+<pre><code>+---------------------------+
+|       ClassName           |   &lt;- Class name
++---------------------------+
+| + public_attr: str        |   &lt;- Attributes
+| - _private_attr: int      |
+| # _protected_attr: float  |
++---------------------------+
+| + public_method(): str    |   &lt;- Methods
+| - _private_method(): None |
+| + static_method(): int    |
++---------------------------+
+</code></pre>
+
+<h3>Visibility Symbols</h3>
+
+<ul>
+    <li><code>+</code> public -- no underscore in Python</li>
+    <li><code>-</code> private -- single underscore <code>_</code> in Python</li>
+    <li><code>#</code> protected -- single underscore <code>_</code> in Python (convention only)</li>
+</ul>
+
+<p>Python does not have true private/protected access modifiers. It is all convention. In UML, use <code>+</code> for public API and <code>-</code> for internal implementation.</p>
+
+<h3>Example: BankAccount</h3>
+
+<pre><code>UML:
++---------------------------+
+|       BankAccount         |
++---------------------------+
+| - _account_id: str        |
+| - _owner: str             |
+| - _balance: float         |
++---------------------------+
+| + deposit(amount): None   |
+| + withdraw(amount): bool  |
+| + get_balance(): float    |
++---------------------------+
+</code></pre>
+
+<p>Translating directly to Python:</p>
+
+<pre><code class="language-python">class BankAccount:
+    """Maps directly from the UML diagram above."""
+
+    def __init__(self, account_id: str, owner: str, balance: float = 0.0):
+        self._account_id = account_id   # - private
+        self._owner = owner             # - private
+        self._balance = balance         # - private
+
+    def deposit(self, amount: float) -> None:       # + public
+        self._balance += amount
+
+    def withdraw(self, amount: float) -> bool:      # + public
+        if amount > self._balance:
+            return False
+        self._balance -= amount
+        return True
+
+    def get_balance(self) -> float:                 # + public
+        return self._balance
+</code></pre>
+
+<h3>Abstract Classes and Interfaces</h3>
+
+<pre><code>UML uses stereotypes:
++----------------------------+
+|  &lt;&lt;abstract&gt;&gt;              |
+|    Shape                   |
++----------------------------+
+| # _color: str              |
++----------------------------+
+| + area(): float            |  (italic = abstract)
+| + perimeter(): float       |  (italic = abstract)
+| + describe(): str          |  (concrete)
++----------------------------+
+</code></pre>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+
+class Shape(ABC):
+    def __init__(self, color: str = "black"):
+        self._color = color
+
+    @abstractmethod
+    def area(self) -> float:
+        pass
+
+    @abstractmethod
+    def perimeter(self) -> float:
+        pass
+
+    def describe(self) -> str:
+        return f"{self._color} shape, area={self.area():.2f}"
+</code></pre>
+
+<h3>Enums in UML</h3>
+
+<pre><code>+-------------------+
+| &lt;&lt;enum&gt;&gt;          |
+|   SpotSize        |
++-------------------+
+| SMALL             |
+| MEDIUM            |
+| LARGE             |
++-------------------+
+</code></pre>
+
+<pre><code class="language-python">from enum import Enum
+
+class SpotSize(Enum):
+    SMALL = "small"
+    MEDIUM = "medium"
+    LARGE = "large"
+</code></pre>
+
+<h3>Static and Class Methods</h3>
+
+<p>In UML, static methods are underlined. In Python:</p>
+
+<pre><code class="language-python">class MathUtils:
+    @staticmethod
+    def factorial(n: int) -> int:
+        if n <= 1:
+            return 1
+        return n * MathUtils.factorial(n - 1)
+
+    @classmethod
+    def from_string(cls, value: str) -> "MathUtils":
+        return cls()
+</code></pre>
+
+<h3>Tips for LLD Interviews</h3>
+
+<ul>
+    <li>Draw class boxes quickly -- name, key attributes, key methods</li>
+    <li>Skip trivial getters/setters in the diagram</li>
+    <li>Focus on relationships between classes, not exhaustive details</li>
+    <li>Use visibility markers (<code>+</code>, <code>-</code>) to show your design intent</li>
+    <li>Mark abstract classes and interfaces clearly</li>
+</ul>

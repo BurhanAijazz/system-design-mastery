@@ -1,0 +1,67 @@
+<h2>Design: Distributed Job Scheduler</h2>
+<p>Design a job scheduler that executes recurring and one-off tasks reliably at scale.</p>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Support cron-like schedules and one-time delayed jobs</li>
+  <li>At-least-once or exactly-once execution guarantees</li>
+  <li>Scalable worker pool with automatic retry and dead letter queue</li>
+  <li>Dashboard for job status, history, and manual re-trigger</li>
+</ul>
+
+<h3>High-Level Architecture</h3>
+<ul>
+  <li><strong>Scheduler Service</strong> &mdash; Evaluates cron expressions, enqueues jobs when due</li>
+  <li><strong>Job Queue</strong> &mdash; Persistent message queue (Kafka / SQS) for pending jobs</li>
+  <li><strong>Worker Pool</strong> &mdash; Stateless workers that pull and execute jobs</li>
+  <li><strong>Job Store (DB)</strong> &mdash; Job definitions, schedules, status, execution history</li>
+  <li><strong>Dead Letter Queue</strong> &mdash; Failed jobs after max retries land here for inspection</li>
+</ul>
+
+<h3>Key Components</h3>
+<pre><code class="language-python">import time, threading
+from datetime import datetime
+
+class JobScheduler:
+    def __init__(self):
+        self.jobs = {}       # job_id -> JobDef
+        self.queue = []      # min-heap by next_run_at
+
+    def register(self, job_id, cron_expr, handler):
+        next_run = self._next_cron_time(cron_expr)
+        self.jobs[job_id] = {
+            "cron": cron_expr, "handler": handler,
+            "next_run": next_run, "retries": 0
+        }
+        heapq.heappush(self.queue, (next_run, job_id))
+
+    def run_loop(self):
+        while True:
+            now = time.time()
+            while self.queue and self.queue[0][0] <= now:
+                _, job_id = heapq.heappop(self.queue)
+                self._execute(job_id)
+            time.sleep(1)
+
+    def _execute(self, job_id):
+        job = self.jobs[job_id]
+        try:
+            job["handler"]()
+            job["retries"] = 0
+        except Exception:
+            job["retries"] += 1
+            if job["retries"] > 3:
+                self._send_to_dlq(job_id)
+                return
+        # Reschedule next occurrence
+        job["next_run"] = self._next_cron_time(job["cron"])
+        heapq.heappush(self.queue, (job["next_run"], job_id))
+</code></pre>
+
+<h3>Scaling Considerations</h3>
+<ul>
+  <li>Leader election (via Zookeeper/etcd) ensures only one scheduler fires each job</li>
+  <li>Workers are stateless &mdash; scale horizontally based on queue depth</li>
+  <li>Idempotent job handlers enable safe retries for exactly-once semantics</li>
+  <li>Partition jobs by tenant or priority to isolate workloads</li>
+</ul>

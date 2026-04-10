@@ -1,0 +1,68 @@
+<h2>Design: Proximity Service</h2>
+<p>Design a service that finds nearby places (restaurants, gas stations) given a user's location.</p>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Find all places within a given radius of a lat/lng coordinate</li>
+  <li>Support filtering by category, rating, open hours</li>
+  <li>Low latency (&lt;100ms) for real-time mobile queries</li>
+  <li>Handle millions of places and high query volume</li>
+</ul>
+
+<h3>High-Level Architecture</h3>
+<ul>
+  <li><strong>Location Service API</strong> &mdash; GET /nearby?lat=X&lng=Y&radius=R</li>
+  <li><strong>Geospatial Index</strong> &mdash; Geohash or Quadtree for efficient spatial queries</li>
+  <li><strong>Place Database</strong> &mdash; Full place details (name, address, hours, ratings)</li>
+  <li><strong>Cache Layer</strong> &mdash; Cache geohash prefix results; places change infrequently</li>
+</ul>
+
+<h3>Key Components</h3>
+<pre><code class="language-python">import math
+
+def geohash_encode(lat, lng, precision=6):
+    """Encode lat/lng into a geohash string."""
+    # Each character narrows the bounding box
+    # precision=6 gives ~1.2km x 0.6km cells
+    lat_range, lng_range = (-90, 90), (-180, 180)
+    bits, ch, idx = 0, 0, 0
+    result = []
+    base32 = "0123456789bcdefghjkmnpqrstuvwxyz"
+    is_lng = True
+    while len(result) < precision:
+        if is_lng:
+            mid = (lng_range[0] + lng_range[1]) / 2
+            if lng >= mid:
+                ch |= (1 << (4 - bits)); lng_range = (mid, lng_range[1])
+            else:
+                lng_range = (lng_range[0], mid)
+        else:
+            mid = (lat_range[0] + lat_range[1]) / 2
+            if lat >= mid:
+                ch |= (1 << (4 - bits)); lat_range = (mid, lat_range[1])
+            else:
+                lat_range = (lat_range[0], mid)
+        is_lng = not is_lng
+        bits += 1
+        if bits == 5:
+            result.append(base32[ch]); bits, ch = 0, 0
+    return ''.join(result)
+
+def haversine(lat1, lng1, lat2, lng2):
+    R = 6371  # Earth radius in km
+    dlat = math.radians(lat2 - lat1)
+    dlng = math.radians(lng2 - lng1)
+    a = (math.sin(dlat/2)**2 +
+         math.cos(math.radians(lat1)) *
+         math.cos(math.radians(lat2)) *
+         math.sin(dlng/2)**2)
+    return R * 2 * math.asin(math.sqrt(a))
+</code></pre>
+
+<h3>Scaling Considerations</h3>
+<ul>
+  <li>Query the target geohash cell plus its 8 neighbors to avoid edge-miss</li>
+  <li>Read replicas &mdash; place data is read-heavy and changes slowly</li>
+  <li>Quadtree splits dense urban areas into smaller cells than rural ones</li>
+  <li>Pre-compute geohash for every place on write; index by geohash prefix</li>
+</ul>

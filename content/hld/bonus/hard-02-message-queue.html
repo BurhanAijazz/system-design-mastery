@@ -1,0 +1,68 @@
+<h2>Design: Distributed Message Queue</h2>
+<p>Design a Kafka-like distributed message queue for high-throughput event streaming.</p>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Durable, ordered message delivery within a partition</li>
+  <li>Consumer groups with partition assignment for parallel consumption</li>
+  <li>At-least-once delivery with consumer offset tracking</li>
+  <li>Replication for fault tolerance; survive broker failures</li>
+</ul>
+
+<h3>High-Level Architecture</h3>
+<ul>
+  <li><strong>Producers</strong> &mdash; Publish messages to a topic, optionally keyed for partition routing</li>
+  <li><strong>Brokers</strong> &mdash; Store partitions as append-only segment files on disk</li>
+  <li><strong>Controller</strong> &mdash; Manages partition leader election and broker membership</li>
+  <li><strong>Consumer Groups</strong> &mdash; Each partition assigned to exactly one consumer in a group</li>
+  <li><strong>ZooKeeper / KRaft</strong> &mdash; Metadata coordination and leader election</li>
+</ul>
+
+<h3>Key Components</h3>
+<pre><code class="language-python">from collections import defaultdict
+
+class Partition:
+    def __init__(self, topic, partition_id):
+        self.topic = topic
+        self.id = partition_id
+        self.log = []  # append-only message log
+        self.replicas = []
+
+    def append(self, message):
+        offset = len(self.log)
+        self.log.append({"offset": offset, "data": message})
+        self._replicate({"offset": offset, "data": message})
+        return offset
+
+    def read(self, offset, max_count=10):
+        return self.log[offset:offset + max_count]
+
+    def _replicate(self, entry):
+        for replica in self.replicas:
+            replica.append_replica(entry)
+
+class ConsumerGroup:
+    def __init__(self, group_id):
+        self.group_id = group_id
+        self.offsets = {}  # (topic, partition) -> committed offset
+        self.assignments = {}  # consumer_id -> [partitions]
+
+    def commit(self, topic, partition, offset):
+        self.offsets[(topic, partition)] = offset
+
+    def poll(self, consumer_id, broker):
+        messages = []
+        for p in self.assignments.get(consumer_id, []):
+            offset = self.offsets.get((p.topic, p.id), 0)
+            batch = p.read(offset, max_count=100)
+            messages.extend(batch)
+        return messages
+</code></pre>
+
+<h3>Scaling Considerations</h3>
+<ul>
+  <li>More partitions = more parallelism, but also more rebalance overhead</li>
+  <li>ISR (in-sync replicas): only acknowledge when min ISR replicas have the message</li>
+  <li>Log compaction retains only latest value per key for changelog topics</li>
+  <li>Consumer lag monitoring triggers auto-scaling of consumer instances</li>
+</ul>

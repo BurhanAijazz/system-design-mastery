@@ -1,0 +1,176 @@
+<h2>Open/Closed Principle (OCP)</h2>
+
+<p>
+  The Open/Closed Principle states that software entities (classes, modules, functions)
+  should be <strong>open for extension</strong> but <strong>closed for modification</strong>.
+  In practical terms, you should be able to add new behavior without changing existing,
+  tested code. This principle reduces the risk of introducing bugs when requirements evolve.
+</p>
+
+<h3>Why It Matters</h3>
+
+<p>
+  Every time you modify existing code, you risk breaking something that already works.
+  OCP encourages designs where new features are added by writing <em>new</em> code rather
+  than editing old code. The most common technique to achieve this is the
+  <strong>Strategy Pattern</strong>, where behavior is encapsulated behind an interface and
+  injected at runtime.
+</p>
+
+<h3>Bad Example: if/elif Chains</h3>
+
+<p>
+  Consider a discount calculator that uses conditional branching to determine discounts.
+  Every time a new customer type is added, the existing function must be modified:
+</p>
+
+<pre><code class="language-python"># BAD: Violates OCP - must modify this function for every new customer type
+
+class DiscountCalculator:
+    def calculate_discount(self, customer_type: str, amount: float) -> float:
+        if customer_type == "regular":
+            return amount * 0.05
+        elif customer_type == "premium":
+            return amount * 0.10
+        elif customer_type == "vip":
+            return amount * 0.20
+        elif customer_type == "employee":
+            return amount * 0.30
+        elif customer_type == "military":
+            return amount * 0.15
+        else:
+            return 0.0
+
+# Adding a new customer type requires modifying calculate_discount().
+# This means retesting the entire function and risking regressions.
+</code></pre>
+
+<p>
+  Problems with this approach:
+</p>
+
+<ul>
+  <li>Adding a new customer type forces changes to a working method.</li>
+  <li>The method grows unbounded as customer types increase.</li>
+  <li>Unit tests must be updated and re-run for the entire method each time.</li>
+  <li>Multiple developers adding types simultaneously cause merge conflicts.</li>
+</ul>
+
+<h3>Good Example: Strategy Pattern</h3>
+
+<p>
+  We define an abstract <code>DiscountStrategy</code> interface and implement each
+  customer type as a separate class. The calculator delegates to whichever strategy
+  is provided, and new types require zero changes to existing code:
+</p>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+
+
+class DiscountStrategy(ABC):
+    """Abstract interface for discount calculation strategies."""
+
+    @abstractmethod
+    def calculate(self, amount: float) -> float:
+        pass
+
+
+class RegularDiscount(DiscountStrategy):
+    def calculate(self, amount: float) -> float:
+        return amount * 0.05
+
+
+class PremiumDiscount(DiscountStrategy):
+    def calculate(self, amount: float) -> float:
+        return amount * 0.10
+
+
+class VIPDiscount(DiscountStrategy):
+    def calculate(self, amount: float) -> float:
+        return amount * 0.20
+
+
+class EmployeeDiscount(DiscountStrategy):
+    def calculate(self, amount: float) -> float:
+        return amount * 0.30
+
+
+class DiscountCalculator:
+    """Calculator is CLOSED for modification, OPEN for extension."""
+
+    def __init__(self, strategy: DiscountStrategy):
+        self._strategy = strategy
+
+    def calculate_discount(self, amount: float) -> float:
+        return self._strategy.calculate(amount)
+
+
+# Usage
+calc = DiscountCalculator(VIPDiscount())
+print(calc.calculate_discount(200.0))  # 40.0
+</code></pre>
+
+<h3>Adding New Behavior Without Changing Existing Code</h3>
+
+<p>
+  Suppose a new "military" discount is needed. We simply create a new class:
+</p>
+
+<pre><code class="language-python"># NEW FILE: no existing code is touched
+
+class MilitaryDiscount(DiscountStrategy):
+    def calculate(self, amount: float) -> float:
+        return amount * 0.15
+
+
+# Wire it up
+calc = DiscountCalculator(MilitaryDiscount())
+print(calc.calculate_discount(100.0))  # 15.0
+</code></pre>
+
+<p>
+  Notice that <code>DiscountCalculator</code> was never modified. The new behavior
+  was added purely through extension.
+</p>
+
+<h3>OCP with a Registry Pattern</h3>
+
+<p>
+  For dynamic dispatch (e.g., mapping strings from config files to strategies),
+  combine OCP with a registry:
+</p>
+
+<pre><code class="language-python">class DiscountRegistry:
+    _strategies: dict[str, type[DiscountStrategy]] = {}
+
+    @classmethod
+    def register(cls, name: str, strategy_cls: type[DiscountStrategy]):
+        cls._strategies[name] = strategy_cls
+
+    @classmethod
+    def get(cls, name: str) -> DiscountStrategy:
+        if name not in cls._strategies:
+            raise ValueError(f"Unknown discount type: {name}")
+        return cls._strategies[name]()
+
+
+# Register strategies (could be done via decorators or config)
+DiscountRegistry.register("regular", RegularDiscount)
+DiscountRegistry.register("premium", PremiumDiscount)
+DiscountRegistry.register("vip", VIPDiscount)
+
+# Usage from config
+strategy = DiscountRegistry.get("premium")
+calc = DiscountCalculator(strategy)
+print(calc.calculate_discount(300.0))  # 30.0
+</code></pre>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>OCP reduces regression risk by keeping working code untouched.</li>
+  <li>The Strategy Pattern is the most common way to achieve OCP.</li>
+  <li>Use abstract base classes or protocols to define extension points.</li>
+  <li>A registry can bridge the gap between string-based config and OCP-compliant strategies.</li>
+  <li>OCP does not mean you never modify code &mdash; it means you design so that common changes are extensions, not modifications.</li>
+</ul>

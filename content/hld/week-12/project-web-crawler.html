@@ -1,0 +1,96 @@
+<h2>Project: Web Crawler Prototype</h2>
+
+<p>This project implements a mini web crawler with BFS crawling, link extraction, URL deduplication via Bloom filter simulation, content deduplication via SimHash, per-domain politeness rate limiting, and a search index for crawled pages.</p>
+
+<h3>Simulated Internet</h3>
+
+<p>The project generates a fake internet with realistic structure for crawling:</p>
+
+<pre><code class="language-python">from dataclasses import dataclass, field
+
+@dataclass
+class WebPage:
+    url: str
+    title: str
+    content: str
+    links: list[str] = field(default_factory=list)
+    status_code: int = 200
+    robots_blocked: bool = False
+
+class SimulatedInternet:
+    DOMAINS = [
+        "techblog.com", "news-daily.org", "docs.python.io",
+        "shop-online.com", "wiki-facts.net", "dev-community.io",
+        "data-science.org", "startup-hub.com", "cloud-infra.net",
+    ]
+    TOPICS = [
+        "distributed systems", "microservices", "caching strategies",
+        "database sharding", "load balancing", "message queues",
+        "container orchestration", "consensus algorithms",
+        "CAP theorem", "consistent hashing", "bloom filters",
+    ]
+
+    def __init__(self, num_pages_per_domain: int = 15):
+        self.pages = {}
+        self.robots_rules = {}
+        self._generate_web(num_pages_per_domain)
+        # Generates pages with cross-domain links,
+        # robots.txt rules, and varying content</code></pre>
+
+<h3>URL Deduplication with Bloom Filter</h3>
+
+<pre><code class="language-python">class BloomFilter:
+    """Probabilistic set membership with no false negatives."""
+    def __init__(self, expected_items: int, fp_rate: float = 0.01):
+        import math
+        self.size = int(-expected_items * math.log(fp_rate)
+                        / (math.log(2) ** 2))
+        self.num_hashes = int((self.size / expected_items)
+                              * math.log(2))
+        self.bits = [False] * self.size
+
+    def add(self, item: str):
+        for seed in range(self.num_hashes):
+            idx = hash(f"{seed}:{item}") % self.size
+            self.bits[idx] = True
+
+    def might_contain(self, item: str) -> bool:
+        return all(
+            self.bits[hash(f"{seed}:{item}") % self.size]
+            for seed in range(self.num_hashes)
+        )</code></pre>
+
+<h3>Politeness: Per-Domain Rate Limiting</h3>
+
+<ul>
+  <li>Each domain has a separate crawl queue</li>
+  <li>Maximum 1 request per second per domain enforced</li>
+  <li>Crawler round-robins across domain queues to maximize throughput while respecting limits</li>
+  <li>Robots.txt rules checked before fetching any page</li>
+</ul>
+
+<h3>Crawl Process (BFS)</h3>
+
+<ul>
+  <li><strong>Initialize:</strong> Seed URLs added to frontier with high priority</li>
+  <li><strong>Fetch:</strong> Pick next URL from frontier (respecting priority and politeness)</li>
+  <li><strong>Parse:</strong> Extract page title, content, and outgoing links</li>
+  <li><strong>Dedup:</strong> Check Bloom filter for each extracted link. Skip already-seen URLs.</li>
+  <li><strong>Content dedup:</strong> Compute SimHash fingerprint. Skip near-duplicate content.</li>
+  <li><strong>Index:</strong> Store page content and metadata in search index</li>
+  <li><strong>Enqueue:</strong> Add new (unseen) links to frontier</li>
+</ul>
+
+<h3>Search Index</h3>
+
+<p>After crawling, pages are indexed for simple keyword search. The index maps words to lists of pages containing them, along with relevance scores based on term frequency and page importance.</p>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>Bloom filters enable efficient URL deduplication with controllable false positive rates</li>
+  <li>BFS crawl order naturally discovers important (well-linked) pages first</li>
+  <li>Per-domain rate limiting is essential for being a good web citizen</li>
+  <li>Content deduplication via fingerprinting catches mirror sites and syndicated content</li>
+  <li>The prototype demonstrates all core crawler components that scale to billions of pages with distributed infrastructure</li>
+</ul>

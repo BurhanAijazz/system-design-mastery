@@ -1,0 +1,70 @@
+<h2>Design: Google Maps</h2>
+<p>Design a mapping and navigation system at global scale.</p>
+
+<h3>Core Features</h3>
+<ul>
+  <li>Map rendering with tiles at multiple zoom levels</li>
+  <li>Route calculation (shortest/fastest path)</li>
+  <li>Real-time traffic and ETA</li>
+  <li>Points of interest search</li>
+</ul>
+
+<h3>Map Tile System</h3>
+<pre><code class="language-python">class MapTile:
+    """Map divided into tiles at each zoom level"""
+    def __init__(self, zoom, x, y):
+        self.zoom = zoom  # 0-22
+        self.x = x
+        self.y = y
+        # At zoom level z: 2^z x 2^z tiles
+        # Total tiles at zoom 22: ~17.6 trillion
+
+    @property
+    def tile_id(self):
+        return f"{self.zoom}/{self.x}/{self.y}"
+
+class TileServer:
+    def __init__(self):
+        self.cache = {}  # tile_id -> rendered_image
+
+    def get_tile(self, zoom, x, y):
+        tile = MapTile(zoom, x, y)
+        if tile.tile_id in self.cache:
+            return self.cache[tile.tile_id]
+        # Render from vector data
+        rendered = self.render_tile(tile)
+        self.cache[tile.tile_id] = rendered
+        return rendered
+</code></pre>
+
+<h3>Routing with Graph Algorithms</h3>
+<pre><code class="language-python">import heapq
+
+def dijkstra(graph, start, end):
+    """Simplified shortest-path routing"""
+    distances = {start: 0}
+    pq = [(0, start)]
+    previous = {}
+
+    while pq:
+        dist, node = heapq.heappop(pq)
+        if node == end:
+            return reconstruct_path(previous, end), dist
+
+        for neighbor, weight in graph[node]:
+            new_dist = dist + weight
+            if new_dist < distances.get(neighbor, float('inf')):
+                distances[neighbor] = new_dist
+                previous[neighbor] = node
+                heapq.heappush(pq, (new_dist, neighbor))
+
+    return None, float('inf')
+</code></pre>
+
+<h3>Architecture at Scale</h3>
+<ul>
+  <li><strong>Tile CDN:</strong> Pre-rendered tiles served from edge servers</li>
+  <li><strong>Graph partitioning:</strong> Road network partitioned geographically</li>
+  <li><strong>Hierarchical routing:</strong> A* with highway hierarchies for long routes</li>
+  <li><strong>Real-time traffic:</strong> GPS data from users, processed with stream processing</li>
+</ul>

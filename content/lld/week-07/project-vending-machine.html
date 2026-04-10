@@ -1,0 +1,193 @@
+<h2>Project: Vending Machine</h2>
+
+<p>A full LLD implementation of a vending machine. This project uses State (machine states), Strategy (change calculation), and Chain of Responsibility (coin validation) patterns.</p>
+
+<h3>Patterns Used</h3>
+
+<ul>
+    <li><strong>State</strong> -- Machine states (Idle, HasMoney, Dispensing, OutOfOrder)</li>
+    <li><strong>Strategy</strong> -- Change calculation algorithms</li>
+    <li><strong>Chain of Responsibility</strong> -- Coin validation pipeline</li>
+</ul>
+
+<h3>Requirements</h3>
+
+<pre><code>Functional:
+  1. Display available items with prices
+  2. Accept coins (quarter, dime, nickel, penny)
+  3. Track inserted balance
+  4. Select item by slot code
+  5. Dispense item if balance >= price
+  6. Return change using minimum coins
+  7. Cancel and refund all inserted coins
+  8. Restock items (admin operation)
+  9. Handle out-of-stock items
+
+Out of scope:
+  - Bill acceptance
+  - Credit card payment
+  - Multiple item purchase in one transaction
+</code></pre>
+
+<h3>Core Entities</h3>
+
+<pre><code class="language-python">from enum import Enum
+from dataclasses import dataclass, field
+from typing import List, Optional, Dict, Tuple
+from abc import ABC, abstractmethod
+
+class Coin(Enum):
+    QUARTER = 0.25
+    DIME = 0.10
+    NICKEL = 0.05
+    PENNY = 0.01
+
+@dataclass
+class Item:
+    name: str
+    price: float
+    quantity: int = 0
+
+    def is_available(self) -> bool:
+        return self.quantity > 0
+
+    def dispense(self) -> bool:
+        if self.quantity > 0:
+            self.quantity -= 1
+            return True
+        return False
+</code></pre>
+
+<h3>Inventory</h3>
+
+<pre><code class="language-python">class Inventory:
+    """Manages vending machine slots and items."""
+
+    def __init__(self):
+        self._slots: Dict[str, Item] = {}
+
+    def add_slot(self, code: str, item: Item) -> None:
+        self._slots[code] = item
+
+    def get_item(self, code: str) -> Optional[Item]:
+        return self._slots.get(code)
+
+    def dispense(self, code: str) -> Optional[str]:
+        item = self._slots.get(code)
+        if item and item.dispense():
+            return item.name
+        return None
+
+    def restock(self, code: str, quantity: int) -> None:
+        item = self._slots.get(code)
+        if item:
+            item.quantity += quantity
+
+    def available_items(self) -> Dict[str, Tuple[str, float, int]]:
+        return {
+            code: (item.name, item.price, item.quantity)
+            for code, item in self._slots.items()
+            if item.is_available()
+        }
+</code></pre>
+
+<h3>State Pattern for Machine Behavior</h3>
+
+<pre><code class="language-python">class VMState(ABC):
+    """Abstract state for vending machine."""
+
+    @abstractmethod
+    def insert_coin(self, machine: "VendingMachine", coin: Coin) -> str:
+        pass
+
+    @abstractmethod
+    def select_item(self, machine: "VendingMachine", code: str) -> str:
+        pass
+
+    @abstractmethod
+    def cancel(self, machine: "VendingMachine") -> str:
+        pass
+
+
+class IdleState(VMState):
+    def insert_coin(self, machine, coin):
+        machine._balance += coin.value
+        machine._state = HasMoneyState()
+        return f"Inserted {coin.name}: balance ${machine._balance:.2f}"
+
+    def select_item(self, machine, code):
+        return "Please insert coins first."
+
+    def cancel(self, machine):
+        return "Nothing to cancel."
+
+
+class HasMoneyState(VMState):
+    def insert_coin(self, machine, coin):
+        machine._balance += coin.value
+        return f"Inserted {coin.name}: balance ${machine._balance:.2f}"
+
+    def select_item(self, machine, code):
+        item = machine._inventory.get_item(code)
+        if not item:
+            return f"Invalid slot: {code}"
+        if not item.is_available():
+            return f"{item.name} is out of stock."
+        if machine._balance < item.price:
+            return f"Need ${item.price:.2f}, have ${machine._balance:.2f}"
+
+        # Dispense
+        machine._inventory.dispense(code)
+        change = machine._balance - item.price
+        machine._balance = 0.0
+        machine._state = IdleState()
+        msg = f"Dispensed: {item.name}"
+        if change > 0:
+            msg += f" | Change: ${change:.2f}"
+        return msg
+
+    def cancel(self, machine):
+        refund = machine._balance
+        machine._balance = 0.0
+        machine._state = IdleState()
+        return f"Cancelled. Refund: ${refund:.2f}"
+</code></pre>
+
+<h3>Vending Machine</h3>
+
+<pre><code class="language-python">class VendingMachine:
+    def __init__(self, inventory: Inventory):
+        self._inventory = inventory
+        self._balance = 0.0
+        self._state: VMState = IdleState()
+
+    def insert_coin(self, coin: Coin) -> str:
+        return self._state.insert_coin(self, coin)
+
+    def select_item(self, code: str) -> str:
+        return self._state.select_item(self, code)
+
+    def cancel(self) -> str:
+        return self._state.cancel(self)
+
+    def display(self) -> Dict[str, Tuple[str, float, int]]:
+        return self._inventory.available_items()
+</code></pre>
+
+<h3>Usage</h3>
+
+<pre><code class="language-python">inv = Inventory()
+inv.add_slot("A1", Item("Cola", 1.25, 5))
+inv.add_slot("A2", Item("Chips", 1.00, 3))
+inv.add_slot("B1", Item("Water", 0.75, 10))
+
+vm = VendingMachine(inv)
+print(vm.insert_coin(Coin.QUARTER))   # balance $0.25
+print(vm.insert_coin(Coin.QUARTER))   # balance $0.50
+print(vm.insert_coin(Coin.QUARTER))   # balance $0.75
+print(vm.select_item("B1"))           # Dispensed: Water
+</code></pre>
+
+<h3>Architecture Summary</h3>
+
+<p>The Vending Machine uses the State pattern to cleanly separate behavior per machine state. In Idle state, only coin insertion is valid. In HasMoney state, users can insert more coins, select items, or cancel. The Inventory class manages slot contents independently, keeping the machine logic focused on the transaction flow.</p>

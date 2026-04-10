@@ -1,0 +1,70 @@
+<h2>Design: Live Comments System</h2>
+<p>Design a real-time live comments system for streaming events and social media posts.</p>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Post comments and see new comments appear in real-time</li>
+  <li>Support threaded replies (parent-child comment trees)</li>
+  <li>Rate limiting to prevent spam and abuse</li>
+  <li>Scale to millions of concurrent viewers on a single popular stream</li>
+</ul>
+
+<h3>High-Level Architecture</h3>
+<ul>
+  <li><strong>Comment API</strong> &mdash; POST /comments (write), GET /comments?stream_id=X (initial load)</li>
+  <li><strong>WebSocket Gateway</strong> &mdash; Maintains persistent connections for real-time push</li>
+  <li><strong>Fan-Out Service</strong> &mdash; Publishes new comments to all subscribers of a stream</li>
+  <li><strong>Comment Store</strong> &mdash; Database with parent_id for threading, indexed by stream_id</li>
+  <li><strong>Rate Limiter</strong> &mdash; Per-user token bucket to throttle comment frequency</li>
+  <li><strong>Moderation Service</strong> &mdash; Content filter, toxicity scorer, keyword blocklist</li>
+</ul>
+
+<h3>Key Components</h3>
+<pre><code class="language-python">import asyncio
+from collections import defaultdict
+
+class LiveCommentService:
+    def __init__(self):
+        self.subscribers = defaultdict(set)  # stream_id -> set of ws
+        self.rate_limiters = {}  # user_id -> TokenBucket
+
+    async def post_comment(self, user_id, stream_id, text, parent_id=None):
+        if not self._check_rate(user_id):
+            raise RateLimitExceeded()
+        if not moderation.is_clean(text):
+            raise ContentBlocked()
+        comment = db.insert({
+            "stream_id": stream_id, "user_id": user_id,
+            "text": text, "parent_id": parent_id,
+            "created_at": now()
+        })
+        await self._fan_out(stream_id, comment)
+        return comment
+
+    async def _fan_out(self, stream_id, comment):
+        payload = serialize(comment)
+        dead = []
+        for ws in self.subscribers[stream_id]:
+            try:
+                await ws.send(payload)
+            except ConnectionClosed:
+                dead.append(ws)
+        for ws in dead:
+            self.subscribers[stream_id].discard(ws)
+
+    def subscribe(self, stream_id, ws):
+        self.subscribers[stream_id].add(ws)
+
+    def _check_rate(self, user_id):
+        if user_id not in self.rate_limiters:
+            self.rate_limiters[user_id] = TokenBucket(5, 1)  # 5 burst, 1/sec
+        return self.rate_limiters[user_id].allow_request()
+</code></pre>
+
+<h3>Scaling Considerations</h3>
+<ul>
+  <li>Hot streams: shard WebSocket connections across multiple gateway nodes via pub/sub (Redis Pub/Sub or Kafka)</li>
+  <li>Fan-out bottleneck: for millions of viewers, batch and sample comments (show top/random subset)</li>
+  <li>Comment threading: store as adjacency list (parent_id) and build tree client-side</li>
+  <li>Separate read/write paths: writes go to primary DB, reads served from cache/replicas</li>
+</ul>

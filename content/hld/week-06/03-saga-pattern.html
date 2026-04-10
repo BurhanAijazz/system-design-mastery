@@ -1,0 +1,81 @@
+<h2>Saga Pattern: Distributed Transactions</h2>
+
+<p>Microservices can't use traditional database transactions across services. The Saga pattern solves this with <strong>local transactions + compensating actions</strong>. This is one of the most asked topics in system design interviews.</p>
+
+<h3>The Problem: No ACID Across Services</h3>
+<p>In a monolith, one transaction covers everything. In microservices, each service has its own database. You can't wrap a single transaction across 3 databases. Two-Phase Commit (2PC) works but is slow and brittle.</p>
+
+<pre><code class="language-python"># Monolith: one transaction
+# BEGIN TRANSACTION
+#   INSERT INTO orders (...)
+#   UPDATE inventory SET stock = stock - 1
+#   INSERT INTO payments (...)
+# COMMIT  -- all or nothing
+
+# Microservices: each service has its own DB
+# OrderService  -> orders_db
+# InventoryService -> inventory_db
+# PaymentService -> payment_db
+# Can't wrap one transaction across 3 databases!
+</code></pre>
+
+<h3>Saga Pattern Overview</h3>
+<p>A saga is a sequence of local transactions. Each step has a <strong>compensating transaction</strong> that undoes it on failure.</p>
+<ul>
+  <li>Step 1: Create Order | Compensate: Cancel Order</li>
+  <li>Step 2: Reserve Inventory | Compensate: Release Inventory</li>
+  <li>Step 3: Process Payment | Compensate: Refund Payment</li>
+  <li>Step 4: Confirm and Ship | (final step, no compensation needed)</li>
+</ul>
+
+<pre><code class="language-python">from dataclasses import dataclass
+from typing import List, Callable, Optional
+
+@dataclass
+class SagaStep:
+    name: str
+    action: Callable         # forward action
+    compensation: Callable   # undo action
+    success_rate: float = 0.9
+
+class SagaOrchestrator:
+    """Execute a saga with automatic compensation on failure."""
+
+    def __init__(self, steps: List[SagaStep]):
+        self.steps = steps
+
+    def execute(self, context: dict) -> dict:
+        completed = []
+        for step in self.steps:
+            success = step.action(context)
+            if success:
+                completed.append(step)
+            else:
+                # Compensate in reverse order
+                for prev_step in reversed(completed):
+                    prev_step.compensation(context)
+                return {"status": "failed", "failed_at": step.name}
+
+        return {"status": "completed"}
+</code></pre>
+
+<h3>Choreography vs Orchestration</h3>
+<ul>
+  <li><strong>Choreography</strong>: Each service listens for events and decides what to do next. No central coordinator. Simpler for small flows but hard to track complex sagas</li>
+  <li><strong>Orchestration</strong>: A central orchestrator service directs the saga steps. Easier to understand, monitor, and debug. Preferred for complex multi-step flows</li>
+</ul>
+
+<h3>Key Insights About Compensating Transactions</h3>
+<ul>
+  <li>Compensating transactions are <strong>not simple undo</strong>. "Refund" is not "un-payment" -- it's a new transaction</li>
+  <li>"Release inventory" must handle the case where stock was already allocated to another order</li>
+  <li>Compensations can also fail -- need retry logic and manual intervention as a fallback</li>
+  <li>Some actions are not reversible (sent email, dispatched physical goods). Design for this</li>
+</ul>
+
+<h3>Saga Guarantees</h3>
+<ul>
+  <li>Sagas guarantee <strong>eventual consistency</strong>, not immediate consistency</li>
+  <li>During execution, the system is in a temporarily inconsistent state (order exists but payment not yet processed)</li>
+  <li>This is acceptable for most business processes -- just make sure the user sees appropriate status updates</li>
+</ul>

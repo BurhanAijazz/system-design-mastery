@@ -1,0 +1,335 @@
+<h2>Project: Employee Management System Refactoring</h2>
+
+<p>
+  In this project, you will take a monolithic employee management system that
+  violates multiple SOLID principles and refactor it step by step into a clean,
+  extensible architecture. This project tests your ability to apply all five
+  SOLID principles in a realistic scenario.
+</p>
+
+<h3>Project Overview</h3>
+
+<ul>
+  <li><strong>Goal:</strong> Refactor the legacy <code>EmployeeManager</code> class into a SOLID-compliant design.</li>
+  <li><strong>Skills tested:</strong> SRP, OCP, LSP, ISP, DIP</li>
+  <li><strong>Estimated time:</strong> 2-3 hours</li>
+  <li><strong>Deliverable:</strong> A working Python package with tests</li>
+</ul>
+
+<h3>The Legacy Code</h3>
+
+<p>
+  Below is the monolithic system you must refactor. Read it carefully and identify
+  every SOLID violation before you start coding.
+</p>
+
+<pre><code class="language-python">import json
+import sqlite3
+from datetime import datetime, timedelta
+
+
+class EmployeeManager:
+    """Legacy monolith: manages all employee operations."""
+
+    def __init__(self):
+        self.db = sqlite3.connect("employees.db")
+        self._init_db()
+
+    def _init_db(self):
+        self.db.execute("""
+            CREATE TABLE IF NOT EXISTS employees (
+                id INTEGER PRIMARY KEY,
+                name TEXT, role TEXT, salary REAL,
+                department TEXT, hire_date TEXT
+            )
+        """)
+
+    def add_employee(self, name, role, salary, department):
+        hire_date = datetime.now().isoformat()
+        self.db.execute(
+            "INSERT INTO employees (name, role, salary, department, hire_date) VALUES (?, ?, ?, ?, ?)",
+            (name, role, salary, department, hire_date),
+        )
+        self.db.commit()
+        self._send_welcome_email(name)
+
+    def calculate_pay(self, employee_id):
+        """Calculates monthly pay based on role."""
+        emp = self._get_employee(employee_id)
+
+        if emp["role"] == "full_time":
+            pay = emp["salary"] / 12
+        elif emp["role"] == "part_time":
+            pay = emp["salary"] / 12 * 0.5
+        elif emp["role"] == "contractor":
+            pay = emp["salary"] / 12 * 1.1  # contractor premium
+        elif emp["role"] == "intern":
+            pay = emp["salary"] / 12 * 0.3
+
+        # Tax calculation (SRP violation: pay calc + tax in one place)
+        if pay > 10000:
+            tax = pay * 0.30
+        elif pay > 5000:
+            tax = pay * 0.20
+        else:
+            tax = pay * 0.10
+
+        return {"gross": pay, "tax": tax, "net": pay - tax}
+
+    def generate_report(self, department, format_type):
+        """Generate department report."""
+        cursor = self.db.execute(
+            "SELECT * FROM employees WHERE department = ?", (department,)
+        )
+        employees = cursor.fetchall()
+
+        if format_type == "json":
+            return json.dumps([dict(zip(["id", "name", "role", "salary", "dept", "hired"], e)) for e in employees])
+        elif format_type == "csv":
+            header = "id,name,role,salary,department,hire_date\n"
+            rows = "\n".join(",".join(str(x) for x in e) for e in employees)
+            return header + rows
+        elif format_type == "summary":
+            total_salary = sum(e[3] for e in employees)
+            return f"Department: {department}, Employees: {len(employees)}, Total Salary: {total_salary}"
+
+    def promote_employee(self, employee_id, new_role, salary_increase):
+        emp = self._get_employee(employee_id)
+        new_salary = emp["salary"] + salary_increase
+        self.db.execute(
+            "UPDATE employees SET role = ?, salary = ? WHERE id = ?",
+            (new_role, new_salary, employee_id),
+        )
+        self.db.commit()
+        self._log_action(f"Promoted {emp['name']} to {new_role}")
+        self._send_promotion_email(emp["name"], new_role)
+
+    def _get_employee(self, employee_id):
+        cursor = self.db.execute("SELECT * FROM employees WHERE id = ?", (employee_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise ValueError(f"Employee {employee_id} not found")
+        return dict(zip(["id", "name", "role", "salary", "department", "hire_date"], row))
+
+    def _send_welcome_email(self, name):
+        print(f"Sending welcome email to {name}")
+
+    def _send_promotion_email(self, name, new_role):
+        print(f"Sending promotion email: {name} is now {new_role}")
+
+    def _log_action(self, message):
+        with open("employee_actions.log", "a") as f:
+            f.write(f"[{datetime.now()}] {message}\n")
+</code></pre>
+
+<h3>Step 1: Identify Violations</h3>
+
+<p>Before coding, document every violation you find:</p>
+
+<ul>
+  <li><strong>SRP violations:</strong> List each distinct responsibility in the class.</li>
+  <li><strong>OCP violations:</strong> Find every if/elif chain that would grow with new requirements.</li>
+  <li><strong>LSP concerns:</strong> Consider what would happen if you tried to create employee subtypes.</li>
+  <li><strong>ISP concerns:</strong> Would a read-only reporting module need all these methods?</li>
+  <li><strong>DIP violations:</strong> Find every hardcoded dependency (database, file, email).</li>
+</ul>
+
+<h3>Step 2: Design the Interfaces</h3>
+
+<p>
+  Create abstractions for each dependency. Here is a suggested starting point:
+</p>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+
+@dataclass
+class Employee:
+    id: int | None
+    name: str
+    role: str
+    salary: float
+    department: str
+    hire_date: str
+
+
+class EmployeeRepository(ABC):
+    @abstractmethod
+    def save(self, employee: Employee) -> int:
+        pass
+
+    @abstractmethod
+    def find_by_id(self, employee_id: int) -> Employee | None:
+        pass
+
+    @abstractmethod
+    def find_by_department(self, department: str) -> list[Employee]:
+        pass
+
+    @abstractmethod
+    def update(self, employee: Employee) -> None:
+        pass
+
+
+class PayCalculator(ABC):
+    @abstractmethod
+    def calculate_gross(self, employee: Employee) -> float:
+        pass
+
+
+class TaxCalculator(ABC):
+    @abstractmethod
+    def calculate_tax(self, gross_pay: float) -> float:
+        pass
+
+
+class NotificationService(ABC):
+    @abstractmethod
+    def send(self, recipient: str, subject: str, body: str) -> None:
+        pass
+
+
+class AuditLogger(ABC):
+    @abstractmethod
+    def log(self, action: str, details: str) -> None:
+        pass
+
+
+class ReportFormatter(ABC):
+    @abstractmethod
+    def format(self, employees: list[Employee]) -> str:
+        pass
+</code></pre>
+
+<h3>Step 3: Implement Pay Strategies (OCP)</h3>
+
+<pre><code class="language-python">class FullTimePayCalculator(PayCalculator):
+    def calculate_gross(self, employee: Employee) -> float:
+        return employee.salary / 12
+
+
+class PartTimePayCalculator(PayCalculator):
+    def calculate_gross(self, employee: Employee) -> float:
+        return employee.salary / 12 * 0.5
+
+
+class ContractorPayCalculator(PayCalculator):
+    def calculate_gross(self, employee: Employee) -> float:
+        return employee.salary / 12 * 1.1
+
+
+class InternPayCalculator(PayCalculator):
+    def calculate_gross(self, employee: Employee) -> float:
+        return employee.salary / 12 * 0.3
+
+
+class PayCalculatorRegistry:
+    def __init__(self):
+        self._calculators: dict[str, PayCalculator] = {}
+
+    def register(self, role: str, calculator: PayCalculator):
+        self._calculators[role] = calculator
+
+    def get(self, role: str) -> PayCalculator:
+        if role not in self._calculators:
+            raise ValueError(f"No pay calculator for role: {role}")
+        return self._calculators[role]
+</code></pre>
+
+<h3>Step 4: Build the Refactored Services</h3>
+
+<pre><code class="language-python">class PayrollService:
+    """Single responsibility: calculate pay for employees."""
+
+    def __init__(self, calculator_registry: PayCalculatorRegistry, tax_calc: TaxCalculator):
+        self._calculators = calculator_registry
+        self._tax = tax_calc
+
+    def calculate_pay(self, employee: Employee) -> dict:
+        calculator = self._calculators.get(employee.role)
+        gross = calculator.calculate_gross(employee)
+        tax = self._tax.calculate_tax(gross)
+        return {"gross": round(gross, 2), "tax": round(tax, 2), "net": round(gross - tax, 2)}
+
+
+class EmployeeOnboardingService:
+    """Single responsibility: onboard new employees."""
+
+    def __init__(self, repo: EmployeeRepository, notifications: NotificationService, logger: AuditLogger):
+        self._repo = repo
+        self._notifications = notifications
+        self._logger = logger
+
+    def onboard(self, name: str, role: str, salary: float, department: str) -> Employee:
+        from datetime import datetime
+        employee = Employee(id=None, name=name, role=role, salary=salary, department=department, hire_date=datetime.now().isoformat())
+        employee.id = self._repo.save(employee)
+        self._notifications.send(name, "Welcome!", f"Welcome to {department}!")
+        self._logger.log("onboard", f"New employee: {name}")
+        return employee
+
+
+class PromotionService:
+    """Single responsibility: handle promotions."""
+
+    def __init__(self, repo: EmployeeRepository, notifications: NotificationService, logger: AuditLogger):
+        self._repo = repo
+        self._notifications = notifications
+        self._logger = logger
+
+    def promote(self, employee_id: int, new_role: str, salary_increase: float) -> Employee:
+        employee = self._repo.find_by_id(employee_id)
+        if not employee:
+            raise ValueError(f"Employee {employee_id} not found")
+        employee.role = new_role
+        employee.salary += salary_increase
+        self._repo.update(employee)
+        self._notifications.send(employee.name, "Promotion", f"You are now a {new_role}!")
+        self._logger.log("promote", f"{employee.name} -> {new_role}")
+        return employee
+</code></pre>
+
+<h3>Requirements Checklist</h3>
+
+<ul>
+  <li>No class should have more than one reason to change (SRP).</li>
+  <li>Adding a new employee role should not require modifying existing pay calculators (OCP).</li>
+  <li>All pay calculators must be substitutable through the <code>PayCalculator</code> interface (LSP).</li>
+  <li>Read-only report consumers should not depend on write operations (ISP).</li>
+  <li>No service should directly instantiate database connections or file handles (DIP).</li>
+  <li>Write at least 10 unit tests using fake/mock implementations.</li>
+  <li>All tests should pass without any real database, file system, or network.</li>
+</ul>
+
+<h3>Suggested File Structure</h3>
+
+<pre><code class="language-python"># employee_mgmt/
+# +-- models.py          # Employee dataclass
+# +-- interfaces.py      # All ABCs
+# +-- pay/
+# |   +-- calculators.py # Pay strategy implementations
+# |   +-- tax.py         # Tax calculator implementations
+# +-- services/
+# |   +-- payroll.py     # PayrollService
+# |   +-- onboarding.py  # EmployeeOnboardingService
+# |   +-- promotion.py   # PromotionService
+# |   +-- reporting.py   # ReportingService
+# +-- infrastructure/
+# |   +-- sqlite_repo.py # SQLiteEmployeeRepository
+# |   +-- email_notif.py # EmailNotificationService
+# |   +-- file_logger.py # FileAuditLogger
+# +-- tests/
+#     +-- test_payroll.py
+#     +-- test_onboarding.py
+#     +-- test_promotion.py
+</code></pre>
+
+<h3>Stretch Goals</h3>
+
+<ul>
+  <li>Add a <code>TerminationService</code> without modifying any existing service.</li>
+  <li>Implement an in-memory repository for development and testing.</li>
+  <li>Add a new report format (Markdown) without changing the reporting service.</li>
+  <li>Use Python <code>Protocol</code> instead of ABCs for structural subtyping.</li>
+</ul>

@@ -1,0 +1,162 @@
+<h2>Command Pattern</h2>
+
+<p>The Command pattern encapsulates a request as an object, allowing you to parameterize clients with different requests, queue requests, log them, and support undo/redo operations.</p>
+
+<h3>The Problem: Direct Coupling</h3>
+
+<p>When button clicks directly call methods on an editor, there is no way to undo actions, record history, or support macros:</p>
+
+<pre><code class="language-python">class TextEditorNaive:
+    """Editor where button clicks directly call methods.
+    No undo, no history, no macro support."""
+
+    def __init__(self):
+        self.content = ""
+
+    def type_text(self, text: str) -> None:
+        self.content += text
+
+    def delete_last(self, count: int = 1) -> None:
+        self.content = self.content[:-count]
+</code></pre>
+
+<p>Once text is deleted, the history is lost. There is no way to undo or replay actions.</p>
+
+<h3>Key Components</h3>
+
+<ul>
+    <li><strong>Command</strong> (interface) -- declares <code>execute()</code> and <code>undo()</code></li>
+    <li><strong>ConcreteCommand</strong> -- implements execute/undo, holds a reference to the receiver</li>
+    <li><strong>Receiver</strong> -- the object that actually performs the work</li>
+    <li><strong>Invoker</strong> -- triggers commands without knowing what they do</li>
+</ul>
+
+<h3>The Receiver</h3>
+
+<pre><code class="language-python">class TextDocument:
+    """The receiver -- performs the actual text operations."""
+
+    def __init__(self):
+        self.content = ""
+
+    def insert(self, text: str, position: int = -1) -> None:
+        if position == -1:
+            position = len(self.content)
+        self.content = self.content[:position] + text + self.content[position:]
+
+    def delete(self, position: int, count: int) -> str:
+        deleted = self.content[position:position + count]
+        self.content = self.content[:position] + self.content[position + count:]
+        return deleted
+</code></pre>
+
+<h3>Command Interface and Concrete Commands</h3>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+
+class Command(ABC):
+    """Base command with execute and undo."""
+
+    @abstractmethod
+    def execute(self) -> None:
+        pass
+
+    @abstractmethod
+    def undo(self) -> None:
+        pass
+
+
+class TypeCommand(Command):
+    """Command to type text at a position."""
+
+    def __init__(self, document: TextDocument, text: str, position: int = -1):
+        self._doc = document
+        self._text = text
+        self._position = position if position != -1 else len(document.content)
+
+    def execute(self) -> None:
+        self._doc.insert(self._text, self._position)
+
+    def undo(self) -> None:
+        self._doc.delete(self._position, len(self._text))
+
+
+class DeleteCommand(Command):
+    """Command to delete text -- stores deleted text for undo."""
+
+    def __init__(self, document: TextDocument, position: int, count: int):
+        self._doc = document
+        self._position = position
+        self._count = count
+        self._deleted_text = ""  # saved on execute for undo
+
+    def execute(self) -> None:
+        self._deleted_text = self._doc.delete(self._position, self._count)
+
+    def undo(self) -> None:
+        self._doc.insert(self._deleted_text, self._position)
+</code></pre>
+
+<h3>The Invoker (Command History)</h3>
+
+<pre><code class="language-python">class CommandHistory:
+    """Invoker -- maintains undo/redo stacks."""
+
+    def __init__(self):
+        self._undo_stack: list[Command] = []
+        self._redo_stack: list[Command] = []
+
+    def execute(self, command: Command) -> None:
+        command.execute()
+        self._undo_stack.append(command)
+        self._redo_stack.clear()  # new action invalidates redo
+
+    def undo(self) -> bool:
+        if not self._undo_stack:
+            return False
+        command = self._undo_stack.pop()
+        command.undo()
+        self._redo_stack.append(command)
+        return True
+
+    def redo(self) -> bool:
+        if not self._redo_stack:
+            return False
+        command = self._redo_stack.pop()
+        command.execute()
+        self._undo_stack.append(command)
+        return True
+</code></pre>
+
+<h3>Usage Example</h3>
+
+<pre><code class="language-python">doc = TextDocument()
+history = CommandHistory()
+
+# Type "Hello World"
+history.execute(TypeCommand(doc, "Hello "))
+history.execute(TypeCommand(doc, "World"))
+print(doc.content)  # "Hello World"
+
+# Undo last type
+history.undo()
+print(doc.content)  # "Hello "
+
+# Redo
+history.redo()
+print(doc.content)  # "Hello World"
+</code></pre>
+
+<h3>When to Use the Command Pattern</h3>
+
+<ul>
+    <li><strong>Undo/Redo</strong> -- text editors, drawing tools, form builders</li>
+    <li><strong>Transaction logging</strong> -- record and replay operations</li>
+    <li><strong>Macro recording</strong> -- save a sequence of commands as a macro</li>
+    <li><strong>Task queues</strong> -- enqueue commands for later execution</li>
+    <li><strong>Remote execution</strong> -- serialize commands and send over a network</li>
+</ul>
+
+<h3>Key Design Insight</h3>
+
+<p>The Command pattern turns method calls into objects. This lets you store, queue, and reverse operations. The invoker (button, menu, scheduler) never knows what work the command performs -- it just calls <code>execute()</code>.</p>

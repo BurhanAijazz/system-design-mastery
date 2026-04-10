@@ -1,0 +1,90 @@
+<h2>Logging Framework Design</h2>
+
+<p>A logging framework is a real-world systems design problem that tests understanding of multiple patterns: Singleton for the logger registry, Strategy for formatters, Chain of Responsibility for filters, Observer for handlers, and Builder for configuration.</p>
+
+<h3>Log Levels</h3>
+
+<p>Log levels form a hierarchy using IntEnum so they support comparison. A logger set to WARNING will only process WARNING, ERROR, and CRITICAL -- lower levels are filtered out.</p>
+
+<pre><code class="language-python">class LogLevel(IntEnum):
+    DEBUG = 10
+    INFO = 20
+    WARNING = 30
+    ERROR = 40
+    CRITICAL = 50</code></pre>
+
+<h3>Log Record</h3>
+
+<p>A LogRecord captures all information about a single log event:</p>
+
+<pre><code class="language-python">@dataclass
+class LogRecord:
+    level: LogLevel
+    message: str
+    logger_name: str
+    timestamp: datetime = field(default_factory=datetime.now)
+    extra: Dict = field(default_factory=dict)</code></pre>
+
+<h3>Formatter (Strategy Pattern)</h3>
+
+<p>Formatters convert a LogRecord into a string. Different handlers may use different formatters:</p>
+
+<pre><code class="language-python">class Formatter(ABC):
+    @abstractmethod
+    def format(self, record: LogRecord) -> str:
+        pass
+
+class SimpleFormatter(Formatter):
+    def format(self, record):
+        return f"[{record.level.name}] {record.message}"
+
+class JSONFormatter(Formatter):
+    def format(self, record):
+        return json.dumps({
+            "level": record.level.name,
+            "message": record.message,
+            "logger": record.logger_name,
+            "timestamp": record.timestamp.isoformat()
+        })
+
+class DetailedFormatter(Formatter):
+    def format(self, record):
+        return (f"{record.timestamp:%Y-%m-%d %H:%M:%S} "
+                f"[{record.level.name}] "
+                f"{record.logger_name}: {record.message}")</code></pre>
+
+<h3>Handler Hierarchy (Observer Pattern)</h3>
+
+<p>Handlers receive log records and output them to a destination. Multiple handlers can be attached to a single logger:</p>
+<ul>
+  <li><strong>ConsoleHandler</strong> -- prints to stdout</li>
+  <li><strong>FileHandler</strong> -- writes to a file</li>
+  <li><strong>RotatingFileHandler</strong> -- writes to a file with size-based rotation</li>
+  <li><strong>MemoryHandler</strong> -- stores in memory (useful for testing)</li>
+</ul>
+
+<h3>Filter Chain (Chain of Responsibility)</h3>
+
+<p>Filters decide whether a log record should be processed. They form a chain -- each filter either passes the record through or blocks it:</p>
+<ul>
+  <li><strong>LevelFilter</strong> -- blocks records below a threshold level</li>
+  <li><strong>KeywordFilter</strong> -- blocks or allows records containing specific keywords</li>
+  <li><strong>RateFilter</strong> -- limits how many records per second pass through (prevents log flooding)</li>
+</ul>
+
+<h3>Logger Registry (Singleton)</h3>
+
+<p>A global registry manages named loggers. Calling <code>get_logger("app.db")</code> always returns the same logger instance. Logger names support hierarchy: "app.db" inherits configuration from "app" unless overridden.</p>
+
+<h3>Thread Safety</h3>
+
+<p>Logging happens from multiple threads. Use a threading lock around handler output to prevent interleaved log lines.</p>
+
+<h3>Key Design Takeaways</h3>
+<ul>
+  <li>IntEnum for log levels enables natural comparison (WARNING > INFO)</li>
+  <li>Strategy pattern for formatters -- same record, different output formats</li>
+  <li>Chain of Responsibility for filters -- compose filtering rules without modifying logger code</li>
+  <li>Singleton for the registry ensures consistent logger access across the application</li>
+  <li>Builder pattern simplifies logger configuration (set level, add handlers, set formatter)</li>
+</ul>

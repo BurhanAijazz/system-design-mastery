@@ -1,0 +1,132 @@
+<h2>Week 7 Exercises</h2>
+
+<p>Practice applying reservation, payment, and inventory management patterns from this week's concepts. Each exercise builds on the architecture covered in the lessons.</p>
+
+<h3>Exercise 1: Hotel Room Booking System</h3>
+
+<p>Design a hotel room booking system that supports the full reservation lifecycle. Guests should be able to search for available rooms by date range, make a reservation (with an expiration timer), confirm by payment, check in, and check out.</p>
+
+<ul>
+    <li>Model rooms with types: Single, Double, Suite</li>
+    <li>Implement the reservation lifecycle: PENDING, CONFIRMED, ACTIVE (checked in), COMPLETED (checked out), CANCELLED, EXPIRED</li>
+    <li>Use a pricing strategy for room rates (flat per night, weekend surcharge, seasonal pricing)</li>
+    <li>Pending reservations expire after 15 minutes if not confirmed</li>
+    <li>Prevent double-booking: a room cannot be reserved by two guests for overlapping dates</li>
+</ul>
+
+<p><strong>Key classes to design:</strong></p>
+
+<pre><code class="language-python">class RoomType(Enum):
+    SINGLE = "single"
+    DOUBLE = "double"
+    SUITE = "suite"
+
+class Room:
+    """Has room_number, room_type, floor, price_per_night."""
+    pass
+
+class RoomReservation:
+    """Extends Reservation with check_in_date, check_out_date, room_id."""
+    pass
+
+class HotelBookingService:
+    """
+    Methods:
+      - search_rooms(check_in, check_out, room_type) -> List[Room]
+      - reserve(guest_id, room_id, check_in, check_out) -> RoomReservation
+      - confirm(reservation_id, payment_method) -> bool
+      - check_in(reservation_id) -> bool
+      - check_out(reservation_id) -> float  # returns total charge
+      - cancel(reservation_id) -> bool
+    """
+    pass
+</code></pre>
+
+<h3>Exercise 2: Movie Ticket Booking with Payments</h3>
+
+<p>Design a movie ticket booking system that combines seat selection with payment processing. Users browse showtimes, select seats, pay, and receive a confirmation.</p>
+
+<ul>
+    <li>Model a theater with screens, each screen has rows and seats</li>
+    <li>Showtimes link a movie to a screen at a specific date and time</li>
+    <li>Support multiple payment methods (CreditCard, Wallet, UPI) using the Strategy pattern</li>
+    <li>Seats are held for 5 minutes during payment processing -- release if payment fails or times out</li>
+    <li>Implement tiered pricing: front rows cheaper, middle premium, back standard</li>
+</ul>
+
+<p><strong>Key classes to design:</strong></p>
+
+<pre><code class="language-python">class SeatStatus(Enum):
+    AVAILABLE = "available"
+    HELD = "held"       # temporarily held during payment
+    BOOKED = "booked"
+
+class Seat:
+    """Has row, number, status, tier (front/middle/back)."""
+    pass
+
+class Showtime:
+    """Links movie_id, screen_id, datetime, and seat availability."""
+    pass
+
+class TicketBookingService:
+    """
+    Methods:
+      - get_available_seats(showtime_id) -> List[Seat]
+      - hold_seats(user_id, showtime_id, seat_ids) -> HoldToken
+      - confirm_booking(hold_token, payment_method) -> Ticket
+      - cancel_hold(hold_token) -> None
+    """
+    pass
+</code></pre>
+
+<h3>Exercise 3: Warehouse Inventory Tracker</h3>
+
+<p>Design an inventory management system for a warehouse with multiple zones and bin locations. Items arrive, get stored in bins, and are picked for outbound orders.</p>
+
+<ul>
+    <li>Warehouse has zones (e.g., "A", "B", "C"), each zone has bins (slots)</li>
+    <li>Bins have a type (small, medium, large) and a capacity</li>
+    <li>Use an allocation strategy to place incoming items: first-available, nearest-to-dock, or best-fit by size</li>
+    <li>Track stock levels per product: total quantity, reserved quantity, available quantity</li>
+    <li>Support restocking (inbound) and picking (outbound) operations</li>
+    <li>Bins can be put into maintenance mode (cleaning, repair)</li>
+</ul>
+
+<p><strong>Key classes to design:</strong></p>
+
+<pre><code class="language-python">class BinStatus(Enum):
+    AVAILABLE = "available"
+    OCCUPIED = "occupied"
+    MAINTENANCE = "maintenance"
+
+class Bin:
+    """Has bin_id, zone, bin_type, capacity, current_items."""
+    pass
+
+class StockRecord:
+    """Tracks product_id, total_qty, reserved_qty, available_qty."""
+    pass
+
+class WarehouseManager:
+    """
+    Methods:
+      - receive_item(product_id, quantity) -> List[str]  # returns bin_ids used
+      - pick_item(product_id, quantity) -> List[str]  # returns bin_ids picked from
+      - reserve_stock(product_id, quantity) -> bool
+      - get_stock_level(product_id) -> StockRecord
+      - set_bin_maintenance(bin_id) -> bool
+      - get_zone_summary(zone) -> Dict[str, int]  # status counts
+    """
+    pass
+</code></pre>
+
+<h3>Tips</h3>
+
+<ul>
+    <li>Start by identifying entities and their relationships (Step 2 of the LLD framework)</li>
+    <li>Map state transitions for lifecycle objects (reservations, seats, bins)</li>
+    <li>Apply Strategy for anything that has multiple algorithms (pricing, allocation, payment)</li>
+    <li>Apply Observer for notifications (booking confirmed, stock low, payment processed)</li>
+    <li>Consider concurrency: what happens if two users try to book the same seat or bin?</li>
+</ul>

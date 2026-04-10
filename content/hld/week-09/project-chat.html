@@ -1,0 +1,104 @@
+<h2>Project: Chat System Prototype</h2>
+
+<p>This project implements an in-memory chat server simulating WhatsApp-like messaging with WebSocket connection management, multi-server message routing, delivery receipts, group messaging, presence tracking, and offline message queuing.</p>
+
+<h3>Core Data Structures</h3>
+
+<pre><code class="language-python">from enum import Enum
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Set
+from collections import defaultdict, deque
+
+class MessageStatus(Enum):
+    SENT = "sent"           # Server received
+    DELIVERED = "delivered"  # Recipient's device received
+    READ = "read"           # Recipient opened chat
+
+class PresenceState(Enum):
+    ONLINE = "online"
+    OFFLINE = "offline"
+    TYPING = "typing"
+
+@dataclass
+class Message:
+    msg_id: int
+    conversation_id: str
+    sender_id: int
+    content: str
+    timestamp: float
+    status: MessageStatus = MessageStatus.SENT
+    delivered_at: Optional[float] = None
+    read_at: Optional[float] = None
+    is_group: bool = False
+
+@dataclass
+class Conversation:
+    conversation_id: str
+    participants: Set[int]
+    is_group: bool = False
+    group_name: str = ""
+    messages: List[Message] = field(default_factory=list)</code></pre>
+
+<h3>Chat Server Simulation</h3>
+
+<p>Each chat server handles WebSocket connections for a subset of users. In production, each server would hold approximately 1M concurrent connections.</p>
+
+<pre><code class="language-python">class ChatServer:
+    def __init__(self, server_id: str):
+        self.server_id = server_id
+        self.connections: Dict[int, bool] = {}
+        self.pending_messages: Dict[int, deque] = defaultdict(deque)
+
+    def connect(self, user_id: int):
+        self.connections[user_id] = True
+
+    def disconnect(self, user_id: int):
+        self.connections.pop(user_id, None)
+
+    def is_connected(self, user_id: int) -> bool:
+        return user_id in self.connections
+
+    def deliver_message(self, user_id: int, message: Message) -> bool:
+        if self.is_connected(user_id):
+            self.total_messages_routed += 1
+            return True  # delivered via WebSocket
+        # Queue for later delivery
+        self.pending_messages[user_id].append(message)
+        return False</code></pre>
+
+<h3>Message Routing</h3>
+
+<ul>
+  <li><strong>Session lookup:</strong> Redis maps each user_id to their current chat server</li>
+  <li><strong>Same server:</strong> If sender and recipient are on the same server, deliver directly</li>
+  <li><strong>Cross-server:</strong> Route message from sender's server to recipient's server via internal messaging</li>
+  <li><strong>Offline:</strong> If recipient is offline, queue the message. Deliver all queued messages on reconnect.</li>
+</ul>
+
+<h3>Delivery Receipts</h3>
+
+<ul>
+  <li><strong>Sent:</strong> Acknowledged when the server receives and persists the message</li>
+  <li><strong>Delivered:</strong> Acknowledged when the recipient's device receives the message (even if not opened)</li>
+  <li><strong>Read:</strong> Acknowledged when the recipient opens the conversation containing the message</li>
+</ul>
+
+<h3>Group Messaging</h3>
+
+<p>When a message is sent to a group, the server fans it out to all participants. Each participant gets their own delivery receipt tracking. The message content is stored once; each participant has a reference to it.</p>
+
+<h3>Presence Tracking</h3>
+
+<ul>
+  <li>Heartbeat-based: clients send periodic heartbeats to indicate they are online</li>
+  <li>If no heartbeat within 30 seconds, mark as offline and record last-seen timestamp</li>
+  <li>Typing indicators are transient events, not persisted</li>
+</ul>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>The session service (user-to-server mapping) is the critical lookup that enables message routing</li>
+  <li>Offline queuing ensures no messages are lost even when recipients are disconnected for days</li>
+  <li>Delivery receipts require bidirectional acknowledgment flows, which adds complexity but is essential for user trust</li>
+</ul>

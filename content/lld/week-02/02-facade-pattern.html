@@ -1,0 +1,294 @@
+<h2>Facade Pattern</h2>
+
+<p>
+  The Facade pattern provides a <strong>simplified, unified interface</strong> to a
+  complex subsystem. It does not hide the subsystem &mdash; clients can still access the
+  underlying components directly if needed &mdash; but it offers a convenient high-level
+  API for the most common use cases.
+</p>
+
+<h3>When to Use the Facade Pattern</h3>
+
+<ul>
+  <li>A subsystem has many classes and interactions that are complex for clients to manage.</li>
+  <li>You want to provide a simple API for the most common operations.</li>
+  <li>You want to decouple client code from the internal details of a subsystem.</li>
+  <li>You are layering a system and need clean entry points between layers.</li>
+</ul>
+
+<h3>Problem: Home Theater System</h3>
+
+<p>
+  A home theater has multiple components, each with its own interface. Watching a movie
+  requires coordinating all of them in the right order:
+</p>
+
+<pre><code class="language-python">class Amplifier:
+    def __init__(self, name: str):
+        self.name = name
+        self._volume = 0
+
+    def on(self):
+        print(f"{self.name}: Powering on")
+
+    def off(self):
+        print(f"{self.name}: Powering off")
+
+    def set_volume(self, level: int):
+        self._volume = level
+        print(f"{self.name}: Volume set to {level}")
+
+    def set_input(self, source: str):
+        print(f"{self.name}: Input set to {source}")
+
+
+class StreamingPlayer:
+    def __init__(self, name: str):
+        self.name = name
+
+    def on(self):
+        print(f"{self.name}: Powering on")
+
+    def off(self):
+        print(f"{self.name}: Powering off")
+
+    def play(self, movie: str):
+        print(f"{self.name}: Playing '{movie}'")
+
+    def pause(self):
+        print(f"{self.name}: Paused")
+
+    def stop(self):
+        print(f"{self.name}: Stopped")
+
+
+class Projector:
+    def __init__(self, name: str):
+        self.name = name
+
+    def on(self):
+        print(f"{self.name}: Powering on")
+
+    def off(self):
+        print(f"{self.name}: Powering off")
+
+    def set_input(self, source: str):
+        print(f"{self.name}: Input set to {source}")
+
+    def wide_screen_mode(self):
+        print(f"{self.name}: Widescreen mode enabled")
+
+
+class TheaterLights:
+    def __init__(self, name: str):
+        self.name = name
+
+    def on(self):
+        print(f"{self.name}: Lights on")
+
+    def off(self):
+        print(f"{self.name}: Lights off")
+
+    def dim(self, level: int):
+        print(f"{self.name}: Dimmed to {level}%")
+
+
+class Screen:
+    def __init__(self, name: str):
+        self.name = name
+
+    def down(self):
+        print(f"{self.name}: Lowering screen")
+
+    def up(self):
+        print(f"{self.name}: Raising screen")
+
+
+class PopcornMaker:
+    def __init__(self, name: str):
+        self.name = name
+
+    def on(self):
+        print(f"{self.name}: Powering on")
+
+    def off(self):
+        print(f"{self.name}: Powering off")
+
+    def pop(self):
+        print(f"{self.name}: Popping popcorn!")
+</code></pre>
+
+<h3>Without a Facade: Client Manages Everything</h3>
+
+<pre><code class="language-python"># Client code must know about every component and the correct order of operations
+def watch_movie_without_facade():
+    amp = Amplifier("Denon AVR")
+    player = StreamingPlayer("Apple TV")
+    projector = Projector("Epson 4K")
+    lights = TheaterLights("Philips Hue")
+    screen = Screen("Silver Screen")
+    popcorn = PopcornMaker("Cuisinart")
+
+    # 10 steps to start a movie!
+    popcorn.on()
+    popcorn.pop()
+    lights.dim(15)
+    screen.down()
+    projector.on()
+    projector.set_input("HDMI-1")
+    projector.wide_screen_mode()
+    amp.on()
+    amp.set_input("HDMI-1")
+    amp.set_volume(25)
+    player.on()
+    player.play("Interstellar")
+
+# And 8 more steps to shut everything down...
+</code></pre>
+
+<h3>With a Facade: Simple High-Level API</h3>
+
+<pre><code class="language-python">class HomeTheaterFacade:
+    """Provides a simplified interface to the home theater subsystem."""
+
+    def __init__(
+        self,
+        amp: Amplifier,
+        player: StreamingPlayer,
+        projector: Projector,
+        lights: TheaterLights,
+        screen: Screen,
+        popcorn: PopcornMaker,
+    ):
+        self._amp = amp
+        self._player = player
+        self._projector = projector
+        self._lights = lights
+        self._screen = screen
+        self._popcorn = popcorn
+
+    def watch_movie(self, movie: str, volume: int = 25):
+        """One method to start the entire movie experience."""
+        print(f"\n--- Preparing to watch '{movie}' ---\n")
+
+        self._popcorn.on()
+        self._popcorn.pop()
+        self._lights.dim(15)
+        self._screen.down()
+        self._projector.on()
+        self._projector.set_input("HDMI-1")
+        self._projector.wide_screen_mode()
+        self._amp.on()
+        self._amp.set_input("HDMI-1")
+        self._amp.set_volume(volume)
+        self._player.on()
+        self._player.play(movie)
+
+        print(f"\n--- Enjoy the movie! ---\n")
+
+    def end_movie(self):
+        """One method to shut everything down."""
+        print("\n--- Shutting down theater ---\n")
+
+        self._player.stop()
+        self._player.off()
+        self._amp.off()
+        self._projector.off()
+        self._screen.up()
+        self._lights.on()
+        self._popcorn.off()
+
+        print("\n--- Goodnight! ---\n")
+
+    def pause(self):
+        """Pause the movie and bring lights up slightly."""
+        self._player.pause()
+        self._lights.dim(50)
+
+    def resume(self):
+        """Resume the movie and dim lights again."""
+        self._lights.dim(15)
+        self._player.play("")  # resume
+</code></pre>
+
+<h3>Client Code With the Facade</h3>
+
+<pre><code class="language-python"># Create the subsystem components
+amp = Amplifier("Denon AVR")
+player = StreamingPlayer("Apple TV")
+projector = Projector("Epson 4K")
+lights = TheaterLights("Philips Hue")
+screen = Screen("Silver Screen")
+popcorn = PopcornMaker("Cuisinart")
+
+# Create the facade
+theater = HomeTheaterFacade(amp, player, projector, lights, screen, popcorn)
+
+# Simple client usage
+theater.watch_movie("Interstellar", volume=30)
+theater.pause()
+theater.resume()
+theater.end_movie()
+</code></pre>
+
+<h3>Facade vs Adapter</h3>
+
+<ul>
+  <li><strong>Adapter:</strong> Converts one interface to another expected interface. Wraps <em>one</em> object.</li>
+  <li><strong>Facade:</strong> Simplifies a <em>complex subsystem</em> of multiple objects. Does not change interfaces.</li>
+  <li>An Adapter makes an incompatible thing compatible. A Facade makes a complex thing simple.</li>
+</ul>
+
+<h3>Facade in Layered Architectures</h3>
+
+<p>
+  Facades are commonly used at layer boundaries in enterprise applications:
+</p>
+
+<pre><code class="language-python">class OrderFacade:
+    """Facade over the order processing subsystem."""
+
+    def __init__(self, inventory, payment, shipping, notifications):
+        self._inventory = inventory
+        self._payment = payment
+        self._shipping = shipping
+        self._notifications = notifications
+
+    def place_order(self, customer_id: str, items: list, payment_info: dict) -> str:
+        """High-level operation hiding multiple subsystem interactions."""
+        # Check inventory
+        for item in items:
+            if not self._inventory.is_available(item["sku"], item["qty"]):
+                raise ValueError(f"Item {item['sku']} is out of stock")
+
+        # Reserve items
+        self._inventory.reserve(items)
+
+        # Process payment
+        total = sum(i["price"] * i["qty"] for i in items)
+        payment_result = self._payment.charge(customer_id, total, payment_info)
+
+        if not payment_result.success:
+            self._inventory.release(items)
+            raise RuntimeError("Payment failed")
+
+        # Create shipment
+        tracking = self._shipping.create_shipment(customer_id, items)
+
+        # Notify customer
+        self._notifications.send_order_confirmation(
+            customer_id, tracking, total
+        )
+
+        return tracking
+</code></pre>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>The Facade simplifies complex subsystems without hiding them.</li>
+  <li>Clients can still access subsystem components directly when needed.</li>
+  <li>Facades reduce coupling between client code and subsystem internals.</li>
+  <li>Use Facades at layer boundaries to keep architectures clean.</li>
+  <li>A Facade does not add new functionality &mdash; it orchestrates existing functionality.</li>
+</ul>

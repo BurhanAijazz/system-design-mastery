@@ -1,0 +1,76 @@
+<h2>WhatsApp / Chat System Design</h2>
+
+<p>Designing a real-time messaging system at WhatsApp scale involves managing 500 million concurrent WebSocket connections, guaranteed message delivery, and presence tracking across thousands of servers.</p>
+
+<h3>Define: Requirements</h3>
+
+<ul>
+  <li><strong>Functional:</strong> 1:1 messaging, group chat (up to 256 members), delivery receipts (sent/delivered/read), online/offline presence, media sharing, end-to-end encryption</li>
+  <li><strong>Non-Functional:</strong> Real-time (&lt;1 second delivery), reliable (no message loss), ordered messages per conversation, 500M concurrent connections</li>
+  <li><strong>Out of Scope:</strong> Voice/video calls, status/stories, payments</li>
+</ul>
+
+<h3>Estimate</h3>
+
+<pre><code class="language-python"># 2B registered users, 500M DAU
+# Each user sends ~40 messages/day
+
+# MESSAGES:
+#   500M x 40 = 20B messages/day
+#   20B / 86400 = 230K messages/sec (peak ~700K/sec)
+
+# CONNECTIONS:
+#   500M concurrent WebSocket connections
+#   Each connection: ~10 KB memory overhead
+#   500M x 10 KB = 5 TB of connection state
+#   Need ~5,000 chat servers (1M connections each)
+
+# STORAGE:
+#   Per text message: ~200 bytes
+#   Daily: 18B x 200B = 3.6 TB/day (Cassandra)
+#   Media: 2B msgs x 2MB = 4 PB/day (S3, only URL in DB)</code></pre>
+
+<h3>Architecture</h3>
+
+<pre><code class="language-python"># Message flow:
+# 1. Client A sends message via WebSocket to Chat Server CS-1
+# 2. CS-1 looks up recipient B's connected server (CS-3) via
+#    Session Service (Redis: user_id -> server_id)
+# 3. CS-1 routes message to CS-3 (server-to-server)
+# 4. CS-3 pushes message to Client B via WebSocket
+# 5. If B is offline -> message queued in Offline Store
+#    When B connects, queued messages are delivered
+
+# Delivery receipts:
+#   SENT:      server received message (single check)
+#   DELIVERED: recipient device received (double check)
+#   READ:      recipient opened conversation (blue double check)</code></pre>
+
+<h3>Key Components</h3>
+
+<ul>
+  <li><strong>Chat Servers:</strong> Each holds ~1M WebSocket connections. Stateful -- a user stays connected to one server.</li>
+  <li><strong>Session Service (Redis):</strong> Maps user_id to their current chat server. Updated on connect/disconnect.</li>
+  <li><strong>Message Queue:</strong> Kafka for reliable message routing between servers.</li>
+  <li><strong>Message Store (Cassandra):</strong> Partitioned by conversation_id, sorted by timestamp. Optimized for sequential reads.</li>
+  <li><strong>Offline Message Store:</strong> Queue per offline user. Drained on reconnect.</li>
+  <li><strong>Presence Service:</strong> Heartbeat-based online/offline tracking with last-seen timestamps.</li>
+</ul>
+
+<h3>Group Messaging</h3>
+
+<ul>
+  <li>Group message triggers fan-out to all members (up to 256)</li>
+  <li>Each member's chat server receives a copy</li>
+  <li>Delivery receipts are per-member in groups</li>
+  <li>Group metadata stored separately; message content stored once, referenced by all members</li>
+</ul>
+
+<h3>Design Considerations</h3>
+
+<ul>
+  <li><strong>End-to-end encryption:</strong> Server cannot read message content; only routes encrypted blobs</li>
+  <li><strong>Message ordering:</strong> Sequence numbers per conversation ensure correct order even with network delays</li>
+  <li><strong>Reconnection:</strong> Client sends last-received sequence number; server sends all messages after that</li>
+  <li><strong>Presence optimization:</strong> Only notify close contacts of online/offline changes to reduce fan-out</li>
+</ul>

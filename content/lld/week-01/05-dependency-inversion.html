@@ -1,0 +1,246 @@
+<h2>Dependency Inversion Principle (DIP)</h2>
+
+<p>
+  The Dependency Inversion Principle has two parts:
+</p>
+
+<ul>
+  <li><strong>High-level modules should not depend on low-level modules.</strong> Both should depend on abstractions.</li>
+  <li><strong>Abstractions should not depend on details.</strong> Details should depend on abstractions.</li>
+</ul>
+
+<p>
+  In practice, this means your business logic should not directly instantiate infrastructure
+  classes (databases, email services, file systems). Instead, it should depend on interfaces
+  that the infrastructure implements.
+</p>
+
+<h3>Why Direct Instantiation Is a Problem</h3>
+
+<p>
+  When a high-level module creates its own dependencies, it becomes tightly coupled
+  to specific implementations. This makes the code hard to test, hard to change, and
+  impossible to reuse in different contexts.
+</p>
+
+<h3>Bad Example: Direct Instantiation</h3>
+
+<pre><code class="language-python">import smtplib
+import mysql.connector
+
+
+class MySQLUserRepository:
+    def __init__(self):
+        self.conn = mysql.connector.connect(
+            host="localhost", database="myapp", user="root", password="secret"
+        )
+
+    def save(self, user: dict):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "INSERT INTO users (name, email) VALUES (%s, %s)",
+            (user["name"], user["email"]),
+        )
+        self.conn.commit()
+
+    def find_by_email(self, email: str) -> dict:
+        cursor = self.conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+        return cursor.fetchone()
+
+
+class SMTPEmailService:
+    def send_welcome_email(self, to_email: str):
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login("app@example.com", "password123")
+        server.sendmail("app@example.com", to_email, "Welcome!")
+        server.quit()
+
+
+class UserService:
+    """HIGH-LEVEL module directly depends on LOW-LEVEL modules."""
+
+    def __init__(self):
+        # Direct instantiation: tightly coupled to MySQL and SMTP
+        self.repo = MySQLUserRepository()
+        self.email = SMTPEmailService()
+
+    def register_user(self, name: str, email: str):
+        user = {"name": name, "email": email}
+        self.repo.save(user)
+        self.email.send_welcome_email(email)
+        return user
+</code></pre>
+
+<p>
+  Problems with this design:
+</p>
+
+<ul>
+  <li><code>UserService</code> cannot be tested without a real MySQL database and SMTP server.</li>
+  <li>Switching to PostgreSQL or SendGrid requires modifying <code>UserService</code>.</li>
+  <li>Connection details are hardcoded in the low-level modules.</li>
+  <li>The business logic (registration workflow) is inseparable from infrastructure.</li>
+</ul>
+
+<h3>Good Example: Dependency Injection via Abstractions</h3>
+
+<p>
+  Define abstract interfaces for the repository and email service.
+  The high-level <code>UserService</code> depends only on these abstractions:
+</p>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+
+
+# --- Abstractions (interfaces) ---
+
+class UserRepository(ABC):
+    @abstractmethod
+    def save(self, user: dict) -> None:
+        pass
+
+    @abstractmethod
+    def find_by_email(self, email: str) -> dict | None:
+        pass
+
+
+class EmailService(ABC):
+    @abstractmethod
+    def send_welcome_email(self, to_email: str) -> None:
+        pass
+
+
+# --- High-level module depends ONLY on abstractions ---
+
+class UserService:
+    def __init__(self, repo: UserRepository, email: EmailService):
+        self._repo = repo
+        self._email = email
+
+    def register_user(self, name: str, email: str) -> dict:
+        existing = self._repo.find_by_email(email)
+        if existing:
+            raise ValueError(f"User with email {email} already exists")
+
+        user = {"name": name, "email": email}
+        self._repo.save(user)
+        self._email.send_welcome_email(email)
+        return user
+</code></pre>
+
+<h3>Concrete Implementations (Details Depend on Abstractions)</h3>
+
+<pre><code class="language-python">import mysql.connector
+
+
+class MySQLUserRepository(UserRepository):
+    def __init__(self, host: str, database: str, user: str, password: str):
+        self._conn = mysql.connector.connect(
+            host=host, database=database, user=user, password=password
+        )
+
+    def save(self, user: dict) -> None:
+        cursor = self._conn.cursor()
+        cursor.execute(
+            "INSERT INTO users (name, email) VALUES (%s, %s)",
+            (user["name"], user["email"]),
+        )
+        self._conn.commit()
+
+    def find_by_email(self, email: str) -> dict | None:
+        cursor = self._conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+        return cursor.fetchone()
+
+
+class SendGridEmailService(EmailService):
+    def __init__(self, api_key: str):
+        self._api_key = api_key
+
+    def send_welcome_email(self, to_email: str) -> None:
+        # Use SendGrid API to send email
+        print(f"Sending welcome email to {to_email} via SendGrid")
+</code></pre>
+
+<h3>Wiring It Together (Composition Root)</h3>
+
+<pre><code class="language-python">def create_user_service() -> UserService:
+    """Composition root: wire dependencies here, not inside business logic."""
+    repo = MySQLUserRepository(
+        host="localhost",
+        database="myapp",
+        user="root",
+        password="secret",
+    )
+    email = SendGridEmailService(api_key="sg_api_key_here")
+    return UserService(repo=repo, email=email)
+
+
+# Application entry point
+service = create_user_service()
+service.register_user("Alice", "alice@example.com")
+</code></pre>
+
+<h3>Easy Testing with Fakes</h3>
+
+<p>
+  Because <code>UserService</code> depends on abstractions, we can inject test doubles:
+</p>
+
+<pre><code class="language-python">class FakeUserRepository(UserRepository):
+    def __init__(self):
+        self._users: list[dict] = []
+
+    def save(self, user: dict) -> None:
+        self._users.append(user)
+
+    def find_by_email(self, email: str) -> dict | None:
+        return next((u for u in self._users if u["email"] == email), None)
+
+
+class FakeEmailService(EmailService):
+    def __init__(self):
+        self.sent_emails: list[str] = []
+
+    def send_welcome_email(self, to_email: str) -> None:
+        self.sent_emails.append(to_email)
+
+
+def test_register_user():
+    repo = FakeUserRepository()
+    email = FakeEmailService()
+    service = UserService(repo=repo, email=email)
+
+    user = service.register_user("Bob", "bob@test.com")
+
+    assert user["name"] == "Bob"
+    assert repo.find_by_email("bob@test.com") is not None
+    assert "bob@test.com" in email.sent_emails
+
+
+def test_duplicate_registration_raises():
+    repo = FakeUserRepository()
+    email = FakeEmailService()
+    service = UserService(repo=repo, email=email)
+
+    service.register_user("Bob", "bob@test.com")
+
+    try:
+        service.register_user("Bob2", "bob@test.com")
+        assert False, "Should have raised ValueError"
+    except ValueError:
+        pass  # expected
+</code></pre>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>High-level business logic should never import or instantiate infrastructure classes directly.</li>
+  <li>Define abstractions (ABCs or Protocols) at the boundary between layers.</li>
+  <li>Inject dependencies through constructors (constructor injection is the most common form).</li>
+  <li>Wire everything together in a <strong>composition root</strong> near the application entry point.</li>
+  <li>DIP makes unit testing trivial: inject fakes instead of real infrastructure.</li>
+  <li>The "inversion" means the dependency arrow points from low-level to high-level (via the abstraction), not the other way around.</li>
+</ul>

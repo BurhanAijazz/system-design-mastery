@@ -1,0 +1,208 @@
+<h2>CAP Theorem</h2>
+
+<p>
+  The CAP theorem, formulated by Eric Brewer in 2000, states that a distributed data store
+  can provide at most <strong>two out of three</strong> guarantees simultaneously:
+  <strong>Consistency</strong>, <strong>Availability</strong>, and <strong>Partition Tolerance</strong>.
+  Since network partitions are unavoidable in distributed systems, the real choice is between
+  consistency and availability during a partition.
+</p>
+
+<h3>The Three Guarantees</h3>
+
+<ul>
+  <li><strong>Consistency (C):</strong> Every read receives the most recent write or an error. All nodes see the same data at the same time.</li>
+  <li><strong>Availability (A):</strong> Every request receives a non-error response, without guarantee that it contains the most recent write. The system is always responsive.</li>
+  <li><strong>Partition Tolerance (P):</strong> The system continues to operate despite network partitions (communication failures between nodes).</li>
+</ul>
+
+<h3>Why You Must Choose</h3>
+
+<pre><code class="language-python"># Imagine two database nodes, Node A and Node B, with a network partition between them.
+#
+#   [Client 1] --> [Node A]  ----X----  [Node B] <-- [Client 2]
+#                                ^
+#                         Network partition
+#                       (nodes can't communicate)
+#
+# Client 1 writes "balance = $100" to Node A.
+# Client 2 reads "balance" from Node B.
+#
+# You have three options:
+#
+# Option 1: CP (Consistency + Partition Tolerance)
+#   Node B refuses to serve reads until it can sync with Node A.
+#   Client 2 gets an error. System is consistent but unavailable for Node B.
+#
+# Option 2: AP (Availability + Partition Tolerance)
+#   Node B serves the read with stale data (old balance).
+#   Client 2 gets a response, but it might be outdated.
+#
+# Option 3: CA (Consistency + Availability, no Partition Tolerance)
+#   Only possible on a single machine or if you guarantee no network issues.
+#   Not realistic for distributed systems.
+</code></pre>
+
+<h3>CP Systems: Consistency Over Availability</h3>
+
+<p>
+  CP systems refuse to serve requests when they cannot guarantee consistency.
+  They sacrifice availability during partitions.
+</p>
+
+<pre><code class="language-python"># Examples of CP systems:
+#   - MongoDB (with majority write concern)
+#   - HBase
+#   - Redis (with Sentinel, during failover)
+#   - Zookeeper
+#   - etcd
+#
+# Use CP when:
+#   - Financial transactions (bank transfers, payments)
+#   - Inventory management (prevent overselling)
+#   - Distributed locks and leader election
+#   - Configuration management
+
+class CPBankAccount:
+    """CP approach: reject operations when consistency cannot be guaranteed."""
+
+    def __init__(self, balance: float, is_primary: bool):
+        self._balance = balance
+        self._is_primary = is_primary
+        self._partition_detected = False
+
+    def transfer(self, amount: float) -> dict:
+        if self._partition_detected and not self._is_primary:
+            # Refuse the operation to maintain consistency
+            return {
+                "success": False,
+                "error": "Service temporarily unavailable - partition detected",
+            }
+
+        if self._balance < amount:
+            return {"success": False, "error": "Insufficient funds"}
+
+        self._balance -= amount
+        return {"success": True, "new_balance": self._balance}
+</code></pre>
+
+<h3>AP Systems: Availability Over Consistency</h3>
+
+<p>
+  AP systems always respond to requests, even if the data might be stale.
+  They sacrifice consistency during partitions and resolve conflicts later.
+</p>
+
+<pre><code class="language-python"># Examples of AP systems:
+#   - Cassandra
+#   - DynamoDB
+#   - CouchDB
+#   - DNS
+#   - Caching systems (Redis in cluster mode)
+#
+# Use AP when:
+#   - Social media feeds (slightly stale content is acceptable)
+#   - Shopping cart (merge later, no lost writes)
+#   - Session storage (user experience > perfect consistency)
+#   - Analytics and metrics collection
+
+class APShoppingCart:
+    """AP approach: always accept operations, reconcile conflicts later."""
+
+    def __init__(self, user_id: str):
+        self.user_id = user_id
+        self._items: list[dict] = []
+        self._vector_clock: dict[str, int] = {}  # For conflict resolution
+
+    def add_item(self, item: str, quantity: int, node_id: str) -> dict:
+        # Always succeeds, even during partition
+        self._items.append({
+            "item": item,
+            "quantity": quantity,
+            "added_at": node_id,
+        })
+        self._vector_clock[node_id] = self._vector_clock.get(node_id, 0) + 1
+        return {"success": True, "items_count": len(self._items)}
+
+    def merge(self, other_cart: "APShoppingCart"):
+        """Resolve conflicts after partition heals by merging both carts."""
+        seen = {(i["item"], i["added_at"]) for i in self._items}
+        for item in other_cart._items:
+            key = (item["item"], item["added_at"])
+            if key not in seen:
+                self._items.append(item)
+</code></pre>
+
+<h3>Consistency Models Spectrum</h3>
+
+<pre><code class="language-python"># CAP is binary, but real systems offer a spectrum of consistency:
+#
+# Strong Consistency (linearizability)
+#   |  Every read returns the latest write. Like a single machine.
+#   |  Example: Google Spanner (uses GPS clocks)
+#   |
+# Sequential Consistency
+#   |  Operations appear in some total order consistent with each client's order.
+#   |
+# Causal Consistency
+#   |  Causally related operations are seen in order. Concurrent operations may differ.
+#   |  Example: DynamoDB with version vectors
+#   |
+# Eventual Consistency
+#   |  All replicas converge to the same value... eventually.
+#   |  Example: DNS, Cassandra with low consistency level
+#   |
+# No Consistency Guarantee
+#      Reads may return anything. Useful for metrics/logs.
+</code></pre>
+
+<h3>PACELC: An Extension of CAP</h3>
+
+<p>
+  CAP only describes behavior during a partition. The PACELC theorem extends it:
+  if there is a <strong>P</strong>artition, choose <strong>A</strong>vailability or
+  <strong>C</strong>onsistency; <strong>E</strong>lse (normal operation), choose
+  <strong>L</strong>atency or <strong>C</strong>onsistency.
+</p>
+
+<pre><code class="language-python"># PACELC classification of popular databases:
+#
+# Database       | Partition (PA/PC) | Normal (EL/EC)
+# ---------------|-------------------|----------------
+# DynamoDB       | PA                | EL (fast, eventually consistent)
+# Cassandra      | PA                | EL
+# MongoDB        | PC                | EC
+# PostgreSQL     | PC                | EC
+# Google Spanner | PC                | EC (uses TrueTime for low latency)
+# CockroachDB    | PC                | EL (tries to minimize latency)
+</code></pre>
+
+<h3>Practical Guidelines for System Design</h3>
+
+<pre><code class="language-python"># Decision matrix for choosing CP vs AP:
+#
+# Question                                    | CP           | AP
+# --------------------------------------------|--------------|-------------
+# Can users tolerate stale reads?              | No           | Yes
+# Is data correction expensive?                | Yes          | No
+# Is downtime worse than stale data?           | No           | Yes
+# Are there legal/financial correctness needs? | Yes          | No
+# Is low latency critical?                     | Less so      | Yes
+#
+# Common hybrid approach:
+# - Use CP for the critical path (payments, inventory)
+# - Use AP for non-critical data (recommendations, feeds)
+# - Example: Amazon uses CP for order placement, AP for product catalog
+</code></pre>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>Network partitions are inevitable in distributed systems. The real choice is CP or AP during a partition.</li>
+  <li>CP sacrifices availability: some requests fail during partitions, but data is always correct.</li>
+  <li>AP sacrifices consistency: all requests succeed, but some may return stale data.</li>
+  <li>Most real systems are not purely CP or AP &mdash; they make different trade-offs for different operations.</li>
+  <li>Use CP for financial data, inventory, and anything where correctness is non-negotiable.</li>
+  <li>Use AP for social feeds, shopping carts, and metrics where availability matters more.</li>
+  <li>PACELC extends CAP by also considering the latency-consistency trade-off during normal operation.</li>
+</ul>

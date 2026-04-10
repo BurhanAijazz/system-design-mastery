@@ -1,0 +1,163 @@
+<h2>Visitor Pattern</h2>
+
+<p>The Visitor pattern defines new operations on a structure of objects without modifying the classes themselves. The operation is moved into a separate "visitor" class. This uses double dispatch: the element calls the visitor, passing itself, so the correct visitor method is called based on both the element type and the visitor type.</p>
+
+<h3>The Problem: Adding Operations to Existing Classes</h3>
+
+<pre><code class="language-python">class CircleNaive:
+    def __init__(self, radius: float):
+        self.radius = radius
+
+    def area(self) -> float:
+        return math.pi * self.radius ** 2
+
+    def draw(self) -> str:
+        return f"Drawing circle (r={self.radius})"
+
+    def to_json(self) -> str:
+        return f'{{"type": "circle", "radius": {self.radius}}}'
+
+    # Every new operation = modify this class.
+    # What about perimeter? SVG export? Bounding box?
+    # This violates OCP.
+</code></pre>
+
+<p>With 5 shapes and 10 operations, you get 50 methods scattered across shape classes. Every new operation requires modifying every shape class.</p>
+
+<h3>Solution: Visitor Pattern</h3>
+
+<h3>Element Interface and Concrete Elements</h3>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+from dataclasses import dataclass
+import math
+
+class Shape(ABC):
+    """Element -- accepts a visitor."""
+
+    @abstractmethod
+    def accept(self, visitor: "ShapeVisitor") -> None:
+        """Double dispatch: call visitor.visit_&lt;type&gt;(self)."""
+        pass
+
+
+@dataclass
+class Circle(Shape):
+    radius: float
+
+    def accept(self, visitor: "ShapeVisitor") -> None:
+        visitor.visit_circle(self)
+
+
+@dataclass
+class Rectangle(Shape):
+    width: float
+    height: float
+
+    def accept(self, visitor: "ShapeVisitor") -> None:
+        visitor.visit_rectangle(self)
+
+
+@dataclass
+class Triangle(Shape):
+    base: float
+    height: float
+
+    def accept(self, visitor: "ShapeVisitor") -> None:
+        visitor.visit_triangle(self)
+</code></pre>
+
+<h3>Visitor Interface</h3>
+
+<pre><code class="language-python">class ShapeVisitor(ABC):
+    """Visitor interface with a visit method per element type."""
+
+    @abstractmethod
+    def visit_circle(self, circle: Circle) -> None: pass
+
+    @abstractmethod
+    def visit_rectangle(self, rect: Rectangle) -> None: pass
+
+    @abstractmethod
+    def visit_triangle(self, tri: Triangle) -> None: pass
+</code></pre>
+
+<h3>Concrete Visitors (New Operations)</h3>
+
+<pre><code class="language-python">class AreaCalculator(ShapeVisitor):
+    """Visitor that calculates area for each shape."""
+
+    def __init__(self):
+        self.total_area = 0.0
+
+    def visit_circle(self, circle: Circle) -> None:
+        area = math.pi * circle.radius ** 2
+        self.total_area += area
+
+    def visit_rectangle(self, rect: Rectangle) -> None:
+        area = rect.width * rect.height
+        self.total_area += area
+
+    def visit_triangle(self, tri: Triangle) -> None:
+        area = 0.5 * tri.base * tri.height
+        self.total_area += area
+
+
+class JSONExporter(ShapeVisitor):
+    """Visitor that exports shapes to JSON."""
+
+    def __init__(self):
+        self.result = []
+
+    def visit_circle(self, circle: Circle) -> None:
+        self.result.append(f'{{"type": "circle", "radius": {circle.radius}}}')
+
+    def visit_rectangle(self, rect: Rectangle) -> None:
+        self.result.append(
+            f'{{"type": "rectangle", "width": {rect.width}, "height": {rect.height}}}'
+        )
+
+    def visit_triangle(self, tri: Triangle) -> None:
+        self.result.append(
+            f'{{"type": "triangle", "base": {tri.base}, "height": {tri.height}}}'
+        )
+</code></pre>
+
+<h3>Usage: New Operations Without Changing Shapes</h3>
+
+<pre><code class="language-python">shapes = [Circle(5), Rectangle(4, 6), Triangle(3, 8)]
+
+# Calculate total area
+calc = AreaCalculator()
+for shape in shapes:
+    shape.accept(calc)
+print(f"Total area: {calc.total_area:.2f}")
+
+# Export to JSON -- no changes to shape classes!
+exporter = JSONExporter()
+for shape in shapes:
+    shape.accept(exporter)
+print(exporter.result)
+</code></pre>
+
+<h3>Double Dispatch Explained</h3>
+
+<p>Python normally uses single dispatch: the method called depends on the object type. With the Visitor pattern, the method called depends on <strong>two</strong> types:</p>
+
+<ol>
+    <li>The element type (Circle, Rectangle) determines which <code>visit_*</code> method is called</li>
+    <li>The visitor type (AreaCalculator, JSONExporter) determines what that method does</li>
+</ol>
+
+<h3>When to Use</h3>
+
+<ul>
+    <li><strong>Stable class hierarchy</strong> with frequently changing operations (shapes, AST nodes)</li>
+    <li><strong>Reporting and export</strong> -- generate different output formats</li>
+    <li><strong>Code analysis</strong> -- lint rules, type checking, optimization passes</li>
+    <li><strong>Tax/pricing calculations</strong> -- different calculation strategies over a product catalog</li>
+</ul>
+
+<h3>When NOT to Use</h3>
+
+<p>If the class hierarchy changes frequently (new shape types added often), the Visitor pattern becomes painful because every visitor must be updated. Use Visitor when elements are stable but operations change.</p>

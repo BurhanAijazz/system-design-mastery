@@ -1,0 +1,63 @@
+<h2>Week 8 Exercises: Core Internet Services</h2>
+
+<p>These exercises reinforce the URL shortener, Pastebin, and rate limiter designs covered this week. Work through each one using the DERSC framework.</p>
+
+<h3>Exercise 1: URL Shortener with Analytics Dashboard</h3>
+
+<p>Design an extension to the URL shortener that provides real-time click analytics. Consider the following requirements:</p>
+
+<ul>
+  <li>Track every click: timestamp, referrer, country (via IP geolocation), device type</li>
+  <li>Provide dashboards showing clicks over time, top referrers, geographic distribution</li>
+  <li>Analytics queries should not slow down the redirect path</li>
+</ul>
+
+<p><strong>Tasks:</strong></p>
+<ul>
+  <li>Estimate the additional storage for analytics events at 1B redirects/day</li>
+  <li>Design the data pipeline: how do click events flow from redirect to dashboard?</li>
+  <li>Choose between synchronous logging (inline with redirect) vs asynchronous (message queue). What are the trade-offs?</li>
+  <li>Sketch the analytics read path: pre-aggregated counters vs query-time aggregation</li>
+</ul>
+
+<h3>Exercise 2: Pastebin with Collaboration</h3>
+
+<p>Extend the Pastebin design to support real-time collaborative editing, similar to Google Docs but for code snippets.</p>
+
+<ul>
+  <li>Multiple users can edit the same paste simultaneously</li>
+  <li>Changes appear in real-time for all connected editors</li>
+  <li>Conflict resolution when two users edit the same line</li>
+</ul>
+
+<p><strong>Tasks:</strong></p>
+<ul>
+  <li>Compare two approaches: Operational Transformation (OT) vs CRDTs. Which is simpler for a paste-sized document?</li>
+  <li>Design the WebSocket connection management for real-time sync</li>
+  <li>How does the system handle a user going offline and reconnecting with stale state?</li>
+  <li>Estimate the message rate: 10 active editors, each typing at 5 characters/second</li>
+</ul>
+
+<h3>Exercise 3: Multi-Algorithm Rate Limiter Comparison</h3>
+
+<p>Implement and compare all five rate limiting algorithms under the same traffic pattern.</p>
+
+<pre><code class="language-python"># Simulate this traffic pattern:
+# - 50 users, each allowed 100 requests/minute
+# - Normal users: steady 1-2 requests/sec
+# - Bursty users: 50 requests in 2 seconds, then idle
+# - Abusive users: constant 10 requests/sec
+
+# For each algorithm, measure:
+# 1. How many legitimate requests were wrongly rejected?
+# 2. How many abusive requests were wrongly allowed?
+# 3. Memory usage per user
+# 4. Redis operations per rate check</code></pre>
+
+<p><strong>Tasks:</strong></p>
+<ul>
+  <li>Implement Token Bucket, Fixed Window, and Sliding Window Counter</li>
+  <li>Run the same traffic simulation through each algorithm</li>
+  <li>Create a comparison table of accuracy, memory, and latency</li>
+  <li>Which algorithm would you recommend for an API gateway handling mixed traffic? Justify your choice with data.</li>
+</ul>

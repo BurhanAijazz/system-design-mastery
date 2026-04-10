@@ -1,0 +1,84 @@
+<h2>Caching Strategies: Read and Write Patterns</h2>
+
+<p>Caching is the single most impactful optimization in system design. It trades <strong>memory for speed and reduced database load</strong>. There are five patterns, each with different trade-offs for consistency, performance, and complexity.</p>
+
+<h3>Simulated Database and Cache</h3>
+<p>To understand caching patterns, consider two components: a slow database (~50ms latency) and a fast cache (~1ms latency).</p>
+
+<pre><code class="language-python">from collections import OrderedDict
+from typing import Dict, Optional, Any
+
+class SimulatedDB:
+    """Database with artificial latency (~50ms)."""
+    def __init__(self, latency_ms=50.0):
+        self.store: Dict[str, Any] = {}
+        self.read_count = 0
+        self.write_count = 0
+
+    def get(self, key: str) -> Optional[Any]:
+        self.read_count += 1
+        return self.store.get(key)
+
+    def put(self, key: str, value: Any) -> None:
+        self.write_count += 1
+        self.store[key] = value
+
+class SimulatedCache:
+    """In-memory LRU cache (~1ms latency)."""
+    def __init__(self, max_size=100):
+        self.store: OrderedDict = OrderedDict()
+        self.hits = 0
+        self.misses = 0
+
+    def get(self, key: str) -> Optional[Any]:
+        if key in self.store:
+            self.hits += 1
+            self.store.move_to_end(key)  # LRU: move to back
+            return self.store[key]
+        self.misses += 1
+        return None
+
+    def put(self, key: str, value: Any) -> None:
+        self.store[key] = value
+        if len(self.store) > 100:
+            self.store.popitem(last=False)  # Evict oldest
+</code></pre>
+
+<h3>Pattern 1: Cache-Aside (Lazy Loading)</h3>
+<p>The application checks the cache first. On a miss, it reads from the database and populates the cache. This is the most common pattern.</p>
+<ul>
+  <li><strong>Pro</strong>: Only caches data that is actually requested</li>
+  <li><strong>Con</strong>: First request is always a cache miss (cold start)</li>
+  <li><strong>Con</strong>: Data can become stale if updated in the database</li>
+</ul>
+
+<h3>Pattern 2: Write-Through</h3>
+<p>Every write goes to both the cache and the database. Ensures the cache is always consistent with the database.</p>
+<ul>
+  <li><strong>Pro</strong>: Cache is never stale</li>
+  <li><strong>Con</strong>: Higher write latency (two writes per operation)</li>
+  <li><strong>Con</strong>: Caches data that may never be read</li>
+</ul>
+
+<h3>Pattern 3: Write-Behind (Write-Back)</h3>
+<p>Writes go to the cache immediately, then asynchronously flushed to the database in batches.</p>
+<ul>
+  <li><strong>Pro</strong>: Very fast writes (cache speed)</li>
+  <li><strong>Pro</strong>: Batching reduces database load</li>
+  <li><strong>Con</strong>: Risk of data loss if cache crashes before flush</li>
+</ul>
+
+<h3>Pattern 4: Read-Through</h3>
+<p>The cache itself handles loading from the database on a miss. The application only talks to the cache.</p>
+
+<h3>Pattern 5: Refresh-Ahead</h3>
+<p>The cache proactively refreshes entries before they expire, based on predicted access patterns.</p>
+
+<h3>Choosing the Right Pattern</h3>
+<ul>
+  <li><strong>Cache-Aside</strong>: general purpose, read-heavy workloads</li>
+  <li><strong>Write-Through</strong>: when you need strong cache consistency</li>
+  <li><strong>Write-Behind</strong>: write-heavy workloads where brief inconsistency is OK</li>
+  <li><strong>Read-Through</strong>: simplifies application code, common with CDNs</li>
+  <li><strong>Refresh-Ahead</strong>: latency-sensitive reads with predictable access patterns</li>
+</ul>

@@ -1,0 +1,65 @@
+<h2>Design: Ad Click Aggregator</h2>
+<p>Design a system that aggregates ad click events in real-time for billing and analytics.</p>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Ingest millions of click events per second</li>
+  <li>Real-time aggregation: clicks per ad per minute for billing</li>
+  <li>Fraud detection: filter bots, click farms, duplicate clicks</li>
+  <li>Support historical queries with time-window rollups</li>
+</ul>
+
+<h3>High-Level Architecture</h3>
+<ul>
+  <li><strong>Click Ingestion (Kafka)</strong> &mdash; High-throughput event stream from ad servers</li>
+  <li><strong>Stream Processor (Flink/Spark)</strong> &mdash; Real-time windowed aggregation</li>
+  <li><strong>Fraud Filter</strong> &mdash; IP rate limiting, device fingerprint dedup, ML scorer</li>
+  <li><strong>Aggregation Store</strong> &mdash; Pre-computed rollups in OLAP DB (ClickHouse, Druid)</li>
+  <li><strong>Query Service</strong> &mdash; APIs for dashboards, billing, and advertiser reports</li>
+</ul>
+
+<h3>Key Components</h3>
+<pre><code class="language-python">from collections import defaultdict
+import time
+
+class ClickAggregator:
+    def __init__(self, window_sec=60):
+        self.window_sec = window_sec
+        # (ad_id, window_start) -> count
+        self.counts = defaultdict(int)
+        self.seen = set()  # dedup: (click_id)
+
+    def process_event(self, event):
+        if event["click_id"] in self.seen:
+            return  # duplicate
+        if self._is_fraud(event):
+            return  # filtered
+        self.seen.add(event["click_id"])
+        window = int(event["ts"] // self.window_sec) * self.window_sec
+        self.counts[(event["ad_id"], window)] += 1
+
+    def _is_fraud(self, event):
+        # Simplified: flag if same IP clicked same ad > 10 times/min
+        return False  # placeholder for ML model + rule engine
+
+    def flush_window(self, window_start):
+        """Write completed window aggregates to OLAP store."""
+        results = {
+            ad_id: count
+            for (ad_id, ws), count in self.counts.items()
+            if ws == window_start
+        }
+        olap_db.batch_insert(window_start, results)
+
+# MapReduce for historical re-aggregation
+# Map: (ad_id, hour) -> click_count per minute file
+# Reduce: sum counts per ad_id per hour
+</code></pre>
+
+<h3>Scaling Considerations</h3>
+<ul>
+  <li>Kafka partitions by ad_id ensure all clicks for an ad go to one aggregator</li>
+  <li>Watermarks handle late-arriving events; allow a grace period before finalizing</li>
+  <li>Lambda architecture: real-time stream layer + batch layer for reconciliation</li>
+  <li>Exactly-once via Kafka transactions + idempotent OLAP upserts</li>
+</ul>

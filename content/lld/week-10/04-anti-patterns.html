@@ -1,0 +1,91 @@
+<h2>Interview Anti-Patterns and Tips</h2>
+
+<p>Common mistakes that lose LLD interviews and best practices that win them. Avoiding anti-patterns is just as important as knowing design patterns. Study these carefully.</p>
+
+<h3>Anti-Pattern 1: Diving Into Code Immediately</h3>
+
+<p>When the interviewer says "Design a parking lot system," do NOT start writing classes immediately. Instead, spend the first 5 minutes clarifying requirements: How many floors? What vehicle types? Payment processing?</p>
+<ul>
+  <li>Shows you think before coding</li>
+  <li>Prevents building the wrong thing</li>
+  <li>Demonstrates real-world engineering mindset</li>
+</ul>
+
+<h3>Anti-Pattern 2: Over-Engineering</h3>
+
+<p>Do not create a ParkingSpotFactoryBuilderSingletonProxy for a simple spot. Use a pattern ONLY when the problem demands it:</p>
+<ul>
+  <li>3 similar if/else branches? Maybe Strategy. Just 2? Plain if/else is fine</li>
+  <li>Do not add Observer for 1 listener</li>
+  <li>Do not add Factory for 1 product type</li>
+  <li>Simple code that works beats clever code that impresses</li>
+</ul>
+
+<h3>Anti-Pattern 3: Under-Engineering</h3>
+
+<p>A 300-line method that handles parking, payment, notification, and ticketing is the opposite extreme. Break it into focused classes:</p>
+
+<pre><code class="language-python"># BAD: everything in one class
+class ParkingLot:
+    def park(self, vehicle_type, license):
+        # 300 lines of mixed logic
+
+# GOOD: proper separation
+class ParkingLot:      # coordinates
+class ParkingFloor:    # manages spots
+class ParkingSpot:     # individual spot
+class PricingStrategy: # fee calculation
+class ParkingTicket:   # tracks entry/exit</code></pre>
+
+<h3>Anti-Pattern 4: God Class</h3>
+
+<p>A single class that does everything violates SRP. Split responsibilities so each class has ONE reason to change:</p>
+
+<pre><code class="language-python"># BAD: ElevatorSystem handles movement, doors,
+# scheduling, display, music, weight, emergency...
+
+# GOOD: separate concerns
+class Elevator:           # movement + doors
+class ElevatorController: # scheduling
+class DisplayObserver:    # floor display
+class WeightSensor:       # weight checking</code></pre>
+
+<h3>Anti-Pattern 5: Ignoring Edge Cases</h3>
+
+<p>Even if you do not implement every edge case, mention them. Say "I'd also handle X, Y, Z but for time, let me focus on the core flow."</p>
+
+<pre><code class="language-python"># BAD:
+def withdraw(self, amount):
+    self.balance -= amount
+    self.dispense(amount)
+
+# GOOD:
+def withdraw(self, amount):
+    if amount <= 0:
+        raise ValueError("Amount must be positive")
+    if amount > self.balance:
+        raise InsufficientFundsError()
+    if amount > self.atm_cash:
+        raise ATMOutOfCashError()
+    self.balance -= amount
+    self.dispense(amount)</code></pre>
+
+<h3>Anti-Pattern 6: Not Discussing Trade-offs</h3>
+
+<p>Never just say "I'll use the State pattern" and move on. Always explain WHY:</p>
+<ul>
+  <li>"I'll use State because we have 5 distinct states with different valid operations"</li>
+  <li>"An alternative would be enum + switch, which is simpler but would get messy with this many states"</li>
+  <li>"The trade-off is more classes but self-contained logic per state"</li>
+</ul>
+
+<h3>Anti-Pattern 7: Inheritance Over Composition</h3>
+
+<p>Deep inheritance hierarchies (PremiumUser -> GoldPremiumUser -> GoldPremiumUserWithDiscount) are rigid. Prefer composition with Strategy objects that can be mixed and matched.</p>
+
+<h3>Anti-Pattern 8: Hardcoding Values</h3>
+
+<p>Use enums for types and categories, configuration objects for limits and thresholds. Never scatter magic numbers throughout the code.</p>
+
+<h3>Key Takeaway</h3>
+<p>The ideal LLD interview solution sits between over-engineering and under-engineering. Use patterns when they solve a real problem, keep classes focused with clear responsibilities, discuss trade-offs for every design decision, and always mention edge cases even when you skip implementing them.</p>

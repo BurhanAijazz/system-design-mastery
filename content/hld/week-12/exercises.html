@@ -1,0 +1,84 @@
+<h2>Week 12 Exercises: Infrastructure and Advanced</h2>
+
+<p>These exercises cover web crawlers, distributed KV stores, ticket booking under extreme concention, and payment systems.</p>
+
+<h3>Exercise 1: Web Crawler Politeness and Priority</h3>
+
+<p>Design and implement the URL Frontier component that balances crawl priority with domain politeness.</p>
+
+<ul>
+  <li>Priority queues: news sites (high), blogs (medium), static pages (low)</li>
+  <li>Politeness: max 1 request per second per domain</li>
+  <li>Fairness: no single domain monopolizes the crawler</li>
+</ul>
+
+<p><strong>Tasks:</strong></p>
+<ul>
+  <li>Design the two-tier queue: front queues for priority, back queues for per-domain politeness</li>
+  <li>How do you handle a domain with 10 million pages? It should not block other domains from being crawled.</li>
+  <li>Implement a Bloom filter for URL deduplication. With 50 billion URLs and a 1% false positive rate, how many bits do you need?</li>
+  <li>How do you decide re-crawl frequency? Design a scoring function based on page change rate and importance.</li>
+</ul>
+
+<pre><code class="language-python"># Bloom filter sizing:
+# n = 50 billion URLs, p = 1% false positive
+# m = -(n * ln(p)) / (ln(2)^2)
+# m = -(50e9 * ln(0.01)) / (0.4807)
+# m ~ 479 billion bits = ~60 GB
+# k (hash functions) = (m/n) * ln(2) ~ 7 hash functions</code></pre>
+
+<h3>Exercise 2: Distributed KV Store Failure Scenarios</h3>
+
+<p>Test your distributed KV store design against these failure scenarios:</p>
+
+<pre><code class="language-python"># Scenario 1: Network partition
+# Nodes A, B, C are replicas. Network splits: {A, B} vs {C}.
+# Client writes to A (quorum W=2, succeeds with A+B).
+# Another client reads from C (quorum R=2, only has C).
+# What does the client see? How do you resolve after healing?
+
+# Scenario 2: Concurrent writes
+# Client 1 writes key="x", value="1" to node A
+# Client 2 writes key="x", value="2" to node B
+# Both succeed (W=1). What is the value of "x"?
+
+# Scenario 3: Node death during write
+# Client writes with W=2. Node A acknowledges.
+# Node B crashes before acknowledging. Node C acknowledges.
+# Write succeeds (W=2 met). When B recovers, it has stale data.
+# How does anti-entropy fix this?</code></pre>
+
+<p><strong>Tasks:</strong></p>
+<ul>
+  <li>For each scenario, trace the exact state of each replica before and after the event</li>
+  <li>Design the read-repair mechanism: when a read quorum detects stale data, how do you fix it?</li>
+  <li>Implement a simple vector clock and show how it detects concurrent vs sequential writes</li>
+  <li>Compare hinted handoff vs Merkle tree anti-entropy for repairing stale replicas</li>
+</ul>
+
+<h3>Exercise 3: Payment Idempotency Stress Test</h3>
+
+<p>Design and test the idempotency layer for a payment system under adversarial conditions.</p>
+
+<pre><code class="language-python"># Adversarial scenarios to handle:
+# 1. Client sends payment, gets timeout, retries 5 times
+#    -> Exactly one charge must occur
+#
+# 2. Client sends payment, server crashes after charging
+#    but before returning response. Client retries.
+#    -> Must return the SAME response, not charge again
+#
+# 3. Two different clients send the same idempotency key
+#    -> Second request should be rejected (not applied)
+#
+# 4. Server processes payment, stores result, but the
+#    idempotency key store crashes. Client retries.
+#    -> How do you recover?</code></pre>
+
+<p><strong>Tasks:</strong></p>
+<ul>
+  <li>Design the idempotency key store: Redis with TTL, or database with unique constraint?</li>
+  <li>What happens if the idempotency store and the payment database are not atomically updated? Design a solution.</li>
+  <li>Implement the double-entry ledger and verify that debits always equal credits after processing 10,000 random transactions</li>
+  <li>Run an end-of-day reconciliation: compare your ledger against a simulated card network settlement file</li>
+</ul>

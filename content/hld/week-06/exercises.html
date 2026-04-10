@@ -1,0 +1,80 @@
+<h2>Week 6 Exercises: Microservices and Distributed Patterns</h2>
+
+<p>These exercises test your understanding of microservice architecture decisions, the saga pattern, and resilience patterns like circuit breakers.</p>
+
+<h3>Exercise 1: Monolith vs Microservices Decision</h3>
+<p>Your company has a monolith serving 10,000 requests/second. Evaluate whether to migrate to microservices for each scenario:</p>
+<ul>
+  <li><strong>Scenario A</strong>: 3-person startup. One codebase. All features ship together weekly. Traffic is growing 20% per month</li>
+  <li><strong>Scenario B</strong>: 80-person engineering team. Teams step on each other's code daily. The payment module needs 10x more resources than the user module. Deploys take 2 hours due to testing everything</li>
+  <li><strong>Scenario C</strong>: 15-person team. The ML recommendation engine needs Python/TensorFlow. The rest is Java. The ML model retrains daily and needs GPU instances</li>
+</ul>
+
+<pre><code class="language-python"># Decision framework:
+def should_use_microservices(
+    team_size: int,
+    independent_scaling_needed: bool,
+    independent_deploy_needed: bool,
+    different_tech_stacks: bool,
+    operational_maturity: str,  # "low", "medium", "high"
+) -> str:
+    if team_size < 10 and not independent_scaling_needed:
+        return "MONOLITH -- too small, overhead not justified"
+    if operational_maturity == "low":
+        return "MODULAR MONOLITH -- get the boundaries right first"
+    if independent_scaling_needed or team_size > 30:
+        return "MICROSERVICES -- clear benefits outweigh complexity"
+    return "MODULAR MONOLITH -- wait for a stronger signal"
+</code></pre>
+
+<h3>Exercise 2: Design a Saga</h3>
+<p>Design a saga for a travel booking system. The user books a flight, hotel, and rental car as a single package. Each is a separate service with its own database.</p>
+<ul>
+  <li>Define the saga steps (forward actions)</li>
+  <li>Define the compensating transaction for each step</li>
+  <li>What happens if the hotel booking succeeds but the car rental fails?</li>
+  <li>Should you use choreography or orchestration? Why?</li>
+  <li>How do you handle the case where a compensating transaction itself fails?</li>
+</ul>
+
+<pre><code class="language-python"># Define your saga steps:
+saga_steps = [
+    {"action": "Book Flight",    "compensate": "Cancel Flight"},
+    {"action": "Book Hotel",     "compensate": "Cancel Hotel"},
+    {"action": "Book Car",       "compensate": "Cancel Car Rental"},
+    {"action": "Charge Payment", "compensate": "Refund Payment"},
+]
+
+# Failure at "Book Car":
+#   -> Compensate "Book Hotel" (cancel hotel)
+#   -> Compensate "Book Flight" (cancel flight)
+#   -> Notify user of failure
+
+# What if "Cancel Hotel" fails during compensation?
+# Options: retry, manual intervention queue, scheduled cleanup job
+</code></pre>
+
+<h3>Exercise 3: Circuit Breaker Configuration</h3>
+<p>You have a service that calls three downstream dependencies. Configure circuit breakers for each:</p>
+<ul>
+  <li><strong>Payment Gateway</strong>: External API, average latency 500ms, 99.5% uptime. Failures are expensive (double charges)</li>
+  <li><strong>Recommendation Engine</strong>: Internal service, average latency 50ms, 99.9% uptime. Failures are cosmetic (show default recommendations)</li>
+  <li><strong>Notification Service</strong>: Internal service, average latency 200ms, 99% uptime. Failures can be retried later</li>
+</ul>
+
+<pre><code class="language-python"># Configure for each dependency:
+configs = {
+    "payment_gateway": {
+        "failure_threshold": "???",   # How many failures before opening?
+        "recovery_timeout": "???",    # How long to wait before testing?
+        "timeout_ms": "???",          # Request timeout?
+        "retry_policy": "???",        # Retry or fail fast?
+    },
+    "reco_engine": { ... },
+    "notification": { ... },
+}
+
+# Hint: Payment needs conservative settings (low threshold, long
+# recovery). Reco engine can have aggressive settings (high threshold,
+# short recovery) since failures are cosmetic.
+</code></pre>

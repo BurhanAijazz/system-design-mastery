@@ -1,0 +1,194 @@
+<h2>Project: Parking Lot System</h2>
+
+<p>A full LLD implementation of a multi-floor parking lot. This project combines Strategy (pricing), State (spot status), Factory (creating spots and vehicles), and Observer (display updates) patterns.</p>
+
+<h3>Patterns Used</h3>
+
+<ul>
+    <li><strong>Strategy</strong> -- Parking rate calculation (hourly, flat, weekend)</li>
+    <li><strong>State</strong> -- Spot status (Available, Occupied, Reserved, Maintenance)</li>
+    <li><strong>Factory</strong> -- Creating spots and vehicles</li>
+    <li><strong>Observer</strong> -- Update display when spot status changes</li>
+</ul>
+
+<h3>Requirements</h3>
+
+<pre><code>Functional:
+  1. Multi-floor parking lot
+  2. Different spot types: compact, large, handicapped, motorcycle
+  3. Different vehicle types: car, truck, motorcycle, van
+  4. Vehicle type must match spot type capability
+  5. Ticket issued on entry, fee calculated on exit
+  6. Multiple pricing strategies (hourly, flat rate)
+  7. Display board shows available spots per floor
+  8. Track capacity per floor and overall
+
+Out of scope:
+  - Reservation system
+  - Payment gateway integration
+  - Valet parking
+</code></pre>
+
+<h3>Core Entities</h3>
+
+<pre><code class="language-python">from enum import Enum
+from dataclasses import dataclass, field
+from typing import List, Optional, Dict
+from datetime import datetime, timedelta
+from abc import ABC, abstractmethod
+import math
+import uuid
+
+class VehicleType(Enum):
+    CAR = "car"
+    TRUCK = "truck"
+    MOTORCYCLE = "motorcycle"
+    VAN = "van"
+
+class SpotType(Enum):
+    COMPACT = "compact"
+    LARGE = "large"
+    HANDICAPPED = "handicapped"
+    MOTORCYCLE = "motorcycle"
+
+class SpotStatus(Enum):
+    AVAILABLE = "available"
+    OCCUPIED = "occupied"
+    RESERVED = "reserved"
+    MAINTENANCE = "maintenance"
+
+# Which vehicle types can park in which spot types
+SPOT_COMPATIBILITY: Dict[VehicleType, List[SpotType]] = {
+    VehicleType.MOTORCYCLE: [SpotType.MOTORCYCLE, SpotType.COMPACT, SpotType.LARGE],
+    VehicleType.CAR: [SpotType.COMPACT, SpotType.LARGE, SpotType.HANDICAPPED],
+    VehicleType.VAN: [SpotType.LARGE],
+    VehicleType.TRUCK: [SpotType.LARGE],
+}
+</code></pre>
+
+<h3>Parking Spot and Floor</h3>
+
+<pre><code class="language-python">@dataclass
+class ParkingSpot:
+    spot_id: str
+    spot_type: SpotType
+    floor: int
+    status: SpotStatus = SpotStatus.AVAILABLE
+    vehicle_id: Optional[str] = None
+
+    def is_available(self) -> bool:
+        return self.status == SpotStatus.AVAILABLE
+
+    def park(self, vehicle_id: str) -> bool:
+        if not self.is_available():
+            return False
+        self.status = SpotStatus.OCCUPIED
+        self.vehicle_id = vehicle_id
+        return True
+
+    def unpark(self) -> Optional[str]:
+        vid = self.vehicle_id
+        self.vehicle_id = None
+        self.status = SpotStatus.AVAILABLE
+        return vid
+
+
+class ParkingFloor:
+    def __init__(self, floor_number: int, spots: List[ParkingSpot]):
+        self._floor = floor_number
+        self._spots = spots
+
+    def find_spot(self, vehicle_type: VehicleType) -> Optional[ParkingSpot]:
+        compatible = SPOT_COMPATIBILITY.get(vehicle_type, [])
+        for spot in self._spots:
+            if spot.is_available() and spot.spot_type in compatible:
+                return spot
+        return None
+
+    def available_count(self) -> Dict[str, int]:
+        counts = {}
+        for spot in self._spots:
+            if spot.is_available():
+                key = spot.spot_type.value
+                counts[key] = counts.get(key, 0) + 1
+        return counts
+</code></pre>
+
+<h3>Pricing Strategy</h3>
+
+<pre><code class="language-python">class ParkingRate(ABC):
+    @abstractmethod
+    def calculate(self, hours: float) -> float:
+        pass
+
+class HourlyRate(ParkingRate):
+    def __init__(self, rate_per_hour: float):
+        self._rate = rate_per_hour
+
+    def calculate(self, hours: float) -> float:
+        return math.ceil(hours) * self._rate
+
+class FlatRate(ParkingRate):
+    def __init__(self, rate: float):
+        self._rate = rate
+
+    def calculate(self, hours: float) -> float:
+        return self._rate
+</code></pre>
+
+<h3>Ticket and Parking Lot</h3>
+
+<pre><code class="language-python">@dataclass
+class ParkingTicket:
+    ticket_id: str
+    vehicle_id: str
+    spot_id: str
+    floor: int
+    entry_time: datetime = field(default_factory=datetime.now)
+    exit_time: Optional[datetime] = None
+    fee: float = 0.0
+
+
+class ParkingLot:
+    def __init__(self, floors: List[ParkingFloor], rate: ParkingRate):
+        self._floors = floors
+        self._rate = rate
+        self._tickets: Dict[str, ParkingTicket] = {}
+
+    def park(self, vehicle_id: str, vehicle_type: VehicleType) -> Optional[ParkingTicket]:
+        for floor in self._floors:
+            spot = floor.find_spot(vehicle_type)
+            if spot:
+                spot.park(vehicle_id)
+                ticket = ParkingTicket(
+                    ticket_id=str(uuid.uuid4())[:8],
+                    vehicle_id=vehicle_id,
+                    spot_id=spot.spot_id,
+                    floor=spot.floor,
+                )
+                self._tickets[ticket.ticket_id] = ticket
+                return ticket
+        return None  # lot is full
+
+    def unpark(self, ticket_id: str) -> Optional[float]:
+        ticket = self._tickets.get(ticket_id)
+        if not ticket:
+            return None
+        ticket.exit_time = datetime.now()
+        hours = (ticket.exit_time - ticket.entry_time).total_seconds() / 3600
+        ticket.fee = self._rate.calculate(hours)
+        # Find and free the spot
+        for floor in self._floors:
+            for spot in floor._spots:
+                if spot.spot_id == ticket.spot_id:
+                    spot.unpark()
+                    break
+        return ticket.fee
+
+    def available_spots(self) -> Dict[int, Dict[str, int]]:
+        return {i: f.available_count() for i, f in enumerate(self._floors)}
+</code></pre>
+
+<h3>Architecture Summary</h3>
+
+<p>The Parking Lot system demonstrates a clean separation of concerns: ParkingFloor handles spot allocation, ParkingRate handles fee calculation, and ParkingLot orchestrates the flow. Vehicle-to-spot compatibility is defined declaratively, making it easy to add new vehicle or spot types.</p>

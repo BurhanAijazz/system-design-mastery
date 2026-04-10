@@ -1,0 +1,97 @@
+<h2>Project: Consistent Hashing Ring</h2>
+
+<p>Build a full consistent hashing implementation with virtual nodes, visualization, and benchmarks. This project is used in Amazon Dynamo, Cassandra, Discord, and Memcached clients.</p>
+
+<h3>Core Implementation</h3>
+<pre><code class="language-python">import hashlib
+import bisect
+from typing import List, Set, Tuple, Optional, Dict
+from collections import defaultdict
+
+class ConsistentHashRing:
+    """Production-quality consistent hash ring with virtual nodes."""
+
+    def __init__(self, virtual_nodes: int = 150):
+        self.virtual_nodes = virtual_nodes
+        self._ring: List[Tuple[int, str]] = []
+        self._nodes: Set[str] = set()
+
+    def _hash(self, key: str) -> int:
+        """MD5 hash to a 128-bit integer on the ring."""
+        return int(hashlib.md5(key.encode()).hexdigest(), 16)
+
+    def add_node(self, node: str) -> None:
+        """Add a node with virtual nodes to the ring."""
+        if node in self._nodes:
+            return
+        self._nodes.add(node)
+        for i in range(self.virtual_nodes):
+            h = self._hash(f"{node}:vn{i}")
+            self._ring.append((h, node))
+        self._ring.sort(key=lambda x: x[0])
+
+    def remove_node(self, node: str) -> None:
+        """Remove a node and all its virtual nodes."""
+        self._nodes.discard(node)
+        self._ring = [(h, n) for h, n in self._ring if n != node]
+
+    def get_node(self, key: str) -> Optional[str]:
+        """Route a key to the next clockwise node on the ring."""
+        if not self._ring:
+            return None
+        h = self._hash(key)
+        idx = bisect.bisect_left(self._ring, (h,))
+        if idx >= len(self._ring):
+            idx = 0
+        return self._ring[idx][1]
+</code></pre>
+
+<h3>Benchmarking: Keys Moved on Node Changes</h3>
+<pre><code class="language-python">def benchmark_node_addition(ring, keys, new_node):
+    """Measure how many keys move when a node is added."""
+    before = {k: ring.get_node(k) for k in keys}
+    ring.add_node(new_node)
+    after = {k: ring.get_node(k) for k in keys}
+
+    moved = sum(1 for k in keys if before[k] != after[k])
+    total = len(keys)
+    print(f"Keys moved: {moved}/{total} ({moved/total*100:.1f}%)")
+    return moved
+
+# Expected: ~1/N of keys move (e.g., ~20% with 5 nodes)
+</code></pre>
+
+<h3>Distribution Analysis</h3>
+<pre><code class="language-python">import statistics
+
+def analyze_distribution(ring, keys):
+    """Analyze how evenly keys are distributed across nodes."""
+    counts = defaultdict(int)
+    for k in keys:
+        node = ring.get_node(k)
+        counts[node] += 1
+
+    values = list(counts.values())
+    ideal = len(keys) / len(counts)
+    std = statistics.stdev(values)
+
+    print(f"  Ideal per node: {ideal:.0f}")
+    print(f"  Actual range: {min(values)} - {max(values)}")
+    print(f"  Std deviation: {std:.1f}")
+    print(f"  Coefficient of variation: {std/ideal*100:.1f}%")
+</code></pre>
+
+<h3>Experiments to Run</h3>
+<ul>
+  <li><strong>Virtual nodes vs evenness</strong>: Vary virtual nodes from 1 to 500. Observe how standard deviation decreases</li>
+  <li><strong>Node addition</strong>: Start with 4 nodes, add a 5th. Measure keys moved vs the theoretical 1/5 = 20%</li>
+  <li><strong>Node removal</strong>: Remove a node and verify only its keys redistribute to the next clockwise node</li>
+  <li><strong>Comparison</strong>: Run the same test with <code>hash % N</code> and see the dramatic difference in keys moved</li>
+</ul>
+
+<h3>Expected Results</h3>
+<ul>
+  <li>With 150 virtual nodes: coefficient of variation drops below 5%</li>
+  <li>Adding 1 node to a 4-node ring: ~20-25% of keys move (vs ~80% with modular hashing)</li>
+  <li>Removing 1 node: only that node's keys move to their next clockwise neighbor</li>
+</ul>

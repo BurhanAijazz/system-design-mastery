@@ -1,0 +1,64 @@
+{
+  "exams": [
+    {
+      "id": "lld-final",
+      "title": "LLD Final Exam",
+      "description": "Comprehensive exam covering SOLID principles and structural patterns",
+      "timeLimit": 1800,
+      "passingScore": 70,
+      "questionCount": 10,
+      "questions": [
+        { "id": "ex-lld-01", "type": "mcq", "question": "A class that handles user creation, email sending, and report generation violates which SOLID principle?", "options": ["OCP", "SRP", "LSP", "DIP"], "correct": 1, "explanation": "This class has multiple reasons to change (user logic, email logic, report logic), violating SRP." },
+        { "id": "ex-lld-02", "type": "mcq", "question": "Which pattern lets you treat a tree of objects the same way as a single object?", "options": ["Adapter", "Proxy", "Composite", "Flyweight"], "correct": 2, "explanation": "Composite pattern allows uniform treatment of individual objects and compositions." },
+        { "id": "ex-lld-03", "type": "true-false", "question": "The Adapter pattern changes the behavior of the adapted class.", "correct": false, "explanation": "Adapter only converts the interface; it does not change the underlying behavior." },
+        { "id": "ex-lld-04", "type": "mcq", "question": "Which design approach best follows the Open/Closed Principle?", "options": ["Adding elif branches for new types", "Using a Strategy pattern with new implementations", "Modifying existing methods", "Using global flags"], "correct": 1, "explanation": "Strategy pattern allows extension through new strategy classes without modifying existing code." },
+        { "id": "ex-lld-05", "type": "multi-select", "question": "Which patterns are classified as Structural?", "options": ["Observer", "Adapter", "Facade", "Command"], "correct": [1, 2], "explanation": "Adapter and Facade are structural patterns. Observer and Command are behavioral." },
+        { "id": "ex-lld-06", "type": "mcq", "question": "What is the primary benefit of the Flyweight pattern?", "options": ["Simplifying interfaces", "Reducing memory usage", "Enabling lazy loading", "Adding access control"], "correct": 1, "explanation": "Flyweight reduces memory by sharing common (intrinsic) state across many objects." },
+        { "id": "ex-lld-07", "type": "mcq", "question": "In the LLD 6-step framework, which step takes the most time?", "options": ["Clarify Requirements", "Identify Entities", "Implement Core Logic", "Trade-offs"], "correct": 2, "explanation": "Implementation takes 15-20 minutes out of a 45-minute interview." },
+        { "id": "ex-lld-08", "type": "true-false", "question": "A Virtual Proxy creates the expensive object immediately on construction.", "correct": false, "explanation": "A Virtual Proxy defers creation of the expensive object until it's actually needed (lazy loading)." },
+        { "id": "ex-lld-09", "type": "mcq", "question": "Which principle is violated if a Bird base class has a fly() method but Penguin extends Bird?", "options": ["SRP", "OCP", "LSP", "ISP"], "correct": 2, "explanation": "Penguin can't fly, so it can't fulfill the Bird contract — a Liskov Substitution Principle violation." },
+        { "id": "ex-lld-10", "type": "mcq", "question": "Which UML relationship means 'part cannot exist without the whole'?", "options": ["Association", "Aggregation", "Composition", "Dependency"], "correct": 2, "explanation": "Composition implies strong ownership where the part's lifecycle is tied to the whole." }
+      ]
+    },
+    {
+      "id": "hld-final",
+      "title": "HLD Final Exam",
+      "description": "Comprehensive exam covering distributed systems fundamentals and networking",
+      "timeLimit": 1800,
+      "passingScore": 70,
+      "questionCount": 10,
+      "questions": [
+        { "id": "ex-hld-01", "type": "mcq", "question": "A system that chooses Availability over Consistency during a network partition is called:", "options": ["CP system", "AP system", "CA system", "ACID system"], "correct": 1, "explanation": "AP systems prioritize availability, accepting eventual consistency during partitions." },
+        { "id": "ex-hld-02", "type": "mcq", "question": "Which load balancing algorithm sends each request to the server with the fewest active connections?", "options": ["Round Robin", "Least Connections", "IP Hash", "Random"], "correct": 1, "explanation": "Least Connections routes to the server handling the fewest active connections." },
+        { "id": "ex-hld-03", "type": "true-false", "question": "gRPC uses JSON as its default serialization format.", "correct": false, "explanation": "gRPC uses Protocol Buffers (protobuf), a binary serialization format, not JSON." },
+        { "id": "ex-hld-04", "type": "mcq", "question": "How many QPS (queries per second) is roughly 1 million requests per day?", "options": ["~1", "~12", "~100", "~1000"], "correct": 1, "explanation": "1,000,000 / 86,400 ≈ 11.6 ≈ ~12 QPS." },
+        { "id": "ex-hld-05", "type": "multi-select", "question": "Which are advantages of horizontal scaling over vertical scaling?", "options": ["No single point of failure", "Simpler architecture", "Theoretically unlimited scale", "No code changes needed"], "correct": [0, 2], "explanation": "Horizontal scaling provides redundancy and theoretically unlimited scale, but adds architectural complexity." },
+        { "id": "ex-hld-06", "type": "mcq", "question": "What is the first step in the DERSC framework?", "options": ["Estimate scale", "Define requirements", "Design resources", "Scale architecture"], "correct": 1, "explanation": "Always start by defining and clarifying functional and non-functional requirements." },
+        { "id": "ex-hld-07", "type": "mcq", "question": "Which real-time protocol provides server-to-client streaming only (not bidirectional)?", "options": ["WebSocket", "gRPC", "Server-Sent Events (SSE)", "Long Polling"], "correct": 2, "explanation": "SSE is unidirectional: server pushes updates to the client over a persistent HTTP connection." },
+        { "id": "ex-hld-08", "type": "true-false", "question": "A CDN can serve both static files and dynamic API responses.", "correct": true, "explanation": "Modern CDNs can cache dynamic responses with appropriate cache headers, though they're primarily used for static content." },
+        { "id": "ex-hld-09", "type": "mcq", "question": "99.9% availability allows how much downtime per year?", "options": ["52.6 minutes", "8.76 hours", "3.65 days", "5.26 minutes"], "correct": 1, "explanation": "99.9% (3 nines) = 0.1% downtime = 365.25 * 24 * 0.001 = 8.76 hours per year." },
+        { "id": "ex-hld-10", "type": "mcq", "question": "Which component sits between clients and backend services, handling auth, rate limiting, and routing?", "options": ["Load Balancer", "CDN", "API Gateway", "Message Queue"], "correct": 2, "explanation": "API Gateway is the single entry point handling cross-cutting concerns like auth, rate limiting, and routing." }
+      ]
+    },
+    {
+      "id": "full-mock",
+      "title": "Full System Design Mock Exam",
+      "description": "Combined LLD + HLD exam simulating real interview conditions",
+      "timeLimit": 2700,
+      "passingScore": 65,
+      "questionCount": 10,
+      "questions": [
+        { "id": "ex-mock-01", "type": "mcq", "question": "Which SOLID principle does the Strategy pattern primarily leverage?", "options": ["SRP", "OCP", "LSP", "DIP"], "correct": 1, "explanation": "Strategy pattern allows extending behavior through new strategies without modifying existing code — the essence of OCP." },
+        { "id": "ex-mock-02", "type": "mcq", "question": "For a URL shortener handling 100M URLs, which storage is most appropriate?", "options": ["In-memory only", "Relational DB with sharding", "Single file system", "Local cache"], "correct": 1, "explanation": "At 100M scale, a sharded relational DB (or NoSQL) provides durability, indexing, and horizontal scaling." },
+        { "id": "ex-mock-03", "type": "true-false", "question": "In a parking lot LLD problem, the Parking Lot class should contain the logic for payment calculation.", "correct": false, "explanation": "Payment logic should be separated (SRP). ParkingLot manages spots; PaymentService handles billing." },
+        { "id": "ex-mock-04", "type": "mcq", "question": "Which pattern is best for implementing undo/redo functionality?", "options": ["Observer", "Command", "State", "Visitor"], "correct": 1, "explanation": "Command pattern encapsulates operations as objects with execute() and undo() methods, enabling undo/redo." },
+        { "id": "ex-mock-05", "type": "mcq", "question": "Twitter's news feed uses which approach for celebrity users with millions of followers?", "options": ["Fan-out on write (push)", "Fan-out on read (pull)", "Hybrid approach", "Direct database queries"], "correct": 2, "explanation": "Twitter uses a hybrid: push for normal users, pull for celebrities to avoid massive write amplification." },
+        { "id": "ex-mock-06", "type": "multi-select", "question": "Which are valid caching strategies?", "options": ["Cache-aside (Lazy loading)", "Write-through", "Write-behind (Write-back)", "Cache-first-delete"], "correct": [0, 1, 2], "explanation": "Cache-aside, write-through, and write-behind are standard caching strategies." },
+        { "id": "ex-mock-07", "type": "mcq", "question": "In an elevator system LLD, which pattern manages elevator states (IDLE, MOVING_UP, MOVING_DOWN)?", "options": ["Strategy", "State", "Observer", "Template Method"], "correct": 1, "explanation": "State pattern encapsulates state-specific behavior, perfect for elevator state transitions." },
+        { "id": "ex-mock-08", "type": "true-false", "question": "Consistent hashing solves the problem of redistributing all keys when a node is added or removed.", "correct": true, "explanation": "Consistent hashing minimizes key redistribution — only K/N keys need to move when a node changes." },
+        { "id": "ex-mock-09", "type": "mcq", "question": "Which approach prevents double-booking in a hotel reservation system?", "options": ["Global lock on all rooms", "Optimistic locking with version numbers", "Disabling concurrent access", "Using a single-threaded server"], "correct": 1, "explanation": "Optimistic locking (version check on update) prevents double-booking while maintaining concurrency." },
+        { "id": "ex-mock-10", "type": "mcq", "question": "What is the main trade-off of eventual consistency?", "options": ["Higher latency", "Stale reads are possible", "Cannot handle writes", "Requires more storage"], "correct": 1, "explanation": "Eventually consistent systems may return stale data briefly, trading immediate consistency for higher availability." }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+<h2>Design: Single-Node Key-Value Store</h2>
+<p>Design an in-memory key-value store on a single node with persistence and TTL support.</p>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Get/Put/Delete operations with O(1) average time</li>
+  <li>Durability via write-ahead log (WAL) and periodic snapshots</li>
+  <li>TTL-based key expiry</li>
+  <li>Recovery from crash using WAL replay on top of last snapshot</li>
+</ul>
+
+<h3>High-Level Architecture</h3>
+<ul>
+  <li><strong>In-Memory Engine</strong> &mdash; HashMap for data, separate HashMap for TTL metadata</li>
+  <li><strong>WAL</strong> &mdash; Append-only file; every mutation logged before acknowledgement</li>
+  <li><strong>Snapshot</strong> &mdash; Periodic full dump of HashMap to disk; truncate WAL after snapshot</li>
+  <li><strong>Expiry Daemon</strong> &mdash; Background thread that lazily or actively evicts expired keys</li>
+</ul>
+
+<h3>Key Components</h3>
+<pre><code class="language-python">import time, threading
+
+class KVStore:
+    def __init__(self):
+        self.data = {}
+        self.ttls = {}  # key -> expiry_timestamp
+        self.wal = open("wal.log", "a")
+
+    def put(self, key, value, ttl=None):
+        self._write_wal("PUT", key, value, ttl)
+        self.data[key] = value
+        if ttl:
+            self.ttls[key] = time.time() + ttl
+
+    def get(self, key):
+        if key in self.ttls and time.time() > self.ttls[key]:
+            self.delete(key)
+            return None
+        return self.data.get(key)
+
+    def delete(self, key):
+        self._write_wal("DEL", key)
+        self.data.pop(key, None)
+        self.ttls.pop(key, None)
+
+    def _write_wal(self, op, key, value=None, ttl=None):
+        self.wal.write(f"{op}|{key}|{value}|{ttl}\n")
+        self.wal.flush()
+
+    def snapshot(self):
+        with open("snapshot.dat", "w") as f:
+            for k, v in self.data.items():
+                f.write(f"{k}|{v}|{self.ttls.get(k,'')}\n")
+        open("wal.log", "w").close()  # truncate WAL
+</code></pre>
+
+<h3>Scaling Considerations</h3>
+<ul>
+  <li>Single-node bottleneck &mdash; shard across nodes for horizontal scale</li>
+  <li>WAL fsync trade-off: fsync every write (durable) vs. batched (faster)</li>
+  <li>Lazy expiry on read + periodic active sweep balances CPU and memory</li>
+  <li>Snapshot uses fork() / copy-on-write to avoid blocking writes (Redis approach)</li>
+</ul>

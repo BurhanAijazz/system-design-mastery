@@ -1,0 +1,68 @@
+<h2>Week 3 Exercises: Databases Deep Dive</h2>
+
+<p>These exercises test your understanding of database selection, sharding strategies, and replication trade-offs. Try to reason through each scenario before checking the hints.</p>
+
+<h3>Exercise 1: Database Selection</h3>
+<p>You are designing a system with the following components. Choose the best database type for each and justify your decision.</p>
+<ul>
+  <li><strong>User accounts and authentication</strong> (email, password hash, profile data, strict uniqueness on email)</li>
+  <li><strong>Real-time leaderboard</strong> showing top 100 players by score, updated every second</li>
+  <li><strong>Product catalog search</strong> with typo tolerance, synonym support, and relevance ranking</li>
+  <li><strong>Social graph</strong> where you need "friends of friends" and "people you may know" queries</li>
+  <li><strong>IoT sensor data</strong> receiving 500K writes/sec from 10,000 devices, queried by time range</li>
+</ul>
+
+<pre><code class="language-python"># Sketch your choices like this:
+components = {
+    "user_accounts":     "???  -- why?",
+    "leaderboard":       "???  -- why?",
+    "product_search":    "???  -- why?",
+    "social_graph":      "???  -- why?",
+    "iot_sensor_data":   "???  -- why?",
+}
+
+# Hint: think about access patterns, consistency needs,
+# write volume, and query complexity for each component.
+</code></pre>
+
+<h3>Exercise 2: Sharding Strategy Design</h3>
+<p>You have an e-commerce platform with 500 million orders. The single database is at capacity. Design a sharding strategy.</p>
+<ul>
+  <li>Consider the most common queries: lookup order by order_id, list orders by user_id, aggregate sales by date range</li>
+  <li>What shard key would you choose? Why?</li>
+  <li>How would you handle the query "get all orders for user X" if the shard key is order_id?</li>
+  <li>What happens when you need to add more shards?</li>
+</ul>
+
+<pre><code class="language-python"># Compare two shard key strategies:
+import hashlib
+
+def shard_by_order_id(order_id: str, num_shards: int) -> int:
+    """Shard by order_id: even distribution, but user queries scatter."""
+    return int(hashlib.md5(order_id.encode()).hexdigest(), 16) % num_shards
+
+def shard_by_user_id(user_id: str, num_shards: int) -> int:
+    """Shard by user_id: user queries hit one shard, but risk hot users."""
+    return int(hashlib.md5(user_id.encode()).hexdigest(), 16) % num_shards
+
+# Which trade-off is better for your system?
+# What secondary indexes or routing tables might you need?
+</code></pre>
+
+<h3>Exercise 3: Replication Failure Scenarios</h3>
+<p>You run a PostgreSQL cluster with 1 leader and 3 followers using asynchronous replication. Walk through each scenario:</p>
+<ul>
+  <li><strong>Scenario A</strong>: A user updates their profile (write to leader), then immediately refreshes the page (read from a follower). What might they see? How do you fix this?</li>
+  <li><strong>Scenario B</strong>: The leader crashes. Follower 2 has a 5-second replication lag. Follower 1 is up to date. Which follower should be promoted? What data is lost if you promote Follower 2?</li>
+  <li><strong>Scenario C</strong>: You switch to synchronous replication for all 3 followers. What happens to write latency? What if one follower is in a different region with 100ms network latency?</li>
+</ul>
+
+<pre><code class="language-python"># Think about these consistency guarantees:
+# 1. Read-after-write: user sees their own writes
+# 2. Monotonic reads: user never sees data go "backward"
+# 3. Consistent prefix: causally related writes seen in order
+
+# For each scenario, identify which guarantee is violated
+# and propose a fix (e.g., sticky sessions, read-from-leader,
+# semi-synchronous replication).
+</code></pre>

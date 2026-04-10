@@ -1,0 +1,192 @@
+<h2>Week 5 Exercises: UML and LLD Methodology</h2>
+
+<p>These exercises practice UML diagramming, requirement gathering, and the 6-step LLD interview framework.</p>
+
+<h3>Exercise 1: UML to Code -- Shopping Cart</h3>
+
+<p>Given the following UML description, write the Python code:</p>
+
+<pre><code>+------------------+  1    *  +------------------+
+|   ShoppingCart   | -------> |   CartItem       |
++------------------+          +------------------+
+| - _items         |          | + product: Product|
+| - _customer      |          | + quantity: int   |
++------------------+          +------------------+
+| + add_item()     |          | + subtotal(): float|
+| + remove_item()  |          +------------------+
+| + total(): float |
++------------------+                 |
+       |                             | 1
+       | 1                           v
+       v                    +------------------+
++------------------+        |   Product        |
+|   Customer       |        +------------------+
++------------------+        | + name: str      |
+| + name: str      |        | + price: float   |
+| + email: str     |        | + sku: str       |
++------------------+        +------------------+
+</code></pre>
+
+<details>
+    <summary>Reveal Answer</summary>
+
+<pre><code class="language-python">from dataclasses import dataclass, field
+from typing import List, Optional
+
+@dataclass
+class Product:
+    name: str
+    price: float
+    sku: str
+
+@dataclass
+class CartItem:
+    product: Product
+    quantity: int = 1
+
+    def subtotal(self) -> float:
+        return self.product.price * self.quantity
+
+@dataclass
+class Customer:
+    name: str
+    email: str
+
+class ShoppingCart:
+    def __init__(self, customer: Customer):
+        self._customer = customer
+        self._items: List[CartItem] = []
+
+    def add_item(self, product: Product, quantity: int = 1) -> None:
+        # Check if product already in cart
+        for item in self._items:
+            if item.product.sku == product.sku:
+                item.quantity += quantity
+                return
+        self._items.append(CartItem(product, quantity))
+
+    def remove_item(self, sku: str) -> bool:
+        for i, item in enumerate(self._items):
+            if item.product.sku == sku:
+                self._items.pop(i)
+                return True
+        return False
+
+    def total(self) -> float:
+        return sum(item.subtotal() for item in self._items)
+</code></pre>
+</details>
+
+<h3>Exercise 2: Requirement Gathering -- Restaurant Reservation System</h3>
+
+<p>You are asked to design a Restaurant Table Reservation System. Practice the requirement gathering step by filling in the template below. Identify the actors, functional requirements, out-of-scope items, and core entities.</p>
+
+<details>
+    <summary>Reveal Answer</summary>
+
+<pre><code>SYSTEM: Restaurant Table Reservation System
+ACTORS: Customer, Host/Receptionist, Admin
+
+FUNCTIONAL REQUIREMENTS:
+  1. Customer can search for available tables by date, time, and party size
+  2. Customer can make a reservation for a specific time slot
+  3. Customer can cancel a reservation
+  4. Host can check in a party (mark reservation as active)
+  5. Host can mark a table as available when party leaves
+  6. System prevents double-booking of tables
+  7. System holds reservation for 15 minutes past reservation time
+  8. Different table sizes: 2-person, 4-person, 6-person, 8-person
+  9. Admin can add/remove tables and set operating hours
+
+OUT OF SCOPE:
+  - Online ordering / menu management
+  - Payment processing
+  - Waitlist management
+  - Multiple restaurant locations
+
+ASSUMPTIONS:
+  - Fixed time slots (e.g., 1.5-hour dining windows)
+  - One reservation per table per time slot
+  - Walk-ins handled separately
+
+CORE ENTITIES:
+  - Restaurant
+  - Table (id, capacity, status)
+  - Reservation (customer, table, date, time_slot, status)
+  - TimeSlot (start_time, end_time)
+  - Customer (name, phone, email)
+
+ENUMS:
+  - TableStatus: AVAILABLE, OCCUPIED, RESERVED, MAINTENANCE
+  - ReservationStatus: PENDING, CONFIRMED, ACTIVE, COMPLETED, CANCELLED, NO_SHOW
+</code></pre>
+</details>
+
+<h3>Exercise 3: LLD Framework Practice -- ATM Machine</h3>
+
+<p>Apply the 6-step LLD framework to an ATM Machine. Complete steps 1 through 3 (Requirements, Entities, and Interfaces). Define the core classes and their public APIs without implementing the full logic.</p>
+
+<details>
+    <summary>Reveal Answer</summary>
+
+<pre><code class="language-python">"""
+Step 1: Requirements
+  Functional:
+    1. User inserts card and enters PIN
+    2. User can check balance
+    3. User can withdraw cash (if sufficient funds)
+    4. User can deposit cash or checks
+    5. Machine dispenses cash in available denominations
+    6. Machine tracks available cash by denomination
+    7. Transaction receipt printed after each operation
+
+  Out of scope:
+    - Fund transfers between accounts
+    - Multi-language support
+    - Card retention for fraud
+"""
+
+# Step 2: Entities
+from abc import ABC, abstractmethod
+from enum import Enum
+from typing import Optional, Dict
+from dataclasses import dataclass
+
+class TransactionType(Enum):
+    BALANCE_INQUIRY = "balance"
+    WITHDRAWAL = "withdrawal"
+    DEPOSIT = "deposit"
+
+class ATMState(Enum):
+    IDLE = "idle"
+    CARD_INSERTED = "card_inserted"
+    AUTHENTICATED = "authenticated"
+    TRANSACTION = "transaction"
+    OUT_OF_SERVICE = "out_of_service"
+
+
+# Step 3: Interfaces
+class ATM:
+    def insert_card(self, card_number: str) -> bool: ...
+    def enter_pin(self, pin: str) -> bool: ...
+    def check_balance(self) -> float: ...
+    def withdraw(self, amount: float) -> Optional[Dict[int, int]]: ...
+    def deposit(self, amount: float) -> bool: ...
+    def eject_card(self) -> None: ...
+
+class CashDispenser:
+    def dispense(self, amount: float) -> Optional[Dict[int, int]]: ...
+    def has_sufficient_cash(self, amount: float) -> bool: ...
+    def restock(self, denomination: int, count: int) -> None: ...
+
+class BankAPI(ABC):
+    @abstractmethod
+    def authenticate(self, card: str, pin: str) -> bool: ...
+    @abstractmethod
+    def get_balance(self, card: str) -> float: ...
+    @abstractmethod
+    def debit(self, card: str, amount: float) -> bool: ...
+    @abstractmethod
+    def credit(self, card: str, amount: float) -> bool: ...
+</code></pre>
+</details>

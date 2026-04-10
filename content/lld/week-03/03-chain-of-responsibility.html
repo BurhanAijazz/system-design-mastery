@@ -1,0 +1,145 @@
+<h2>Chain of Responsibility Pattern</h2>
+
+<p>The Chain of Responsibility pattern passes a request along a chain of handlers. Each handler decides either to process the request or to pass it to the next handler in the chain.</p>
+
+<h3>The Problem: Monolithic Handler</h3>
+
+<p>Without this pattern, you end up with a single giant function handling all cases:</p>
+
+<pre><code class="language-python">def process_support_ticket_naive(ticket: dict) -> str:
+    """Giant if/elif that handles all levels -- hard to extend."""
+    severity = ticket.get("severity", "low")
+
+    if severity == "low":
+        return f"Level 1 resolved: {ticket['issue']}"
+    elif severity == "medium":
+        return f"Level 2 resolved: {ticket['issue']}"
+    elif severity == "high":
+        return f"Manager resolved: {ticket['issue']}"
+    elif severity == "critical":
+        return f"Director resolved: {ticket['issue']}"
+    else:
+        return "Unhandled ticket!"
+</code></pre>
+
+<p>Adding a new severity level or handler requires modifying this function, violating the Open/Closed Principle.</p>
+
+<h3>Solution: Chain of Responsibility</h3>
+
+<p>Build a chain of handlers. Each handler checks if it can handle the request. If yes, it processes it. If no, it passes it along to the next handler.</p>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Optional
+
+@dataclass
+class SupportTicket:
+    issue: str
+    severity: str  # low, medium, high, critical
+    customer: str
+
+
+class SupportHandler(ABC):
+    """Abstract handler with a link to the next handler."""
+
+    def __init__(self):
+        self._next_handler: Optional[SupportHandler] = None
+
+    def set_next(self, handler: SupportHandler) -> SupportHandler:
+        """Set the next handler and return it (for chaining)."""
+        self._next_handler = handler
+        return handler
+
+    def handle(self, ticket: SupportTicket) -> str:
+        """Try to handle. If can't, pass to next."""
+        if self.can_handle(ticket):
+            return self.process(ticket)
+        elif self._next_handler:
+            return self._next_handler.handle(ticket)
+        else:
+            return f"No handler available for: {ticket.issue}"
+
+    @abstractmethod
+    def can_handle(self, ticket: SupportTicket) -> bool:
+        pass
+
+    @abstractmethod
+    def process(self, ticket: SupportTicket) -> str:
+        pass
+</code></pre>
+
+<h3>Concrete Handlers</h3>
+
+<pre><code class="language-python">class Level1Support(SupportHandler):
+    """Handles low-severity tickets."""
+
+    def can_handle(self, ticket: SupportTicket) -> bool:
+        return ticket.severity == "low"
+
+    def process(self, ticket: SupportTicket) -> str:
+        return f"[L1 Support] Resolved '{ticket.issue}' for {ticket.customer}"
+
+
+class Level2Support(SupportHandler):
+    """Handles medium-severity tickets."""
+
+    def can_handle(self, ticket: SupportTicket) -> bool:
+        return ticket.severity == "medium"
+
+    def process(self, ticket: SupportTicket) -> str:
+        return f"[L2 Support] Resolved '{ticket.issue}' for {ticket.customer}"
+
+
+class ManagerSupport(SupportHandler):
+    """Handles high-severity tickets."""
+
+    def can_handle(self, ticket: SupportTicket) -> bool:
+        return ticket.severity == "high"
+
+    def process(self, ticket: SupportTicket) -> str:
+        return f"[Manager] Escalated and resolved '{ticket.issue}'"
+</code></pre>
+
+<h3>Building and Using the Chain</h3>
+
+<pre><code class="language-python"># Build the chain: L1 -> L2 -> Manager
+l1 = Level1Support()
+l2 = Level2Support()
+manager = ManagerSupport()
+
+l1.set_next(l2).set_next(manager)
+
+# All tickets enter at the start of the chain
+ticket = SupportTicket("Slow WiFi", "low", "Alice")
+print(l1.handle(ticket))    # L1 handles it
+
+ticket = SupportTicket("Server down", "high", "Bob")
+print(l1.handle(ticket))    # Passed through L1 -> L2 -> Manager
+</code></pre>
+
+<h3>When to Use Chain of Responsibility</h3>
+
+<ul>
+    <li><strong>Middleware pipelines</strong> -- authentication, logging, CORS, rate limiting</li>
+    <li><strong>Support ticket escalation</strong> -- L1 to L2 to manager to director</li>
+    <li><strong>Request validation</strong> -- validate format, then auth, then permissions</li>
+    <li><strong>Event handling</strong> -- GUI event bubbling from child to parent</li>
+    <li><strong>Logging systems</strong> -- console handler, file handler, alert handler</li>
+</ul>
+
+<h3>Key Benefits</h3>
+
+<ul>
+    <li>Adding a new handler is easy -- create a class, insert it into the chain</li>
+    <li>Each handler focuses on one responsibility</li>
+    <li>The sender does not need to know which handler will process the request</li>
+    <li>The chain order can be configured at runtime</li>
+</ul>
+
+<h3>Fluent Chain Building</h3>
+
+<p>The <code>set_next()</code> method returns the handler, enabling fluent chain construction:</p>
+
+<pre><code class="language-python">chain = Level1Support()
+chain.set_next(Level2Support()).set_next(ManagerSupport()).set_next(DirectorSupport())
+</code></pre>

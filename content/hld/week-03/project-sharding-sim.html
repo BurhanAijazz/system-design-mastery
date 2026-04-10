@@ -1,0 +1,106 @@
+<h2>Project: Sharding Simulator</h2>
+
+<p>This project is an interactive simulator that demonstrates sharding strategies, data distribution, migration costs, and query routing. It builds intuition about the trade-offs between range, hash, and consistent-hash sharding.</p>
+
+<h3>Core Data Models</h3>
+<pre><code class="language-python">from dataclasses import dataclass, field
+from typing import Dict, List
+from abc import ABC, abstractmethod
+import hashlib
+
+@dataclass
+class Record:
+    """A synthetic data record to be sharded."""
+    key: str
+    value: str = ""
+    timestamp: int = 0
+
+@dataclass
+class Shard:
+    """Represents a database shard."""
+    name: str
+    records: int = 0
+
+@dataclass
+class ShardingResult:
+    """Result of distributing data across shards."""
+    strategy_name: str
+    total_records: int
+    distribution: Dict[str, int]
+    std_dev: float = 0.0
+    hottest_shard: str = ""
+    hottest_pct: float = 0.0
+
+@dataclass
+class MigrationResult:
+    """Result of adding/removing a shard."""
+    records_moved: int
+    total_records: int
+    migration_pct: float
+</code></pre>
+
+<h3>Sharding Strategy Interface</h3>
+<pre><code class="language-python">class ShardingStrategy(ABC):
+    """Base class for sharding strategies."""
+
+    @abstractmethod
+    def assign(self, key: str) -> str:
+        """Return the shard name for a given key."""
+        pass
+
+    @abstractmethod
+    def add_shard(self, shard_name: str) -> None:
+        pass
+
+    @abstractmethod
+    def remove_shard(self, shard_name: str) -> None:
+        pass
+</code></pre>
+
+<h3>Key Strategies to Implement</h3>
+<ul>
+  <li><strong>Range-Based</strong>: Assign keys by value ranges. Simple but creates hot partitions for sequential inserts</li>
+  <li><strong>Hash-Based</strong>: <code>hash(key) % num_shards</code>. Even distribution but reshuffles all keys when shard count changes</li>
+  <li><strong>Consistent Hashing</strong>: Place shards on a ring. Only ~1/N keys move when a shard is added or removed</li>
+</ul>
+
+<h3>What to Compare</h3>
+<ul>
+  <li><strong>Distribution evenness</strong>: Standard deviation of records per shard. Lower is better</li>
+  <li><strong>Migration cost</strong>: Percentage of keys that move when adding a shard</li>
+  <li><strong>Hot partition risk</strong>: Percentage of data on the busiest shard</li>
+</ul>
+
+<h3>Sample Experiment</h3>
+<pre><code class="language-python">import statistics
+from collections import defaultdict
+
+def measure_distribution(strategy, keys, shard_names):
+    """Measure how evenly keys are distributed."""
+    counts = defaultdict(int)
+    for key in keys:
+        shard = strategy.assign(key)
+        counts[shard] += 1
+
+    values = [counts[s] for s in shard_names]
+    std = statistics.stdev(values) if len(values) > 1 else 0
+    hottest = max(values)
+    print(f"  Std dev: {std:.1f}")
+    print(f"  Hottest shard: {hottest}/{len(keys)} "
+          f"({hottest/len(keys)*100:.1f}%)")
+
+def measure_migration(strategy, keys, old_shards, new_shards):
+    """Measure keys moved when adding a shard."""
+    before = {k: strategy.assign(k) for k in keys}
+    strategy.add_shard(new_shards[-1])
+    after = {k: strategy.assign(k) for k in keys}
+    moved = sum(1 for k in keys if before[k] != after[k])
+    print(f"  Keys moved: {moved}/{len(keys)} ({moved/len(keys)*100:.1f}%)")
+</code></pre>
+
+<h3>Expected Results</h3>
+<ul>
+  <li>Hash-based: even distribution (~25% per shard with 4 shards) but ~75% migration when adding a shard</li>
+  <li>Consistent hashing: slightly less even but only ~20-25% migration when adding a shard</li>
+  <li>Range-based: uneven if keys are skewed, but range queries are efficient</li>
+</ul>

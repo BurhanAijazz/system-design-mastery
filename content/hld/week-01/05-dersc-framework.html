@@ -1,0 +1,280 @@
+<h2>DERSC Framework: A 5-Step System Design Methodology</h2>
+
+<p>
+  DERSC is a structured approach to system design that ensures you cover all critical
+  aspects in a logical order. It stands for: <strong>D</strong>etermine requirements,
+  <strong>E</strong>stimate scale, <strong>R</strong>esource planning,
+  <strong>S</strong>ystem architecture, and <strong>C</strong>ritical deep dives.
+  This framework prevents the common mistake of jumping directly into component design
+  without understanding the problem.
+</p>
+
+<h3>Step 1: Determine Requirements</h3>
+
+<p>
+  Start by clearly defining what the system needs to do (functional requirements) and
+  how well it needs to do it (non-functional requirements).
+</p>
+
+<pre><code class="language-python"># Example: Design a news feed system (like Twitter's home timeline)
+
+# FUNCTIONAL REQUIREMENTS
+functional = {
+    "core": [
+        "Users can post short messages (tweets)",
+        "Users can follow other users",
+        "Users see a feed of posts from people they follow",
+        "Users can like and retweet posts",
+    ],
+    "secondary": [
+        "Users can search for posts and users",
+        "Users receive notifications for mentions and likes",
+        "Users can send direct messages",
+    ],
+    "out_of_scope": [
+        "Advertising system",
+        "Analytics dashboard",
+        "Content moderation (mention but don't design)",
+    ],
+}
+
+# NON-FUNCTIONAL REQUIREMENTS
+non_functional = {
+    "scale": "500 million users, 200 million DAU",
+    "availability": "99.99% uptime (52 minutes downtime/year)",
+    "latency": "Feed loads in < 200ms at p99",
+    "consistency": "Eventual consistency acceptable for feed (AP)",
+    "durability": "No data loss for posted content",
+}
+</code></pre>
+
+<p>
+  Key questions to ask in this step:
+</p>
+
+<ul>
+  <li>Who are the users and what are their primary actions?</li>
+  <li>What is the read/write ratio?</li>
+  <li>What consistency model is acceptable?</li>
+  <li>What are the latency requirements?</li>
+  <li>What can we explicitly exclude from scope?</li>
+</ul>
+
+<h3>Step 2: Estimate Scale</h3>
+
+<p>
+  Perform back-of-envelope calculations to quantify the system's demands.
+</p>
+
+<pre><code class="language-python">def estimate_news_feed():
+    # Traffic
+    dau = 200_000_000
+    tweets_per_user_per_day = 2
+    reads_per_user_per_day = 50
+
+    write_rps = dau * tweets_per_user_per_day / 86400
+    read_rps = dau * reads_per_user_per_day / 86400
+
+    print(f"Write RPS: {write_rps:,.0f}")       # ~4,600
+    print(f"Read RPS: {read_rps:,.0f}")          # ~115,000
+    print(f"Peak Read RPS (3x): {read_rps * 3:,.0f}")  # ~345,000
+
+    # Storage (per day)
+    avg_tweet_bytes = 500  # text + metadata
+    daily_tweets = dau * tweets_per_user_per_day
+    daily_storage_gb = daily_tweets * avg_tweet_bytes / 1e9
+
+    print(f"\nDaily new tweets: {daily_tweets:,.0f}")      # 400M
+    print(f"Daily storage: {daily_storage_gb:.0f} GB")      # ~200 GB
+    print(f"Yearly storage: {daily_storage_gb * 365:.0f} GB")  # ~73 TB
+
+    # Bandwidth
+    avg_feed_response_kb = 50  # 20 tweets with metadata
+    outgoing_mbps = read_rps * avg_feed_response_kb * 8 / 1e6
+
+    print(f"\nOutgoing bandwidth: {outgoing_mbps:,.0f} Mbps")  # ~46,000 Mbps = ~46 Gbps
+
+    # Cache
+    # Cache the feeds of active users
+    avg_cached_feed_kb = 100
+    cache_gb = dau * 0.2 * avg_cached_feed_kb / 1e6  # 20% hot users
+
+    print(f"Cache needed: {cache_gb:.0f} GB")  # ~4,000 GB = 4 TB
+
+
+estimate_news_feed()
+</code></pre>
+
+<h3>Step 3: Resource Planning</h3>
+
+<p>
+  Based on estimates, determine what resources (servers, databases, caches) are needed.
+</p>
+
+<pre><code class="language-python"># Resource planning for the news feed system:
+
+resources = {
+    "application_servers": {
+        "rps_per_server": 5000,
+        "peak_rps": 345_000,
+        "servers_needed": 345_000 // 5000,  # 69 servers
+        "with_headroom": 100,  # round up for safety
+    },
+    "database": {
+        "type": "Sharded NoSQL (Cassandra)",
+        "write_throughput": "4,600 writes/sec across shards",
+        "storage_per_year": "73 TB",
+        "sharding_key": "user_id",
+        "replication_factor": 3,
+    },
+    "cache": {
+        "type": "Redis Cluster",
+        "total_memory": "4 TB",
+        "nodes": "40 nodes with 100 GB each",
+        "purpose": "Pre-computed feeds for active users",
+    },
+    "message_queue": {
+        "type": "Kafka",
+        "purpose": "Fan-out new tweets to follower feeds",
+        "throughput": "400M messages/day",
+    },
+    "cdn": {
+        "purpose": "Serve media (images, videos) for tweets",
+        "estimated_bandwidth_savings": "80% of media traffic",
+    },
+}
+</code></pre>
+
+<h3>Step 4: System Architecture</h3>
+
+<p>
+  Draw the high-level component diagram and define how data flows between components.
+</p>
+
+<pre><code class="language-python"># News Feed System Architecture
+#
+# [Mobile/Web Client]
+#       |
+# [CDN] -- serves static assets and media
+#       |
+# [API Gateway / Load Balancer]
+#       |
+# +-----+-----+-----+-----+
+# |     |     |     |     |
+# [Tweet] [Feed] [User] [Search] [Notification]
+# Service Service Service Service  Service
+#   |       |       |       |         |
+#   |   [Feed Cache]|   [Search     [Push
+#   |   (Redis)     |    Index]      Service]
+#   |               |  (Elasticsearch)
+#   +-------+-------+
+#           |
+#     [Message Queue (Kafka)]
+#           |
+#     [Fan-out Workers]
+#           |
+#     [Tweet Storage]     [User Graph]
+#     (Cassandra)         (Neo4j/Graph DB)
+
+# Data Flow: Posting a Tweet
+# 1. Client -> API Gateway -> Tweet Service
+# 2. Tweet Service saves to Tweet Storage
+# 3. Tweet Service publishes event to Kafka
+# 4. Fan-out Workers read event, look up followers
+# 5. For each follower, prepend tweet to their cached feed (Redis)
+# 6. Notification Service sends push to mentioned users
+
+# Data Flow: Reading Feed
+# 1. Client -> API Gateway -> Feed Service
+# 2. Feed Service checks Redis cache for pre-computed feed
+# 3. If cache hit: return immediately (fast path)
+# 4. If cache miss: query Tweet Storage for followed users' tweets
+# 5. Merge, sort, cache, and return
+</code></pre>
+
+<h3>Step 5: Critical Deep Dives</h3>
+
+<p>
+  Pick the most challenging components and design them in detail. For the news feed,
+  the critical challenge is the <strong>fan-out strategy</strong>.
+</p>
+
+<pre><code class="language-python"># Deep Dive: Fan-out on Write vs Fan-out on Read
+#
+# OPTION A: Fan-out on Write (Push model)
+#   When a user tweets, immediately push it to all followers' feed caches.
+#   Pros: Feed reads are fast (pre-computed)
+#   Cons: Celebrity problem (user with 50M followers = 50M writes per tweet)
+#
+# OPTION B: Fan-out on Read (Pull model)
+#   When a user opens their feed, query all followed users' tweets in real-time.
+#   Pros: No celebrity problem, writes are fast
+#   Cons: Feed reads are slow (must query many users)
+#
+# OPTION C: Hybrid (what Twitter actually does)
+#   - For regular users (< 10K followers): fan-out on write
+#   - For celebrities (> 10K followers): fan-out on read
+#   - When reading feed: merge pre-computed feed + celebrity tweets
+
+class FanOutStrategy:
+    CELEBRITY_THRESHOLD = 10_000
+
+    def __init__(self, feed_cache, tweet_store, follower_graph):
+        self._cache = feed_cache
+        self._tweets = tweet_store
+        self._graph = follower_graph
+
+    def on_new_tweet(self, user_id: str, tweet: dict):
+        """Called when a user posts a new tweet."""
+        # Save tweet
+        self._tweets.save(tweet)
+
+        follower_count = self._graph.get_follower_count(user_id)
+
+        if follower_count < self.CELEBRITY_THRESHOLD:
+            # Fan-out on write for regular users
+            followers = self._graph.get_followers(user_id)
+            for follower_id in followers:
+                self._cache.prepend_to_feed(follower_id, tweet)
+        else:
+            # Celebrity: skip fan-out, will be merged on read
+            pass
+
+    def get_feed(self, user_id: str, page_size: int = 20) -> list[dict]:
+        """Get a user's news feed."""
+        # Get pre-computed feed from cache
+        cached_feed = self._cache.get_feed(user_id, page_size * 2)
+
+        # Get celebrity tweets (fan-out on read)
+        celebrity_following = self._graph.get_celebrity_following(user_id)
+        celebrity_tweets = []
+        for celeb_id in celebrity_following:
+            recent = self._tweets.get_recent(celeb_id, limit=5)
+            celebrity_tweets.extend(recent)
+
+        # Merge and sort by timestamp
+        merged = cached_feed + celebrity_tweets
+        merged.sort(key=lambda t: t["created_at"], reverse=True)
+
+        return merged[:page_size]
+</code></pre>
+
+<h3>DERSC Checklist</h3>
+
+<ul>
+  <li><strong>D - Determine Requirements:</strong> Functional, non-functional, and explicit exclusions.</li>
+  <li><strong>E - Estimate Scale:</strong> Traffic (RPS), storage (TB), bandwidth (Gbps), cache (GB).</li>
+  <li><strong>R - Resource Planning:</strong> Server count, database type, cache size, message queue.</li>
+  <li><strong>S - System Architecture:</strong> Component diagram, data flow, API contracts.</li>
+  <li><strong>C - Critical Deep Dives:</strong> Design the hardest 1-2 components in detail with trade-off analysis.</li>
+</ul>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>DERSC gives you a repeatable structure for any system design problem.</li>
+  <li>Never skip requirements and estimation &mdash; they constrain all downstream decisions.</li>
+  <li>The deep dive is where you differentiate yourself by showing depth of understanding.</li>
+  <li>Always discuss trade-offs: there is no perfect design, only trade-offs you can justify.</li>
+  <li>Practice DERSC on classic problems (URL shortener, chat system, news feed) until it becomes instinct.</li>
+</ul>

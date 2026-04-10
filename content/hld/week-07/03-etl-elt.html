@@ -1,0 +1,88 @@
+<h2>ETL/ELT Pipeline Design</h2>
+
+<p>How data moves from source systems to analytics destinations. ETL and ELT are the plumbing of every data-driven company.</p>
+
+<h3>ETL vs ELT</h3>
+<ul>
+  <li><strong>ETL (Extract, Transform, Load)</strong>: Transform before loading. Traditional approach (Informatica, Talend). Only clean data enters the warehouse. Slow iteration</li>
+  <li><strong>ELT (Extract, Load, Transform)</strong>: Load raw data first, transform inside the warehouse. Modern approach (dbt, Spark). Raw data preserved, faster iteration</li>
+</ul>
+
+<pre><code class="language-python">from typing import List, Dict, Any
+from collections import defaultdict
+import random
+
+# --- EXTRACT: read from source systems ---
+
+def extract_orders(num_orders: int) -> List[Dict]:
+    """Simulate extracting orders from an operational database."""
+    rng = random.Random(42)
+    statuses = ["completed", "pending", "cancelled", "refunded"]
+    orders = []
+    for i in range(num_orders):
+        orders.append({
+            "order_id": f"ORD-{i:06d}",
+            "user_id": f"USR-{rng.randint(0, 999):04d}",
+            "amount": round(rng.uniform(5, 500), 2),
+            "status": rng.choice(statuses),
+            "created_at": f"2024-01-{rng.randint(1,31):02d}",
+            "raw_items": f"item_{rng.randint(1,100)},item_{rng.randint(1,100)}",
+        })
+    return orders
+
+# --- TRANSFORM: clean, validate, enrich ---
+
+def transform_orders(raw_orders: List[Dict]) -> List[Dict]:
+    """Clean and structure raw order data."""
+    transformed = []
+    for order in raw_orders:
+        if order["status"] == "cancelled":
+            continue  # Filter out cancelled orders
+        transformed.append({
+            "order_id": order["order_id"],
+            "user_id": order["user_id"],
+            "amount": float(order["amount"]),
+            "status": order["status"].upper(),
+            "items": order["raw_items"].split(","),
+            "item_count": len(order["raw_items"].split(",")),
+        })
+    return transformed
+
+# --- LOAD: write to destination ---
+
+def load_to_warehouse(orders: List[Dict], warehouse: Dict):
+    """Load transformed data into the warehouse."""
+    for order in orders:
+        warehouse[order["order_id"]] = order
+</code></pre>
+
+<h3>Pipeline Components</h3>
+<ul>
+  <li><strong>Extract</strong>: Read from source systems (databases, APIs, files, streams). Techniques: full load, incremental (CDC), log-based replication</li>
+  <li><strong>Transform</strong>: Clean (remove nulls, fix types), validate (business rules), enrich (join with reference data), aggregate (pre-compute metrics)</li>
+  <li><strong>Load</strong>: Write to destination (warehouse, lake, search index). Modes: full replace, append, upsert (merge)</li>
+</ul>
+
+<h3>Change Data Capture (CDC)</h3>
+<p>Instead of extracting all data every time, capture only what changed since the last extract. CDC reads the database's transaction log to stream inserts, updates, and deletes in real-time.</p>
+<ul>
+  <li>Tools: Debezium, AWS DMS, Fivetran</li>
+  <li>Enables near-real-time data pipelines instead of nightly batch jobs</li>
+</ul>
+
+<h3>Modern Data Stack</h3>
+<ul>
+  <li><strong>Extraction</strong>: Fivetran, Airbyte (managed connectors)</li>
+  <li><strong>Storage</strong>: Snowflake, BigQuery, Redshift (cloud warehouse)</li>
+  <li><strong>Transformation</strong>: dbt (SQL-based transforms in the warehouse)</li>
+  <li><strong>Orchestration</strong>: Airflow, Dagster, Prefect (schedule and monitor pipelines)</li>
+  <li><strong>Visualization</strong>: Looker, Tableau, Metabase (dashboards and reports)</li>
+</ul>
+
+<h3>Pipeline Reliability</h3>
+<ul>
+  <li><strong>Idempotency</strong>: Running the pipeline twice produces the same result (no duplicates)</li>
+  <li><strong>Data quality checks</strong>: Validate row counts, null rates, and schema after each stage</li>
+  <li><strong>Alerting</strong>: Notify on pipeline failures, data quality violations, SLA breaches</li>
+  <li><strong>Backfill</strong>: Ability to reprocess historical data when logic changes</li>
+</ul>

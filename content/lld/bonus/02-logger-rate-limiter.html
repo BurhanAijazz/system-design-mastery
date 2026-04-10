@@ -1,0 +1,25 @@
+<h2>Design: Logger Rate Limiter</h2>
+<p>Design a logger that limits duplicate log messages within a time window.</p>
+
+<h3>Implementation</h3>
+<pre><code class="language-python">class LoggerRateLimiter:
+    def __init__(self, window_seconds: int = 10):
+        self._window = window_seconds
+        self._timestamps = {}  # message -> last_printed_timestamp
+
+    def should_print(self, timestamp: int, message: str) -> bool:
+        if message not in self._timestamps:
+            self._timestamps[message] = timestamp
+            return True
+        if timestamp - self._timestamps[message] >= self._window:
+            self._timestamps[message] = timestamp
+            return True
+        return False
+</code></pre>
+
+<h3>Key Takeaways</h3>
+<ul>
+  <li>Simple HashMap-based deduplication</li>
+  <li>O(1) per operation</li>
+  <li>Consider cleanup of old entries for long-running systems</li>
+</ul>

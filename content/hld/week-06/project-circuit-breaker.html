@@ -1,0 +1,110 @@
+<h2>Project: Circuit Breaker Simulator</h2>
+
+<p>Build a full circuit breaker with state machine, configurable thresholds, recovery detection, and telemetry dashboard. This project builds intuition about resilience patterns in microservices.</p>
+
+<h3>Circuit Breaker Engine</h3>
+<pre><code class="language-python">from enum import Enum
+from dataclasses import dataclass, field
+from typing import List, Dict, Tuple, Callable
+from collections import deque
+
+class State(Enum):
+    CLOSED = "CLOSED"
+    OPEN = "OPEN"
+    HALF_OPEN = "HALF_OPEN"
+
+@dataclass
+class CircuitBreakerConfig:
+    failure_threshold: int = 5      # failures before opening
+    recovery_timeout: float = 30.0  # seconds before half-open
+    success_threshold: int = 2      # successes to close from half-open
+    half_open_max_calls: int = 3    # max test calls in half-open
+
+@dataclass
+class CircuitBreakerMetrics:
+    total_calls: int = 0
+    total_successes: int = 0
+    total_failures: int = 0
+    total_rejected: int = 0
+    state_changes: int = 0
+    time_in_open: float = 0.0
+
+class CircuitBreaker:
+    """Full circuit breaker with state machine and telemetry."""
+
+    def __init__(self, name: str, config: CircuitBreakerConfig = None):
+        self.name = name
+        self.config = config or CircuitBreakerConfig()
+        self.state = State.CLOSED
+        self.metrics = CircuitBreakerMetrics()
+        self.failure_count = 0
+        self.success_count = 0
+        self.last_failure_time = 0.0
+        self.open_since = 0.0
+
+    def call(self, service_func: Callable, sim_time: float = 0.0):
+        self.metrics.total_calls += 1
+
+        if self.state == State.OPEN:
+            if sim_time - self.open_since >= self.config.recovery_timeout:
+                self._transition(State.HALF_OPEN, sim_time)
+            else:
+                self.metrics.total_rejected += 1
+                return {"rejected": True, "state": "OPEN"}
+
+        success = service_func()
+        if success:
+            self.metrics.total_successes += 1
+            self.success_count += 1
+            if self.state == State.HALF_OPEN:
+                if self.success_count >= self.config.success_threshold:
+                    self._transition(State.CLOSED, sim_time)
+            self.failure_count = 0
+        else:
+            self.metrics.total_failures += 1
+            self.failure_count += 1
+            self.last_failure_time = sim_time
+            if self.failure_count >= self.config.failure_threshold:
+                self._transition(State.OPEN, sim_time)
+
+        return {"rejected": False, "success": success}
+
+    def _transition(self, new_state: State, sim_time: float):
+        self.state = new_state
+        self.metrics.state_changes += 1
+        if new_state == State.OPEN:
+            self.open_since = sim_time
+        if new_state in (State.CLOSED, State.HALF_OPEN):
+            self.failure_count = 0
+            self.success_count = 0
+</code></pre>
+
+<h3>Simulation Scenarios</h3>
+<ul>
+  <li><strong>Service outage and recovery</strong>: Service fails for 60 seconds then recovers. Watch the circuit breaker open, wait, test, and close</li>
+  <li><strong>Intermittent failures</strong>: Service has 20% failure rate. Does the circuit breaker trip? How does threshold affect behavior?</li>
+  <li><strong>With vs without circuit breaker</strong>: Compare 1,000 requests during an outage. Without CB: all 1,000 hit the failing service. With CB: only ~5 hit it before the breaker opens</li>
+</ul>
+
+<h3>Bulkhead Integration</h3>
+<pre><code class="language-python">class BulkheadCircuitBreaker:
+    """Separate circuit breakers per downstream service."""
+    def __init__(self):
+        self.breakers: Dict[str, CircuitBreaker] = {}
+
+    def add_service(self, name: str, config: CircuitBreakerConfig = None):
+        self.breakers[name] = CircuitBreaker(name, config)
+
+    def call(self, service_name: str, func: Callable, sim_time: float):
+        breaker = self.breakers[service_name]
+        return breaker.call(func, sim_time)
+    # Each service isolated: PaymentService failure doesn't affect UserService
+</code></pre>
+
+<h3>Metrics to Monitor</h3>
+<ul>
+  <li>Rejection rate during OPEN state (should be near 100%)</li>
+  <li>Time spent in each state (long OPEN periods indicate persistent failures)</li>
+  <li>Recovery success rate (how often does HALF_OPEN lead to CLOSED?)</li>
+  <li>Failure rate comparison: with vs without circuit breaker</li>
+</ul>

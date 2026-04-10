@@ -1,0 +1,134 @@
+<h2>Template Method Pattern</h2>
+
+<p>The Template Method pattern defines the skeleton of an algorithm in a base class method, letting subclasses override specific steps without changing the algorithm's structure. The base class controls the order; subclasses customize individual steps.</p>
+
+<h3>The Problem: Duplicated Algorithm Structure</h3>
+
+<p>Without the Template Method, different implementations duplicate the same algorithmic structure:</p>
+
+<pre><code class="language-python">class CSVDataMiner:
+    def mine(self, path: str) -> str:
+        # Step 1: Open file
+        raw_data = f"csv_data_from_{path}"
+        # Step 2: Extract data
+        records = [{"name": "Alice", "score": 90}]
+        # Step 3: Analyze
+        result = f"CSV Analysis: avg score = 90"
+        # Step 4: Generate report
+        return result
+
+
+class JSONDataMiner:
+    def mine(self, path: str) -> str:
+        # Step 1: Open file (same structure!)
+        raw_data = f"json_data_from_{path}"
+        # Step 2: Extract data (different parsing)
+        records = [{"name": "Bob", "score": 85}]
+        # Step 3: Analyze (same!)
+        result = f"JSON Analysis: avg score = 85"
+        # Step 4: Generate report (same!)
+        return result
+</code></pre>
+
+<p>Both <code>mine()</code> methods have identical structure but duplicate everything. Adding a new format (XML, YAML) means copying the whole method again.</p>
+
+<h3>Solution: Template Method</h3>
+
+<p>Define the algorithm structure once in a base class. Subclasses override only the steps that differ.</p>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+from typing import List, Dict, Any
+
+class DataMiner(ABC):
+    """Base class defines the algorithm skeleton.
+    The mine() method is the TEMPLATE METHOD."""
+
+    def mine(self, path: str) -> str:
+        """Template method -- defines the algorithm structure.
+        Do NOT override this in subclasses."""
+        raw_data = self.open_file(path)
+        records = self.extract_data(raw_data)
+        records = self.parse_data(records)
+        analysis = self.analyze(records)
+        report = self.generate_report(analysis)
+        self.send_report(report)  # Hook -- optional
+        return report
+
+    # --- Abstract steps: subclasses MUST override these ---
+
+    @abstractmethod
+    def open_file(self, path: str) -> str:
+        pass
+
+    @abstractmethod
+    def extract_data(self, raw_data: str) -> List[Dict]:
+        pass
+
+    # --- Concrete steps: same for all subclasses ---
+
+    def parse_data(self, records: List[Dict]) -> List[Dict]:
+        """Default implementation -- subclasses CAN override."""
+        return records
+
+    def analyze(self, records: List[Dict]) -> str:
+        count = len(records)
+        return f"Analyzed {count} records"
+
+    def generate_report(self, analysis: str) -> str:
+        return f"Report: {analysis}"
+
+    # --- Hook: optional step, does nothing by default ---
+
+    def send_report(self, report: str) -> None:
+        """Hook -- subclasses can override to add behavior."""
+        pass
+</code></pre>
+
+<h3>Concrete Implementations</h3>
+
+<pre><code class="language-python">class CSVMiner(DataMiner):
+    def open_file(self, path: str) -> str:
+        return f"csv_content_of_{path}"
+
+    def extract_data(self, raw_data: str) -> List[Dict]:
+        return [{"name": "Alice", "score": 90}]
+
+
+class JSONMiner(DataMiner):
+    def open_file(self, path: str) -> str:
+        return f"json_content_of_{path}"
+
+    def extract_data(self, raw_data: str) -> List[Dict]:
+        return [{"name": "Bob", "score": 85}]
+
+    def send_report(self, report: str) -> None:
+        """Override hook to email the report."""
+        print(f"Emailing report: {report}")
+</code></pre>
+
+<h3>Three Types of Steps</h3>
+
+<ul>
+    <li><strong>Abstract steps</strong> -- subclasses MUST implement (e.g., <code>open_file</code>, <code>extract_data</code>)</li>
+    <li><strong>Concrete steps</strong> -- shared implementation, subclasses CAN override (e.g., <code>analyze</code>)</li>
+    <li><strong>Hooks</strong> -- empty by default, subclasses optionally override (e.g., <code>send_report</code>)</li>
+</ul>
+
+<h3>When to Use the Template Method</h3>
+
+<ul>
+    <li><strong>Data processing pipelines</strong> -- parse, validate, transform, export</li>
+    <li><strong>Report generators</strong> -- gather data, format, render, send</li>
+    <li><strong>Game loops</strong> -- input, update, render (same structure for all games)</li>
+    <li><strong>Build systems</strong> -- compile, link, test, package</li>
+    <li><strong>Test frameworks</strong> -- setUp, runTest, tearDown</li>
+</ul>
+
+<h3>Template Method vs Strategy</h3>
+
+<ul>
+    <li><strong>Template Method</strong> uses <strong>inheritance</strong>: the base class defines the skeleton, subclasses override steps.</li>
+    <li><strong>Strategy</strong> uses <strong>composition</strong>: the algorithm is injected as a separate object.</li>
+</ul>
+
+<p>Prefer Template Method when the overall algorithm structure is fixed and only individual steps vary. Prefer Strategy when the entire algorithm can be swapped out.</p>

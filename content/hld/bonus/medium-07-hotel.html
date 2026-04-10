@@ -1,0 +1,65 @@
+<h2>Design: Hotel Reservation</h2>
+<p>Design a hotel reservation system that handles availability, booking, and pricing.</p>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Search available rooms by date range, location, and room type</li>
+  <li>Book a room with double-booking prevention</li>
+  <li>Support overbooking up to a configurable percentage</li>
+  <li>Dynamic pricing based on demand, season, and occupancy</li>
+  <li>Cancellation with refund policy enforcement</li>
+</ul>
+
+<h3>High-Level Architecture</h3>
+<ul>
+  <li><strong>Search Service</strong> &mdash; Queries inventory index for available rooms</li>
+  <li><strong>Booking Service</strong> &mdash; Reserves rooms transactionally, prevents double-book</li>
+  <li><strong>Inventory Service</strong> &mdash; Availability calendar: room_type + date &rarr; remaining count</li>
+  <li><strong>Pricing Service</strong> &mdash; Computes nightly rate from demand signals</li>
+  <li><strong>Notification Service</strong> &mdash; Confirmation emails, cancellation alerts</li>
+</ul>
+
+<h3>Key Components</h3>
+<pre><code class="language-python">class InventoryService:
+    def __init__(self, db):
+        self.db = db
+
+    def check_availability(self, hotel_id, room_type, check_in, check_out):
+        """Returns min available rooms across the date range."""
+        dates = date_range(check_in, check_out)
+        counts = [
+            self.db.get_available(hotel_id, room_type, d)
+            for d in dates
+        ]
+        return min(counts)
+
+    def reserve(self, hotel_id, room_type, check_in, check_out):
+        """Atomic reservation using optimistic locking."""
+        with self.db.transaction():
+            for d in date_range(check_in, check_out):
+                row = self.db.select_for_update(hotel_id, room_type, d)
+                overbooking_limit = row["total"] * 1.1  # 10% overbook
+                if row["booked"] >= overbooking_limit:
+                    raise NoAvailabilityError(d)
+                self.db.increment_booked(hotel_id, room_type, d)
+            return self.db.create_reservation(
+                hotel_id, room_type, check_in, check_out
+            )
+
+class PricingService:
+    def compute_rate(self, base_rate, occupancy_pct, is_weekend):
+        multiplier = 1.0
+        if occupancy_pct > 0.8:
+            multiplier += 0.3  # surge pricing
+        if is_weekend:
+            multiplier += 0.15
+        return round(base_rate * multiplier, 2)
+</code></pre>
+
+<h3>Scaling Considerations</h3>
+<ul>
+  <li>Pessimistic locking (SELECT FOR UPDATE) prevents double-booking per date-room</li>
+  <li>Cache search results with short TTL; invalidate on booking</li>
+  <li>Shard inventory DB by hotel_id or region</li>
+  <li>Async cancellation processing to release inventory and trigger refund</li>
+</ul>

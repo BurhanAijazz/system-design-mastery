@@ -1,0 +1,86 @@
+<h2>Cache Design: LRU, LFU, and TTL</h2>
+
+<p>Caching is one of the most commonly asked LLD topics. This lesson covers the core cache data structures, eviction strategies (LRU, LFU, TTL), and the Strategy pattern for swapping eviction policies. The key goal: O(1) get and put operations with bounded memory and automatic eviction.</p>
+
+<h3>Cache Interface</h3>
+
+<p>Every cache implementation needs these core operations:</p>
+<ul>
+  <li><code>get(key)</code> -- return the value or None</li>
+  <li><code>put(key, value)</code> -- insert or update an entry</li>
+  <li><code>size()</code> -- current number of entries</li>
+  <li>Automatic eviction when the cache exceeds its capacity</li>
+</ul>
+
+<pre><code class="language-python">class Cache(ABC):
+    @abstractmethod
+    def get(self, key: str) -> Optional[Any]:
+        pass
+
+    @abstractmethod
+    def put(self, key: str, value: Any) -> None:
+        pass
+
+    @abstractmethod
+    def size(self) -> int:
+        pass</code></pre>
+
+<h3>LRU Cache (Doubly-Linked List + HashMap)</h3>
+
+<p>Least Recently Used: evict the entry that has not been accessed for the longest time. This is the number one most asked cache question in interviews.</p>
+
+<p><strong>Data structure:</strong> Doubly-linked list + HashMap</p>
+<ul>
+  <li>HashMap maps key to DLL Node for O(1) lookup</li>
+  <li>Doubly-linked list maintains access order (most recent at head, least at tail)</li>
+  <li>On get: move the accessed node to the head</li>
+  <li>On put: add to head, evict from tail if full</li>
+  <li>Sentinel head/tail nodes eliminate null checks</li>
+</ul>
+
+<pre><code class="language-python">class DLLNode:
+    """Doubly-linked list node."""
+    def __init__(self, key: str = "", value: Any = None):
+        self.key = key
+        self.value = value
+        self.prev: Optional[DLLNode] = None
+        self.next: Optional[DLLNode] = None
+
+
+class LRUCache(Cache):
+    """LRU Cache with O(1) get/put using DLL + HashMap."""
+
+    def __init__(self, capacity: int):
+        self._capacity = capacity
+        self._map: Dict[str, DLLNode] = {}
+        # Sentinel nodes (avoid null checks)
+        self._head = DLLNode()  # Most recently used
+        self._tail = DLLNode()  # Least recently used
+        self._head.next = self._tail
+        self._tail.prev = self._head</code></pre>
+
+<h3>LFU Cache</h3>
+
+<p>Least Frequently Used: evict the entry with the lowest access count. When there is a tie in frequency, evict the least recently used among them. Uses frequency buckets where each frequency maps to an OrderedDict for LRU tie-breaking.</p>
+
+<h3>TTL Cache</h3>
+
+<p>Time-To-Live: entries expire after a configured duration. Two expiration strategies:</p>
+<ul>
+  <li><strong>Lazy expiration</strong> -- check on access and remove if expired (simple, but stale entries linger)</li>
+  <li><strong>Active expiration</strong> -- background thread periodically scans and removes expired entries</li>
+</ul>
+
+<h3>Strategy Pattern for Eviction</h3>
+
+<p>Use the Strategy pattern to make the eviction policy swappable. The cache delegates eviction decisions to an EvictionStrategy, making it easy to switch between LRU, LFU, or TTL without changing the cache shell.</p>
+
+<h3>Key Design Takeaways</h3>
+<ul>
+  <li>LRU is the default interview answer -- know the DLL + HashMap implementation cold</li>
+  <li>Both get and put must be O(1) -- this drives the choice of data structures</li>
+  <li>Sentinel nodes in the DLL eliminate edge-case null checks</li>
+  <li>LFU adds frequency tracking; use OrderedDict per frequency for O(1) LRU tie-breaking</li>
+  <li>TTL caches trade freshness for complexity; lazy expiration is simpler, active is cleaner</li>
+  <li>Track cache statistics (hits, misses, evictions) to evaluate effectiveness</li>
+</ul>

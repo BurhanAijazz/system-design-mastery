@@ -1,0 +1,68 @@
+<h2>Twitter / Newsfeed Design</h2>
+
+<p>The Twitter newsfeed is the most classic social system design question. The core challenge is the <strong>fan-out problem</strong>: when a user tweets, how do millions of followers see it in their timeline?</p>
+
+<h3>Define: Requirements</h3>
+
+<ul>
+  <li><strong>Functional:</strong> Post tweets (280 chars + optional media), follow/unfollow users, home timeline (feed of followed users' tweets), user profile timeline, search, likes, retweets, replies</li>
+  <li><strong>Non-Functional:</strong> Timeline loads in &lt;200ms, tweets appear in followers' feeds within seconds, high availability, eventual consistency acceptable</li>
+  <li><strong>Out of Scope:</strong> Direct messages, trending topics, ads, recommendations</li>
+</ul>
+
+<h3>Estimate</h3>
+
+<pre><code class="language-python"># 300M DAU, each follows ~200 people
+# 10% tweet daily, avg 2 tweets/day
+
+# WRITES:
+#   300M x 10% x 2 = 60M tweets/day
+#   60M / 86400 ~ 700 tweets/sec (peak ~2,100/sec)
+
+# READS:
+#   300M x 10 timeline loads = 3B/day
+#   3B / 86400 ~ 35,000 QPS (peak ~105,000 QPS)
+# READ-HEAVY: 50:1 read-to-write ratio
+
+# TIMELINE CACHE:
+#   Each user: last 200 tweet IDs = 1.6 KB
+#   300M x 1.6 KB = 480 GB (fits in Redis cluster)</code></pre>
+
+<h3>The Fan-Out Problem</h3>
+
+<p>This is the heart of the design. There are two approaches:</p>
+
+<pre><code class="language-python"># APPROACH 1: Fan-Out on Write (Push Model)
+# When user tweets -> write to ALL followers' timelines
+# Pros: Timeline reads are instant (pre-computed)
+# Cons: Celebrity problem - user with 50M followers
+#        triggers 50M cache writes per tweet!
+
+# APPROACH 2: Fan-Out on Read (Pull Model)
+# When user loads timeline -> fetch tweets from all followed users
+# Pros: No write amplification
+# Cons: Slow reads - must query 200 users' tweets and merge
+
+# APPROACH 3: Hybrid (Twitter's actual approach)
+# Regular users: fan-out on write (push to followers)
+# Celebrities (>10K followers): fan-out on read
+# Timeline = cached_tweets UNION celebrity_tweets</code></pre>
+
+<h3>Architecture</h3>
+
+<ul>
+  <li><strong>Tweet Service:</strong> Handles tweet creation, stores in database</li>
+  <li><strong>Fan-out Service:</strong> Pushes tweet IDs to followers' timeline caches (Redis sorted sets)</li>
+  <li><strong>Timeline Service:</strong> Reads pre-computed timeline from cache, merges with celebrity tweets on-the-fly</li>
+  <li><strong>Social Graph Service:</strong> Manages follow relationships (60B edges for 300M users)</li>
+  <li><strong>Search Service:</strong> Elasticsearch index on tweet text and metadata</li>
+</ul>
+
+<h3>Key Design Decisions</h3>
+
+<ul>
+  <li><strong>Celebrity threshold:</strong> Users with &gt;10K followers use pull model; below that use push model</li>
+  <li><strong>Timeline cache:</strong> Redis sorted sets with tweet timestamp as score, trimmed to last 200 entries</li>
+  <li><strong>Media storage:</strong> Images and videos on S3 behind CDN; only URLs stored in tweet metadata</li>
+  <li><strong>Eventual consistency:</strong> A tweet may take a few seconds to appear in all followers' feeds, which is acceptable</li>
+</ul>

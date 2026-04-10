@@ -1,0 +1,86 @@
+<h2>Week 7 Exercises: Storage and Data Pipelines</h2>
+
+<p>These exercises test your understanding of storage paradigms, data pipeline design, search engines, and time-series databases.</p>
+
+<h3>Exercise 1: Storage Architecture Design</h3>
+<p>You are building a video streaming platform (like YouTube). Design the storage architecture for these data types:</p>
+<ul>
+  <li><strong>Video files</strong>: Raw uploads (1GB-50GB each), transcoded versions in multiple resolutions</li>
+  <li><strong>Video metadata</strong>: Title, description, tags, upload time, view count</li>
+  <li><strong>User activity logs</strong>: Play events, pause events, seek events (millions per second)</li>
+  <li><strong>Search index</strong>: Users search for videos by title, description, and tags</li>
+  <li><strong>Recommendations</strong>: "Videos you might like" based on watch history</li>
+</ul>
+
+<pre><code class="language-python"># Design your storage choices:
+storage_architecture = {
+    "video_files":      "??? -- why this storage type?",
+    "video_metadata":   "??? -- why this database?",
+    "activity_logs":    "??? -- why this database?",
+    "search_index":     "??? -- why this technology?",
+    "recommendations":  "??? -- why this approach?",
+}
+
+# Hint: think about access patterns, scale, latency needs,
+# and cost for each data type. No single database fits all.
+</code></pre>
+
+<h3>Exercise 2: ETL Pipeline Design</h3>
+<p>Design a data pipeline that processes e-commerce click data into a daily analytics dashboard showing:</p>
+<ul>
+  <li>Top 10 products by page views</li>
+  <li>Conversion rate (views -> add-to-cart -> purchase) by category</li>
+  <li>Average session duration by traffic source</li>
+</ul>
+<p>Answer these questions:</p>
+<ul>
+  <li>Would you use ETL or ELT? Why?</li>
+  <li>What format would you store raw events in? (JSON, Parquet, CSV)</li>
+  <li>How would you handle late-arriving events (events that arrive after the daily batch runs)?</li>
+  <li>How would you make the pipeline idempotent (re-runnable without duplicates)?</li>
+</ul>
+
+<pre><code class="language-python"># Sketch your pipeline stages:
+pipeline = {
+    "extract": "Read click events from ???",
+    "load_raw": "Store raw events in ??? format on ???",
+    "transform": [
+        "Sessionize events (group by user + 30min inactivity gap)",
+        "Join with product catalog for category data",
+        "Compute metrics: views, cart_adds, purchases per product",
+        "Compute conversion funnels per category",
+    ],
+    "load_final": "Write aggregated results to ???",
+    "schedule": "??? (how often, what tool)",
+}
+</code></pre>
+
+<h3>Exercise 3: Search Engine Design</h3>
+<p>You are adding search to a recipe website with 5 million recipes. Users search by ingredients, cuisine type, cooking time, and free text.</p>
+<ul>
+  <li>Build a simple inverted index for the recipe titles and ingredients</li>
+  <li>Implement TF-IDF scoring to rank results by relevance</li>
+  <li>How would you handle typo tolerance ("chiken" -> "chicken")?</li>
+  <li>How would you handle faceted filtering (show results filtered by "Italian" cuisine AND under 30 minutes)?</li>
+</ul>
+
+<pre><code class="language-python"># Build and query your search index:
+from collections import defaultdict
+
+index = defaultdict(set)
+recipes = {
+    1: "Spicy chicken tacos with avocado",
+    2: "Grilled chicken caesar salad",
+    3: "Vegetarian black bean tacos",
+    4: "Chicken tikka masala with rice",
+}
+
+# Index the recipes
+for doc_id, text in recipes.items():
+    for word in text.lower().split():
+        index[word].add(doc_id)
+
+# Search for "chicken tacos"
+# Find intersection of index["chicken"] and index["tacos"]
+# Then rank by TF-IDF relevance
+</code></pre>

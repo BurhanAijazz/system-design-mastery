@@ -1,0 +1,188 @@
+<h2>Worked Example: Library Management System</h2>
+
+<p>A complete walkthrough of the 6-step LLD framework applied to a Library Management System. Every step is shown explicitly so you can see the framework in action.</p>
+
+<h3>Step 1: Clarify Requirements</h3>
+
+<p>Interviewer: "Design a Library Management System."</p>
+
+<p>Clarifying questions and answers:</p>
+<ul>
+    <li>Q: "Who are the users?" A: Members (borrow books), Librarians (manage books/members).</li>
+    <li>Q: "What operations should the system support?" A: Search, borrow, return, reserve, manage inventory.</li>
+    <li>Q: "Should I handle fines for overdue books?" A: Yes, simple daily fine.</li>
+    <li>Q: "Multiple copies of the same book?" A: Yes. A Book has metadata, BookItem is a physical copy.</li>
+</ul>
+
+<pre><code>FUNCTIONAL REQUIREMENTS:
+  1. Members can search books by title, author, or ISBN
+  2. Members can borrow available book items (max 5 at a time)
+  3. Members can return book items
+  4. Members can reserve a book if all copies are borrowed
+  5. System calculates fines for overdue returns ($1/day)
+  6. Librarian can add/remove books and book items
+  7. Librarian can register new members
+  8. Books are due in 14 days
+
+OUT OF SCOPE:
+  - Online/digital books
+  - Payment processing
+  - Inter-library loans
+</code></pre>
+
+<h3>Step 2: Identify Core Entities</h3>
+
+<pre><code>Noun extraction:
+  Members, Librarians, Books, BookItem (physical copy),
+  Reservation, Fine, Rack (location), Library
+
+Entities:
+  - Library
+  - Book (metadata: title, author, ISBN)
+  - BookItem (physical copy, has barcode, status)
+  - Member (name, member_id, borrowed items)
+  - Librarian (name, employee_id)
+  - BookReservation (who reserved what)
+  - Fine (amount, paid status)
+
+Enums:
+  - BookStatus: AVAILABLE, BORROWED, RESERVED, LOST
+  - ReservationStatus: PENDING, FULFILLED, CANCELLED
+
+Relationships:
+  - Book 1 --> 1..* BookItem (one book has many copies)
+  - Member 1 --> 0..5 BookItem (borrows up to 5)
+  - Member 1 --> 0..* BookReservation
+  - Library ◆--> Book, Member (composition)
+</code></pre>
+
+<h3>Step 3: Define Interfaces</h3>
+
+<pre><code class="language-python">class Library:
+    def search_books(self, query: str) -> List[Book]: ...
+    def get_book_by_isbn(self, isbn: str) -> Optional[Book]: ...
+
+class BookItem:
+    def borrow(self, member: Member) -> bool: ...
+    def return_item(self) -> float: ...  # returns fine amount
+
+class Member:
+    def borrow_book(self, item: BookItem) -> bool: ...
+    def return_book(self, item: BookItem) -> float: ...
+    def reserve_book(self, book: Book) -> BookReservation: ...
+</code></pre>
+
+<h3>Step 4 + 5: Implementation</h3>
+
+<pre><code class="language-python">from dataclasses import dataclass, field
+from typing import List, Dict, Optional
+from enum import Enum
+from datetime import datetime, timedelta
+
+class BookStatus(Enum):
+    AVAILABLE = "available"
+    BORROWED = "borrowed"
+    RESERVED = "reserved"
+    LOST = "lost"
+
+
+@dataclass
+class Book:
+    isbn: str
+    title: str
+    author: str
+    _items: List["BookItem"] = field(default_factory=list, repr=False)
+
+    def add_item(self, item: "BookItem") -> None:
+        self._items.append(item)
+
+    def available_items(self) -> List["BookItem"]:
+        return [i for i in self._items if i.status == BookStatus.AVAILABLE]
+
+    def has_available_copy(self) -> bool:
+        return len(self.available_items()) > 0
+
+
+@dataclass
+class BookItem:
+    barcode: str
+    book: Book
+    status: BookStatus = BookStatus.AVAILABLE
+    borrowed_by: Optional["Member"] = field(default=None, repr=False)
+    due_date: Optional[datetime] = None
+
+    def borrow(self, member: "Member") -> bool:
+        if self.status != BookStatus.AVAILABLE:
+            return False
+        self.status = BookStatus.BORROWED
+        self.borrowed_by = member
+        self.due_date = datetime.now() + timedelta(days=14)
+        return True
+
+    def return_item(self) -> float:
+        fine = 0.0
+        if self.due_date and datetime.now() > self.due_date:
+            overdue_days = (datetime.now() - self.due_date).days
+            fine = overdue_days * 1.0  # $1/day
+        self.status = BookStatus.AVAILABLE
+        self.borrowed_by = None
+        self.due_date = None
+        return fine
+
+
+class Member:
+    MAX_BOOKS = 5
+
+    def __init__(self, member_id: str, name: str):
+        self.member_id = member_id
+        self.name = name
+        self._borrowed: List[BookItem] = []
+        self._total_fines = 0.0
+
+    def borrow_book(self, item: BookItem) -> bool:
+        if len(self._borrowed) >= self.MAX_BOOKS:
+            return False
+        if item.borrow(self):
+            self._borrowed.append(item)
+            return True
+        return False
+
+    def return_book(self, item: BookItem) -> float:
+        fine = item.return_item()
+        self._total_fines += fine
+        self._borrowed.remove(item)
+        return fine
+
+
+class Library:
+    def __init__(self, name: str):
+        self.name = name
+        self._books: Dict[str, Book] = {}
+        self._members: Dict[str, Member] = {}
+
+    def add_book(self, book: Book) -> None:
+        self._books[book.isbn] = book
+
+    def search_books(self, query: str) -> List[Book]:
+        query_lower = query.lower()
+        return [
+            b for b in self._books.values()
+            if query_lower in b.title.lower()
+            or query_lower in b.author.lower()
+        ]
+
+    def register_member(self, member_id: str, name: str) -> Member:
+        member = Member(member_id, name)
+        self._members[member_id] = member
+        return member
+</code></pre>
+
+<h3>Step 6: Trade-offs Discussion</h3>
+
+<ul>
+    <li><strong>Book vs BookItem separation</strong>: allows multiple copies with independent status tracking</li>
+    <li><strong>Fine calculation</strong>: simple daily rate could be replaced with a Strategy pattern for tiered fines</li>
+    <li><strong>Search</strong>: linear scan works for small libraries; a real system would use an index or database</li>
+    <li><strong>Concurrency</strong>: borrowing the same book item simultaneously would need locking</li>
+    <li><strong>Reservation queue</strong>: could add a priority queue per book for fairness</li>
+</ul>

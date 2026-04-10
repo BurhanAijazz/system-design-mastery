@@ -1,0 +1,84 @@
+<h2>YouTube / Video Platform Design</h2>
+
+<p>YouTube is the heaviest system design problem: petabytes of video content, millions of concurrent viewers, and a complex transcoding pipeline. The key challenge is handling massive storage and bandwidth at global scale.</p>
+
+<h3>Define: Requirements</h3>
+
+<ul>
+  <li><strong>Functional:</strong> Upload videos (any format, up to 256 GB), stream with adaptive quality, search videos, personalized recommendations, like/comment/subscribe, view count tracking</li>
+  <li><strong>Non-Functional:</strong> Resumable uploads for large files, playback starts within 2 seconds, 99.99% streaming availability, eventual consistency for view counts and comments</li>
+  <li><strong>Out of Scope:</strong> Live streaming, monetization/ads, Shorts</li>
+</ul>
+
+<h3>Estimate</h3>
+
+<pre><code class="language-python"># 2B MAU, 500M DAU
+# 500 hours of video uploaded per minute (YouTube's real number)
+
+# UPLOAD:
+#   500 hrs/min x 60 x 24 = 720K hours/day
+#   Transcoded to 3 resolutions: ~144 TB/day new storage
+
+# STREAMING:
+#   500M videos/day x 10 min avg x 2.5 MB/min = 12.5 PB/day
+#   12.5 PB / 86400 = 145 GB/sec sustained
+#   Peak (3x): 435 GB/sec -> CDN is critical
+
+# STORAGE PER YEAR:
+#   144 TB/day x 365 = 52.5 PB/year
+#   After 10 years: 500+ PB (half an exabyte!)
+#   S3-compatible object storage is the ONLY option
+
+# METADATA: 500M videos x 10 KB = 5 TB (manageable)</code></pre>
+
+<h3>Architecture</h3>
+
+<pre><code class="language-python"># High-level flow:
+# Client -> API Gateway -> Upload Service (chunked upload)
+#                                |
+#                          Raw Storage (S3)
+#                                |
+#                     Transcoding Pipeline (parallel)
+#                       /      |        \
+#                    240p    720p     1080p    4K
+#                       \      |        /
+#                     HLS Manifest Generator
+#                                |
+#                           CDN (edge)
+#                                |
+#                          Client streams</code></pre>
+
+<h3>Upload Pipeline</h3>
+
+<ul>
+  <li><strong>Chunked upload:</strong> Break large files into 5 MB chunks for resumable upload. Client tracks which chunks are uploaded.</li>
+  <li><strong>Pre-signed URLs:</strong> Upload directly to S3, bypassing application servers for throughput.</li>
+  <li><strong>Transcoding:</strong> Parallel workers transcode to multiple resolutions (240p, 360p, 480p, 720p, 1080p, 4K). Each resolution has different bitrate and processing time.</li>
+  <li><strong>HLS/DASH manifests:</strong> Generate manifest files listing available resolutions and segments for adaptive bitrate streaming.</li>
+</ul>
+
+<h3>Streaming and Adaptive Bitrate</h3>
+
+<ul>
+  <li>Video is split into 2-10 second segments, each available in multiple resolutions</li>
+  <li>Client requests segments based on available bandwidth (adaptive bitrate)</li>
+  <li>CDN caches popular segments at edge locations globally</li>
+  <li>Less popular (long-tail) content may require origin fetch from S3</li>
+</ul>
+
+<h3>View Counting</h3>
+
+<ul>
+  <li>Real-time counting would create a hot partition (viral videos get millions of views/minute)</li>
+  <li>Solution: count locally on each server, batch-aggregate periodically (every 30 seconds)</li>
+  <li>View counts are eventually consistent -- acceptable for this use case</li>
+</ul>
+
+<h3>Key Design Decisions</h3>
+
+<ul>
+  <li><strong>CDN is the product:</strong> At 435 GB/sec peak, serving from origin is impossible. CDN handles 95%+ of traffic.</li>
+  <li><strong>Transcoding priority:</strong> Lower resolutions first (users can start watching sooner), then higher resolutions in background.</li>
+  <li><strong>Content moderation:</strong> Automated scanning during transcoding phase, before content is published.</li>
+  <li><strong>Thumbnail generation:</strong> Auto-extract key frames during transcoding; also allow custom uploads.</li>
+</ul>

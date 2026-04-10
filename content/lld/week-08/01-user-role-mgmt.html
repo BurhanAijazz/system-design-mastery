@@ -1,0 +1,97 @@
+<h2>User and Role Management</h2>
+
+<p>Almost every platform system has users with different roles and permissions. This lesson covers the common user model, role-based access control (RBAC), user relationships, and registration patterns. The key insight is separating concerns: credentials live in an Account, display data lives in a Profile, and a User entity ties them together as the aggregate root.</p>
+
+<h3>Core User Model</h3>
+
+<p>A typical platform user is composed of three distinct pieces:</p>
+<ul>
+  <li><strong>Account</strong> -- holds credentials (email, password hash) and security concerns like status and login tracking</li>
+  <li><strong>UserProfile</strong> -- holds display information (display name, avatar, bio, phone)</li>
+  <li><strong>User</strong> -- the domain entity that serves as the aggregate root, tying Account and Profile together</li>
+</ul>
+
+<p>Separating Account from Profile follows the Single Responsibility Principle: Account handles authentication concerns while Profile handles presentation concerns.</p>
+
+<pre><code class="language-python">class AccountStatus(Enum):
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+    DEACTIVATED = "deactivated"
+    PENDING_VERIFICATION = "pending_verification"
+
+
+@dataclass
+class Account:
+    """Security/credential information."""
+    email: str
+    password_hash: str  # never store plaintext!
+    status: AccountStatus = AccountStatus.PENDING_VERIFICATION
+    created_at: datetime = field(default_factory=datetime.now)
+    last_login: Optional[datetime] = None
+
+    def verify(self) -> None:
+        self.status = AccountStatus.ACTIVE
+
+    def suspend(self) -> None:
+        self.status = AccountStatus.SUSPENDED
+
+    def record_login(self) -> None:
+        self.last_login = datetime.now()
+
+
+@dataclass
+class UserProfile:
+    """Display/presentation information."""
+    display_name: str
+    avatar_url: str = ""
+    bio: str = ""
+    phone: str = ""
+
+    def update(self, **kwargs) -> None:
+        for key, value in kwargs.items():
+            if hasattr(self, key):
+                setattr(self, key, value)</code></pre>
+
+<h3>The User Aggregate Root</h3>
+
+<p>The User class composes Account and Profile, exposing convenient properties while keeping the internal structure flexible:</p>
+
+<pre><code class="language-python">class User:
+    """The domain entity -- aggregate root."""
+
+    def __init__(self, user_id: str, account: Account, profile: UserProfile):
+        self.user_id = user_id
+        self.account = account
+        self.profile = profile
+
+    @property
+    def name(self) -> str:
+        return self.profile.display_name
+
+    @property
+    def email(self) -> str:
+        return self.account.email</code></pre>
+
+<h3>Role-Based Access Control</h3>
+
+<p>RBAC assigns permissions through roles rather than directly to users. The pattern involves:</p>
+<ul>
+  <li><strong>Permission</strong> -- a Flag enum representing granular capabilities (READ, WRITE, DELETE, ADMIN)</li>
+  <li><strong>Role</strong> -- a named bundle of permissions (VIEWER gets READ, EDITOR gets READ | WRITE)</li>
+  <li><strong>User-Role mapping</strong> -- each user holds a set of roles; permission checks aggregate all role permissions</li>
+</ul>
+
+<h3>Authentication vs Authorization</h3>
+<ul>
+  <li><strong>Authentication</strong> -- "Who are you?" (verifying credentials via Account)</li>
+  <li><strong>Authorization</strong> -- "What can you do?" (checking permissions via Role)</li>
+</ul>
+
+<h3>Key Design Takeaways</h3>
+<ul>
+  <li>Use enums for status values (AccountStatus, Role) -- never raw strings</li>
+  <li>Separate security data (Account) from display data (Profile) following SRP</li>
+  <li>Use the aggregate root pattern so external code talks to User, not its internals</li>
+  <li>Compose permissions using Flag enums for flexible, combinable capabilities</li>
+  <li>Track state transitions (PENDING -> ACTIVE -> SUSPENDED) explicitly</li>
+</ul>

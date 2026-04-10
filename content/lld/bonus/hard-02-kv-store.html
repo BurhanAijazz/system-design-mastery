@@ -1,0 +1,80 @@
+<h2>Design: Distributed Key-Value Store</h2>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Distribute keys across N nodes using <strong>consistent hashing</strong></li>
+  <li>Configurable <strong>replication factor</strong> (e.g., RF=3)</li>
+  <li>Tunable consistency via <strong>quorum reads/writes</strong> (W + R > N)</li>
+  <li>Failure detection via <strong>gossip protocol</strong></li>
+</ul>
+
+<h3>Approach</h3>
+<ul>
+  <li>Consistent hash ring with virtual nodes for balanced distribution</li>
+  <li>Each key is replicated to the next RF nodes clockwise on the ring</li>
+  <li>Reads/writes succeed when quorum threshold is met</li>
+  <li>Gossip protocol propagates node liveness; failed nodes trigger hinted handoff</li>
+</ul>
+
+<h3>Key Code</h3>
+<pre><code class="language-python">import hashlib, bisect
+
+class ConsistentHashRing:
+    def __init__(self, replicas=150):
+        self._replicas = replicas
+        self._ring: list[int] = []
+        self._nodes: dict[int, str] = {}
+
+    def _hash(self, key: str) -> int:
+        return int(hashlib.md5(key.encode()).hexdigest(), 16)
+
+    def add_node(self, node: str):
+        for i in range(self._replicas):
+            h = self._hash(f"{node}:{i}")
+            bisect.insort(self._ring, h)
+            self._nodes[h] = node
+
+    def get_nodes(self, key: str, rf: int = 3) -> list[str]:
+        h = self._hash(key)
+        idx = bisect.bisect_right(self._ring, h) % len(self._ring)
+        seen, result = set(), []
+        while len(result) < rf:
+            node = self._nodes[self._ring[idx % len(self._ring)]]
+            if node not in seen:
+                seen.add(node)
+                result.append(node)
+            idx += 1
+        return result
+
+class KVStore:
+    def __init__(self, ring: ConsistentHashRing, w_quorum=2, r_quorum=2):
+        self.ring = ring
+        self.W = w_quorum
+        self.R = r_quorum
+        self._local: dict[str, dict] = {}  # node -> {key: val}
+
+    def put(self, key, value):
+        nodes = self.ring.get_nodes(key)
+        acks = 0
+        for n in nodes:
+            self._local.setdefault(n, {})[key] = value
+            acks += 1
+        if acks < self.W:
+            raise RuntimeError("Write quorum not met")
+
+    def get(self, key):
+        nodes = self.ring.get_nodes(key)
+        values = [self._local.get(n, {}).get(key) for n in nodes]
+        valid = [v for v in values if v is not None]
+        if len(valid) < self.R:
+            raise RuntimeError("Read quorum not met")
+        return valid[0]
+</code></pre>
+
+<h3>Takeaways</h3>
+<ul>
+  <li>Virtual nodes smooth out distribution when physical nodes vary in capacity</li>
+  <li>Quorum formula <code>W + R > RF</code> guarantees overlap for strong consistency</li>
+  <li>Gossip scales O(log N) convergence with bounded bandwidth</li>
+  <li>Core ideas from Dynamo/Cassandra: hinted handoff, read repair, anti-entropy</li>
+</ul>

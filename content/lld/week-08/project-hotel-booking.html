@@ -1,0 +1,92 @@
+<h2>Project: Hotel Booking System</h2>
+
+<p>A full LLD implementation of a hotel room booking system. This project uses the State pattern for reservation lifecycle, Strategy for pricing, Observer for booking notifications, and Chain of Responsibility for reservation validation.</p>
+
+<h3>Requirements</h3>
+
+<p><strong>Functional:</strong></p>
+<ul>
+  <li>Search hotels by city, date range, room type</li>
+  <li>View available rooms for a hotel</li>
+  <li>Book a room (create reservation)</li>
+  <li>Check in and check out</li>
+  <li>Cancel reservation</li>
+  <li>Different room types (Standard, Deluxe, Suite)</li>
+  <li>Pricing strategies (seasonal, dynamic, promotional)</li>
+  <li>Guest reviews and ratings</li>
+  <li>Reservation validation chain</li>
+</ul>
+
+<p><strong>Out of scope:</strong> Payment gateway, loyalty program tiers, room service / amenities ordering.</p>
+
+<h3>Core Entities</h3>
+
+<pre><code class="language-python">class RoomType(Enum):
+    STANDARD = "standard"
+    DELUXE = "deluxe"
+    SUITE = "suite"
+
+class RoomStatus(Enum):
+    AVAILABLE = "available"
+    OCCUPIED = "occupied"
+    MAINTENANCE = "maintenance"
+
+class ReservationStatus(Enum):
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    CHECKED_IN = "checked_in"
+    CHECKED_OUT = "checked_out"
+    CANCELLED = "cancelled"
+
+# Valid state transitions -- explicit guard against invalid moves
+VALID_TRANSITIONS = {
+    ReservationStatus.PENDING: {ReservationStatus.CONFIRMED,
+                                 ReservationStatus.CANCELLED},
+    ReservationStatus.CONFIRMED: {ReservationStatus.CHECKED_IN,
+                                   ReservationStatus.CANCELLED},
+    ReservationStatus.CHECKED_IN: {ReservationStatus.CHECKED_OUT},
+    ReservationStatus.CHECKED_OUT: set(),
+    ReservationStatus.CANCELLED: set(),
+}</code></pre>
+
+<h3>Architecture</h3>
+
+<p>The HotelService orchestrates hotels, rooms, reservations, and validation:</p>
+<ul>
+  <li><strong>Hotel</strong> -- has multiple Rooms, belongs to a city, has reviews</li>
+  <li><strong>Room</strong> -- has a type, status, base price, and floor number</li>
+  <li><strong>Reservation</strong> -- links a guest to a room for a date range, tracks status through its lifecycle</li>
+  <li><strong>ReservationValidator</strong> -- Chain of Responsibility: checks availability, then credit, then loyalty status</li>
+</ul>
+
+<h3>Design Patterns Used</h3>
+
+<ul>
+  <li><strong>State</strong> -- Reservation lifecycle: PENDING -> CONFIRMED -> CHECKED_IN -> CHECKED_OUT (or CANCELLED from PENDING/CONFIRMED). State transitions are validated against a whitelist</li>
+  <li><strong>Strategy</strong> -- Pricing varies by season, demand, or promotion. SeasonalPricing adjusts rates by time of year, DynamicPricing adjusts by occupancy rate, PromotionalPricing applies discount codes</li>
+  <li><strong>Observer</strong> -- Booking events trigger email and SMS notifications to guests</li>
+  <li><strong>Chain of Responsibility</strong> -- Reservation requests pass through a validation chain: AvailabilityHandler -> CreditHandler -> LoyaltyHandler. Each handler either approves and forwards, or rejects</li>
+</ul>
+
+<h3>Key Implementation Considerations</h3>
+
+<pre><code class="language-python"># Date-range availability checking:
+# A room is available for dates [check_in, check_out] if no
+# existing reservation overlaps that range.
+
+def is_available(self, room, check_in, check_out):
+    for reservation in room.reservations:
+        if (check_in < reservation.check_out and
+                check_out > reservation.check_in):
+            return False  # overlap detected
+    return True</code></pre>
+
+<h3>Implementation Steps</h3>
+<ul>
+  <li>Define entities: Hotel, Room, Reservation, Guest, Review</li>
+  <li>Implement reservation state machine with valid transition guards</li>
+  <li>Build pricing strategies for seasonal, dynamic, and promotional pricing</li>
+  <li>Create the validation chain for reservation requests</li>
+  <li>Build the HotelService that coordinates search, availability, booking, and check-in/out</li>
+  <li>Add Observer notifications for reservation status changes</li>
+</ul>

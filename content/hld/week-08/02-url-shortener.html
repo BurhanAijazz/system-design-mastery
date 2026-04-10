@@ -1,0 +1,76 @@
+<h2>URL Shortener Design</h2>
+
+<p>The URL shortener is the most classic HLD interview question. It covers key generation, caching, storage estimation, and a clean API design. This lesson walks through the full DERSC framework.</p>
+
+<h3>Define: Requirements</h3>
+
+<ul>
+  <li><strong>Functional:</strong> Generate a short URL from a long URL; redirect short URL to original; optional custom aliases, expiration, and click analytics</li>
+  <li><strong>Non-Functional:</strong> High availability for redirects, low latency (&lt;50ms), short URLs should be as short as possible, not guessable</li>
+  <li><strong>Out of Scope:</strong> User accounts, rate limiting, link previews</li>
+</ul>
+
+<h3>Estimate: Back-of-Envelope</h3>
+
+<pre><code class="language-python"># Assumptions:
+#   100M new URLs/day, Read:Write = 10:1
+
+# QPS:
+#   Write: 100M / 86400 ~ 1,200 QPS (peak ~3,600)
+#   Read:  1B / 86400 ~ 12,000 QPS (peak ~36,000)
+
+# Storage (5-year horizon):
+#   Per URL record: ~500 bytes
+#   Daily: 100M x 500B = 50 GB/day
+#   5 years: ~91 TB
+
+# URL length with Base62:
+#   62^7 = 3.5 TRILLION combinations
+#   At 100M/day, lasts 95 years. 7 chars is sufficient.</code></pre>
+
+<h3>Architect: API and Data Model</h3>
+
+<pre><code class="language-python"># API Design:
+# POST /api/v1/urls
+#   Request:  { "long_url": "https://...", "custom_alias": "my-link" }
+#   Response: { "short_url": "https://short.ly/aB3x7Kp" }
+
+# GET /{short_code} -> 301/302 redirect to long_url
+
+# Key Generation - Base62 Encoding:
+BASE62 = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+def base62_encode(num: int) -> str:
+    if num == 0:
+        return BASE62[0]
+    result = []
+    while num > 0:
+        result.append(BASE62[num % 62])
+        num //= 62
+    return ''.join(reversed(result))</code></pre>
+
+<h3>Core Components</h3>
+
+<ul>
+  <li><strong>Key Generation Service:</strong> Counter-based with Base62 encoding or MD5/SHA hash truncation. Counter avoids collisions; hash approach is stateless.</li>
+  <li><strong>Database:</strong> Simple key-value mapping (short_code -> long_url + metadata). NoSQL like DynamoDB or sharded MySQL.</li>
+  <li><strong>Cache (Redis):</strong> LRU cache for hot URLs. 20% of daily reads fit in ~100 GB Redis instance.</li>
+  <li><strong>Load Balancer:</strong> Distributes redirect traffic across read-optimized servers.</li>
+</ul>
+
+<h3>Scale: Caching and Sharding</h3>
+
+<ul>
+  <li><strong>Cache layer:</strong> Redis in front of DB. Cache hit avoids DB lookup entirely.</li>
+  <li><strong>DB sharding:</strong> Partition by hash of short_code for even distribution.</li>
+  <li><strong>301 vs 302 redirect:</strong> 301 (permanent) reduces server load but loses analytics. 302 (temporary) ensures every click hits the server for tracking.</li>
+  <li><strong>Expiration:</strong> Background cleanup job deletes expired URLs and evicts from cache.</li>
+</ul>
+
+<h3>Key Trade-offs</h3>
+
+<ul>
+  <li>Counter-based keys are sequential (predictable) but collision-free. Hash-based keys are random but may collide.</li>
+  <li>Custom aliases require uniqueness checks and longer lookup paths.</li>
+  <li>Analytics adds write amplification on every redirect but provides business value.</li>
+</ul>

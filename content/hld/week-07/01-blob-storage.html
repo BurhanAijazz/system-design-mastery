@@ -1,0 +1,77 @@
+<h2>Blob Storage and Object Stores</h2>
+
+<p>How modern systems store files at massive scale. S3, GCS, Azure Blob -- the backbone of cloud data storage. Understanding the three storage paradigms is essential for system design.</p>
+
+<h3>File vs Block vs Object Storage</h3>
+<ul>
+  <li><strong>File Storage</strong> (NFS, EFS): Familiar hierarchy of directories and files. POSIX semantics. Great for shared file systems. Limits: doesn't scale beyond millions of files</li>
+  <li><strong>Block Storage</strong> (EBS, SAN): Raw storage blocks. Lowest latency, highest IOPS. You format with a filesystem. Attached to one server at a time. Best for databases and OS boot disks</li>
+  <li><strong>Object Storage</strong> (S3, GCS, Azure Blob): Flat namespace with keys. HTTP API (PUT, GET, DELETE). Scales to billions of objects, exabytes of data. Best for images, videos, backups, logs, data lakes</li>
+</ul>
+
+<pre><code class="language-python">from dataclasses import dataclass, field
+from typing import Dict, Optional
+import hashlib
+
+@dataclass
+class S3Object:
+    """Simulated object in an object store."""
+    key: str           # e.g., "users/42/profile.jpg"
+    data: bytes
+    content_type: str  # e.g., "image/jpeg"
+    metadata: Dict[str, str] = field(default_factory=dict)
+    size: int = 0
+    etag: str = ""
+
+    def __post_init__(self):
+        self.size = len(self.data)
+        self.etag = hashlib.md5(self.data).hexdigest()
+
+class SimulatedObjectStore:
+    """Simplified S3-like object store."""
+    def __init__(self):
+        self.buckets: Dict[str, Dict[str, S3Object]] = {}
+
+    def create_bucket(self, name: str):
+        self.buckets[name] = {}
+
+    def put_object(self, bucket: str, key: str, data: bytes,
+                   content_type: str = "application/octet-stream"):
+        obj = S3Object(key=key, data=data, content_type=content_type)
+        self.buckets[bucket][key] = obj
+        return obj.etag
+
+    def get_object(self, bucket: str, key: str) -> Optional[S3Object]:
+        return self.buckets.get(bucket, {}).get(key)
+
+    def delete_object(self, bucket: str, key: str):
+        self.buckets.get(bucket, {}).pop(key, None)
+
+    def list_objects(self, bucket: str, prefix: str = ""):
+        return [k for k in self.buckets.get(bucket, {})
+                if k.startswith(prefix)]
+</code></pre>
+
+<h3>Key Object Storage Concepts</h3>
+<ul>
+  <li><strong>Buckets</strong>: Top-level containers. Globally unique names. Like a top-level directory</li>
+  <li><strong>Keys</strong>: Object identifier within a bucket. "/" is just a convention, not real directories</li>
+  <li><strong>Immutable objects</strong>: You replace the entire object, no partial updates or appends</li>
+  <li><strong>Durability</strong>: S3 offers 99.999999999% (11 nines) durability -- data replicated across facilities</li>
+  <li><strong>Storage classes</strong>: Frequent access, Infrequent access, Glacier (archival). Lower cost for less-accessed data</li>
+</ul>
+
+<h3>Pre-Signed URLs</h3>
+<p>Allow clients to upload/download directly from the object store without proxying through your server. Generate a time-limited signed URL.</p>
+
+<h3>Multipart Upload</h3>
+<p>For large files (>100MB), split into parts, upload in parallel, then combine. Enables resumable uploads and better throughput.</p>
+
+<h3>When to Use Object Storage</h3>
+<ul>
+  <li>User-uploaded images, videos, documents</li>
+  <li>Backup and disaster recovery</li>
+  <li>Static website hosting</li>
+  <li>Data lake storage (Parquet files, logs, raw data)</li>
+  <li>Do NOT use for: databases, low-latency access, data that needs partial updates</li>
+</ul>

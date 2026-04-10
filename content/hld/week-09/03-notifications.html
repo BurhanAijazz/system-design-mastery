@@ -1,0 +1,72 @@
+<h2>Notification System at Scale</h2>
+
+<p>A notification system delivers push notifications, emails, SMS, and in-app messages at billions per day. The challenge is reliability, user preferences, priority handling, and integration with multiple third-party delivery providers.</p>
+
+<h3>Define: Requirements</h3>
+
+<ul>
+  <li><strong>Functional:</strong> Multi-channel delivery (push via APNs/FCM, email via SES/SendGrid, SMS via Twilio, in-app via WebSocket), user preferences per channel per type, template system, priority levels (urgent/normal/low), deduplication, rate limiting</li>
+  <li><strong>Non-Functional:</strong> Reliable (no lost notifications), scalable to 10B/day, low latency for urgent alerts (&lt;1 second), delivery analytics</li>
+</ul>
+
+<h3>Estimate</h3>
+
+<pre><code class="language-python"># 10B notifications/day
+# 10B / 86400 ~ 115K notifications/sec (peak ~350K/sec)
+# Channel split: push 60%, email 25%, SMS 5%, in-app 10%</code></pre>
+
+<h3>Architecture</h3>
+
+<p>The system follows a pipeline pattern: trigger services emit notification requests, which flow through validation, preference checks, template rendering, priority queuing, and finally channel-specific dispatchers.</p>
+
+<pre><code class="language-python"># Notification flow:
+# 1. Trigger service sends request:
+#    { user_id: 42, type: "order_shipped",
+#      data: { order_id: "ORD-123" } }
+#
+# 2. Notification Service:
+#    a. Dedup: check idempotency key (was this already sent?)
+#    b. Preferences: does user want "order_shipped" on push+email?
+#    c. Template: render "order_shipped" with data
+#       -> "Your order ORD-123 has been shipped!"
+#    d. Rate limit: not too many notifications in short window
+#
+# 3. Priority Queue (Kafka):
+#    URGENT (payment alerts) -> processed first
+#    NORMAL (social) -> standard processing
+#    LOW (marketing) -> best-effort, batched
+#
+# 4. Channel Dispatchers:
+#    Push -> APNs (iOS) + FCM (Android)
+#    Email -> SES / SendGrid
+#    SMS -> Twilio
+#    In-app -> WebSocket push</code></pre>
+
+<h3>Key Components</h3>
+
+<ul>
+  <li><strong>Notification Service:</strong> Central orchestrator that validates, deduplicates, checks preferences, and renders templates</li>
+  <li><strong>Template Engine:</strong> Stores notification templates with placeholders; renders with per-notification data</li>
+  <li><strong>Preference Store:</strong> Per-user, per-notification-type, per-channel settings (Redis for fast lookups)</li>
+  <li><strong>Priority Queues (Kafka):</strong> Separate topics for urgent, normal, and low priority</li>
+  <li><strong>Channel Dispatchers:</strong> One per channel, handles provider-specific formatting and retries</li>
+  <li><strong>Analytics Store:</strong> Tracks delivery, open, and click-through rates</li>
+</ul>
+
+<h3>Reliability Patterns</h3>
+
+<ul>
+  <li><strong>At-least-once delivery:</strong> Retry failed sends with exponential backoff; idempotency keys prevent duplicates at the provider level</li>
+  <li><strong>Dead letter queue:</strong> Notifications that fail after max retries go to a DLQ for investigation</li>
+  <li><strong>Circuit breaker:</strong> If a provider (e.g., APNs) is down, stop sending and queue messages until recovery</li>
+  <li><strong>Fallback channels:</strong> If push fails, fall back to email or SMS for critical notifications</li>
+</ul>
+
+<h3>Design Considerations</h3>
+
+<ul>
+  <li><strong>User fatigue:</strong> Rate limit non-urgent notifications (max 5 marketing notifications per day per user)</li>
+  <li><strong>Batching:</strong> Low-priority notifications can be batched into digests (daily summary email)</li>
+  <li><strong>Timezone awareness:</strong> Do not send marketing notifications at 3 AM user-local time</li>
+  <li><strong>Token management:</strong> Device push tokens expire and change; maintain a registry of active tokens per user</li>
+</ul>

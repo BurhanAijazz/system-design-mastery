@@ -1,0 +1,223 @@
+{
+  "id": "hld",
+  "title": "High-Level Design Course",
+  "description": "Master distributed systems, scalability, and HLD interview problems",
+  "framework": {
+    "name": "DERSC Framework",
+    "steps": ["Define Requirements", "Estimate Scale", "Resource/API Design", "Scale Architecture", "Confirm Trade-offs"]
+  },
+  "weeks": [
+    {
+      "id": "week-01", "number": 1, "title": "Fundamentals & Framework",
+      "description": "HLD vs LLD, scalability, estimation, CAP theorem, and the DERSC framework",
+      "sections": {
+        "concepts": [
+          { "id": "01-hld-vs-lld", "title": "HLD vs LLD", "file": "content/hld/week-01/01-hld-vs-lld.html", "duration": 30, "keywords": ["HLD", "LLD", "comparison"], "patterns": [] },
+          { "id": "02-scalability", "title": "Scalability Fundamentals", "file": "content/hld/week-01/02-scalability-fundamentals.html", "duration": 40, "keywords": ["vertical", "horizontal", "availability"], "patterns": ["Scaling"] },
+          { "id": "03-estimation", "title": "Back-of-Envelope Estimation", "file": "content/hld/week-01/03-estimation.html", "duration": 45, "keywords": ["estimation", "QPS", "storage", "bandwidth"], "patterns": ["Estimation"] },
+          { "id": "04-cap-theorem", "title": "CAP Theorem & Consistency Models", "file": "content/hld/week-01/04-cap-theorem.html", "duration": 40, "keywords": ["CAP", "consistency", "availability", "partition"], "patterns": ["CAP"] },
+          { "id": "05-dersc", "title": "DERSC Interview Framework", "file": "content/hld/week-01/05-dersc-framework.html", "duration": 35, "keywords": ["DERSC", "framework", "methodology"], "patterns": ["DERSC"] }
+        ],
+        "practice": [{ "id": "exercises", "title": "Week 1 Exercises", "file": "content/hld/week-01/exercises.html", "questionCount": 6 }],
+        "projects": [{ "id": "project-estimation-calc", "title": "Estimation Calculator", "file": "content/hld/week-01/project-estimation-calc.html", "patterns": ["Estimation"] }]
+      }
+    },
+    {
+      "id": "week-02", "number": 2, "title": "Networking & Protocols",
+      "description": "DNS, CDN, load balancers, HTTP/REST/gRPC, WebSockets, API gateways",
+      "sections": {
+        "concepts": [
+          { "id": "01-dns-cdn", "title": "DNS and CDN", "file": "content/hld/week-02/01-dns-cdn.html", "duration": 35, "keywords": ["DNS", "CDN", "caching", "edge"], "patterns": ["DNS", "CDN"] },
+          { "id": "02-load-balancers", "title": "Load Balancers & Reverse Proxies", "file": "content/hld/week-02/02-load-balancers.html", "duration": 40, "keywords": ["load balancer", "L4", "L7"], "patterns": ["Load Balancing"] },
+          { "id": "03-api-protocols", "title": "HTTP, REST, GraphQL, gRPC", "file": "content/hld/week-02/03-api-protocols.html", "duration": 40, "keywords": ["REST", "GraphQL", "gRPC"], "patterns": ["API Design"] },
+          { "id": "04-realtime", "title": "WebSockets, SSE, Long Polling", "file": "content/hld/week-02/04-realtime.html", "duration": 35, "keywords": ["WebSocket", "SSE", "real-time"], "patterns": ["Real-time"] },
+          { "id": "05-api-gateway", "title": "API Gateway & Service Mesh", "file": "content/hld/week-02/05-api-gateway.html", "duration": 35, "keywords": ["API gateway", "service mesh"], "patterns": ["Gateway"] }
+        ],
+        "practice": [{ "id": "exercises", "title": "Week 2 Exercises", "file": "content/hld/week-02/exercises.html", "questionCount": 6 }],
+        "projects": [{ "id": "project-lb-simulator", "title": "Load Balancer Simulator", "file": "content/hld/week-02/project-lb-simulator.html", "patterns": ["Load Balancing"] }]
+      }
+    },
+    {
+      "id": "week-03", "number": 3, "title": "Databases Deep Dive",
+      "description": "SQL vs NoSQL, indexing, replication, sharding, ACID vs BASE",
+      "sections": {
+        "concepts": [
+          { "id": "01-sql-vs-nosql", "title": "SQL vs NoSQL: When to Use Which", "file": "content/hld/week-03/01-sql-vs-nosql.html", "duration": 40, "keywords": ["SQL", "NoSQL", "RDBMS", "document", "key-value"], "patterns": [] },
+          { "id": "02-indexing", "title": "Indexing & Query Optimization", "file": "content/hld/week-03/02-indexing.html", "duration": 35, "keywords": ["B-tree", "index", "query optimization"], "patterns": [] },
+          { "id": "03-replication", "title": "Replication: Leader-Follower & Multi-Leader", "file": "content/hld/week-03/03-replication.html", "duration": 40, "keywords": ["replication", "leader-follower", "sync", "async"], "patterns": [] },
+          { "id": "04-sharding", "title": "Sharding Strategies", "file": "content/hld/week-03/04-sharding.html", "duration": 40, "keywords": ["sharding", "range", "hash", "directory"], "patterns": [] },
+          { "id": "05-db-types", "title": "Database Types: KV, Document, Column, Graph", "file": "content/hld/week-03/05-db-types.html", "duration": 35, "keywords": ["key-value", "document", "column-family", "graph"], "patterns": [] },
+          { "id": "06-acid-base", "title": "ACID vs BASE Transactions", "file": "content/hld/week-03/06-acid-base.html", "duration": 35, "keywords": ["ACID", "BASE", "transactions", "distributed"], "patterns": [] }
+        ],
+        "practice": [{ "id": "exercises", "title": "Week 3 Exercises", "file": "content/hld/week-03/exercises.html", "questionCount": 6 }],
+        "projects": [{ "id": "project-sharding-sim", "title": "Sharding Simulator", "file": "content/hld/week-03/project-sharding-sim.html", "patterns": ["Sharding"] }]
+      }
+    },
+    {
+      "id": "week-04", "number": 4, "title": "Caching & Performance",
+      "description": "Caching strategies, invalidation, Redis/Memcached, CDN caching, consistent hashing",
+      "sections": {
+        "concepts": [
+          { "id": "01-caching-strategies", "title": "Caching Strategies: Read/Write Patterns", "file": "content/hld/week-04/01-caching-strategies.html", "duration": 40, "keywords": ["cache-aside", "write-through", "write-behind"], "patterns": ["Caching"] },
+          { "id": "02-cache-invalidation", "title": "Cache Invalidation & Consistency", "file": "content/hld/week-04/02-cache-invalidation.html", "duration": 35, "keywords": ["TTL", "stampede", "penetration", "invalidation"], "patterns": [] },
+          { "id": "03-distributed-cache", "title": "Distributed Cache: Redis & Memcached", "file": "content/hld/week-04/03-distributed-cache.html", "duration": 35, "keywords": ["Redis", "Memcached", "distributed cache"], "patterns": [] },
+          { "id": "04-cdn-edge", "title": "CDN & Edge Caching", "file": "content/hld/week-04/04-cdn-edge.html", "duration": 30, "keywords": ["CDN", "edge", "geographic", "cache layers"], "patterns": ["CDN"] },
+          { "id": "05-consistent-hashing", "title": "Consistent Hashing", "file": "content/hld/week-04/05-consistent-hashing.html", "duration": 40, "keywords": ["consistent hashing", "hash ring", "virtual nodes"], "patterns": ["Consistent Hashing"] }
+        ],
+        "practice": [{ "id": "exercises", "title": "Week 4 Exercises", "file": "content/hld/week-04/exercises.html", "questionCount": 6 }],
+        "projects": [{ "id": "project-hash-ring", "title": "Consistent Hashing Ring", "file": "content/hld/week-04/project-hash-ring.html", "patterns": ["Consistent Hashing"] }]
+      }
+    },
+    {
+      "id": "week-05", "number": 5, "title": "Message Queues & Async",
+      "description": "Sync vs async, Kafka/RabbitMQ, event-driven architecture, stream processing",
+      "sections": {
+        "concepts": [
+          { "id": "01-sync-async", "title": "Sync vs Async Communication", "file": "content/hld/week-05/01-sync-async.html", "duration": 30, "keywords": ["synchronous", "asynchronous", "decoupling"], "patterns": [] },
+          { "id": "02-message-queues", "title": "Message Queues: Kafka, RabbitMQ, SQS", "file": "content/hld/week-05/02-message-queues.html", "duration": 40, "keywords": ["Kafka", "RabbitMQ", "SQS", "pub/sub"], "patterns": ["Message Queue"] },
+          { "id": "03-event-driven", "title": "Event-Driven Architecture", "file": "content/hld/week-05/03-event-driven.html", "duration": 40, "keywords": ["event sourcing", "CQRS", "event bus"], "patterns": ["Event Sourcing", "CQRS"] },
+          { "id": "04-stream-processing", "title": "Stream Processing vs Batch", "file": "content/hld/week-05/04-stream-processing.html", "duration": 35, "keywords": ["Lambda", "Kappa", "windowing", "streaming"], "patterns": [] },
+          { "id": "05-idempotency", "title": "Idempotency & Exactly-Once Delivery", "file": "content/hld/week-05/05-idempotency.html", "duration": 35, "keywords": ["idempotency", "exactly-once", "at-least-once"], "patterns": [] }
+        ],
+        "practice": [{ "id": "exercises", "title": "Week 5 Exercises", "file": "content/hld/week-05/exercises.html", "questionCount": 6 }],
+        "projects": [{ "id": "project-order-pipeline", "title": "Event-Driven Order Pipeline", "file": "content/hld/week-05/project-order-pipeline.html", "patterns": ["Event-Driven"] }]
+      }
+    },
+    {
+      "id": "week-06", "number": 6, "title": "Microservices & Distributed Patterns",
+      "description": "Monolith vs microservices, service discovery, saga, circuit breaker, consensus",
+      "sections": {
+        "concepts": [
+          { "id": "01-monolith-vs-micro", "title": "Monolith vs Microservices", "file": "content/hld/week-06/01-monolith-vs-micro.html", "duration": 40, "keywords": ["monolith", "microservices", "DDD", "Conway's Law"], "patterns": [] },
+          { "id": "02-service-discovery", "title": "Service Discovery & Communication", "file": "content/hld/week-06/02-service-discovery.html", "duration": 35, "keywords": ["service discovery", "API composition"], "patterns": [] },
+          { "id": "03-saga-pattern", "title": "Saga Pattern & Distributed Transactions", "file": "content/hld/week-06/03-saga-pattern.html", "duration": 40, "keywords": ["saga", "choreography", "orchestration"], "patterns": ["Saga"] },
+          { "id": "04-circuit-breaker", "title": "Circuit Breaker, Retry, Bulkhead", "file": "content/hld/week-06/04-circuit-breaker.html", "duration": 35, "keywords": ["circuit breaker", "retry", "bulkhead", "resilience"], "patterns": ["Circuit Breaker"] },
+          { "id": "05-consensus", "title": "Distributed Consensus: Raft & Paxos", "file": "content/hld/week-06/05-consensus.html", "duration": 40, "keywords": ["Raft", "Paxos", "leader election", "consensus"], "patterns": [] }
+        ],
+        "practice": [{ "id": "exercises", "title": "Week 6 Exercises", "file": "content/hld/week-06/exercises.html", "questionCount": 6 }],
+        "projects": [{ "id": "project-circuit-breaker", "title": "Circuit Breaker Simulator", "file": "content/hld/week-06/project-circuit-breaker.html", "patterns": ["Circuit Breaker", "State"] }]
+      }
+    },
+    {
+      "id": "week-07", "number": 7, "title": "Storage & Data Pipeline",
+      "description": "Blob storage, data lakes vs warehouses, ETL, search engines, time-series",
+      "sections": {
+        "concepts": [
+          { "id": "01-blob-storage", "title": "Blob Storage & Object Stores", "file": "content/hld/week-07/01-blob-storage.html", "duration": 35, "keywords": ["S3", "GCS", "blob", "pre-signed URL"], "patterns": [] },
+          { "id": "02-data-lakes", "title": "Data Lakes vs Warehouses", "file": "content/hld/week-07/02-data-lakes.html", "duration": 35, "keywords": ["data lake", "warehouse", "lakehouse"], "patterns": [] },
+          { "id": "03-etl-elt", "title": "ETL/ELT Pipeline Design", "file": "content/hld/week-07/03-etl-elt.html", "duration": 35, "keywords": ["ETL", "ELT", "orchestration", "pipeline"], "patterns": [] },
+          { "id": "04-search-engines", "title": "Search Engines & Elasticsearch", "file": "content/hld/week-07/04-search-engines.html", "duration": 35, "keywords": ["Elasticsearch", "inverted index", "BM25"], "patterns": [] },
+          { "id": "05-time-series", "title": "Time-Series & Analytics Stores", "file": "content/hld/week-07/05-time-series.html", "duration": 30, "keywords": ["time-series", "downsampling", "InfluxDB"], "patterns": [] }
+        ],
+        "practice": [{ "id": "exercises", "title": "Week 7 Exercises", "file": "content/hld/week-07/exercises.html", "questionCount": 6 }],
+        "projects": [{ "id": "project-log-pipeline", "title": "Log Aggregation Pipeline", "file": "content/hld/week-07/project-log-pipeline.html", "patterns": [] }]
+      }
+    },
+    {
+      "id": "week-08", "number": 8, "title": "HLD Problems: Core Internet",
+      "description": "URL shortener, Pastebin, distributed rate limiter — classic warm-up problems",
+      "sections": {
+        "concepts": [
+          { "id": "01-methodology-recap", "title": "HLD Walkthrough Methodology Recap", "file": "content/hld/week-08/01-methodology-recap.html", "duration": 25, "keywords": ["DERSC", "recap", "walkthrough"], "patterns": [] },
+          { "id": "02-url-shortener", "title": "Design URL Shortener", "file": "content/hld/week-08/02-url-shortener.html", "duration": 45, "keywords": ["URL shortener", "base62", "hashing"], "patterns": [] },
+          { "id": "03-pastebin", "title": "Design Pastebin", "file": "content/hld/week-08/03-pastebin.html", "duration": 40, "keywords": ["pastebin", "content storage", "access control"], "patterns": [] },
+          { "id": "04-rate-limiter", "title": "Design Distributed Rate Limiter", "file": "content/hld/week-08/04-rate-limiter.html", "duration": 40, "keywords": ["rate limiter", "token bucket", "sliding window"], "patterns": [] }
+        ],
+        "practice": [{ "id": "exercises", "title": "Week 8 Exercises", "file": "content/hld/week-08/exercises.html", "questionCount": 6 }],
+        "projects": [
+          { "id": "project-url-shortener", "title": "URL Shortener Prototype", "file": "content/hld/week-08/project-url-shortener.html", "patterns": [] },
+          { "id": "project-rate-limiter", "title": "Distributed Rate Limiter", "file": "content/hld/week-08/project-rate-limiter.html", "patterns": [] }
+        ]
+      }
+    },
+    {
+      "id": "week-09", "number": 9, "title": "HLD Problems: Social & Messaging",
+      "description": "Twitter feed, WhatsApp chat, notifications at scale, Instagram",
+      "sections": {
+        "concepts": [
+          { "id": "01-twitter-feed", "title": "Design Twitter News Feed", "file": "content/hld/week-09/01-twitter-feed.html", "duration": 45, "keywords": ["Twitter", "news feed", "fan-out", "push/pull"], "patterns": [] },
+          { "id": "02-whatsapp", "title": "Design WhatsApp Chat System", "file": "content/hld/week-09/02-whatsapp.html", "duration": 45, "keywords": ["WhatsApp", "chat", "WebSocket", "E2E encryption"], "patterns": [] },
+          { "id": "03-notifications", "title": "Design Notification System at Scale", "file": "content/hld/week-09/03-notifications.html", "duration": 40, "keywords": ["notifications", "multi-channel", "priority queue"], "patterns": [] },
+          { "id": "04-instagram", "title": "Design Instagram Photo Sharing", "file": "content/hld/week-09/04-instagram.html", "duration": 40, "keywords": ["Instagram", "image pipeline", "feed generation"], "patterns": [] }
+        ],
+        "practice": [{ "id": "exercises", "title": "Week 9 Exercises", "file": "content/hld/week-09/exercises.html", "questionCount": 6 }],
+        "projects": [
+          { "id": "project-newsfeed", "title": "Newsfeed Fan-out Simulator", "file": "content/hld/week-09/project-newsfeed.html", "patterns": [] },
+          { "id": "project-chat", "title": "Chat System Prototype", "file": "content/hld/week-09/project-chat.html", "patterns": [] }
+        ]
+      }
+    },
+    {
+      "id": "week-10", "number": 10, "title": "HLD Problems: Media & Streaming",
+      "description": "YouTube, Netflix, Spotify, Google Drive",
+      "sections": {
+        "concepts": [
+          { "id": "01-youtube", "title": "Design YouTube Video Platform", "file": "content/hld/week-10/01-youtube.html", "duration": 45, "keywords": ["YouTube", "video", "transcoding", "adaptive bitrate"], "patterns": [] },
+          { "id": "02-netflix", "title": "Design Netflix Streaming Service", "file": "content/hld/week-10/02-netflix.html", "duration": 45, "keywords": ["Netflix", "streaming", "Open Connect", "CDN"], "patterns": [] },
+          { "id": "03-spotify", "title": "Design Spotify Music Streaming", "file": "content/hld/week-10/03-spotify.html", "duration": 40, "keywords": ["Spotify", "audio", "playlists", "offline"], "patterns": [] },
+          { "id": "04-google-drive", "title": "Design Google Drive File Storage", "file": "content/hld/week-10/04-google-drive.html", "duration": 40, "keywords": ["Google Drive", "file sync", "delta sync", "versioning"], "patterns": [] }
+        ],
+        "practice": [{ "id": "exercises", "title": "Week 10 Exercises", "file": "content/hld/week-10/exercises.html", "questionCount": 6 }],
+        "projects": [
+          { "id": "project-video-pipeline", "title": "Video Upload Pipeline", "file": "content/hld/week-10/project-video-pipeline.html", "patterns": [] },
+          { "id": "project-file-sync", "title": "File Sync Simulator", "file": "content/hld/week-10/project-file-sync.html", "patterns": [] }
+        ]
+      }
+    },
+    {
+      "id": "week-11", "number": 11, "title": "HLD Problems: Commerce & Platforms",
+      "description": "Amazon e-commerce, Uber ride sharing, Zomato food delivery, Airbnb",
+      "sections": {
+        "concepts": [
+          { "id": "01-amazon", "title": "Design Amazon E-Commerce Platform", "file": "content/hld/week-11/01-amazon.html", "duration": 45, "keywords": ["Amazon", "e-commerce", "inventory", "payment"], "patterns": [] },
+          { "id": "02-uber", "title": "Design Uber Ride Sharing", "file": "content/hld/week-11/02-uber.html", "duration": 45, "keywords": ["Uber", "geospatial", "matching", "surge pricing"], "patterns": [] },
+          { "id": "03-zomato", "title": "Design Zomato Food Delivery", "file": "content/hld/week-11/03-zomato.html", "duration": 40, "keywords": ["Zomato", "food delivery", "three-sided marketplace"], "patterns": [] },
+          { "id": "04-airbnb", "title": "Design Airbnb Booking Platform", "file": "content/hld/week-11/04-airbnb.html", "duration": 40, "keywords": ["Airbnb", "calendar", "booking", "double-booking"], "patterns": [] }
+        ],
+        "practice": [{ "id": "exercises", "title": "Week 11 Exercises", "file": "content/hld/week-11/exercises.html", "questionCount": 6 }],
+        "projects": [
+          { "id": "project-ride-matching", "title": "Ride Matching Simulator", "file": "content/hld/week-11/project-ride-matching.html", "patterns": [] },
+          { "id": "project-booking", "title": "Booking System Prototype", "file": "content/hld/week-11/project-booking.html", "patterns": [] }
+        ]
+      }
+    },
+    {
+      "id": "week-12", "number": 12, "title": "HLD Problems: Infra & Advanced",
+      "description": "Google Search crawler, distributed KV store, Ticketmaster, payment system",
+      "sections": {
+        "concepts": [
+          { "id": "01-web-crawler", "title": "Design Google Search Web Crawler", "file": "content/hld/week-12/01-web-crawler.html", "duration": 45, "keywords": ["web crawler", "URL frontier", "dedup", "PageRank"], "patterns": [] },
+          { "id": "02-kv-store", "title": "Design Distributed Key-Value Store", "file": "content/hld/week-12/02-kv-store.html", "duration": 45, "keywords": ["DynamoDB", "Cassandra", "quorum", "gossip"], "patterns": [] },
+          { "id": "03-ticketmaster", "title": "Design Ticketmaster Booking System", "file": "content/hld/week-12/03-ticketmaster.html", "duration": 40, "keywords": ["Ticketmaster", "hot partition", "virtual queue"], "patterns": [] },
+          { "id": "04-payment-system", "title": "Design Payment System", "file": "content/hld/week-12/04-payment-system.html", "duration": 40, "keywords": ["payment", "authorize", "capture", "settle", "ledger"], "patterns": [] },
+          { "id": "05-interview-tips", "title": "Interview Anti-Patterns & Tips", "file": "content/hld/week-12/05-interview-tips.html", "duration": 25, "keywords": ["anti-patterns", "tips", "mistakes"], "patterns": [] }
+        ],
+        "practice": [{ "id": "exercises", "title": "Week 12 Exercises", "file": "content/hld/week-12/exercises.html", "questionCount": 6 }],
+        "projects": [
+          { "id": "project-web-crawler", "title": "Web Crawler Prototype", "file": "content/hld/week-12/project-web-crawler.html", "patterns": [] },
+          { "id": "project-payment-flow", "title": "Payment Flow Simulator", "file": "content/hld/week-12/project-payment-flow.html", "patterns": [] }
+        ]
+      }
+    }
+  ],
+  "bonus": [
+    { "id": "easy-01", "title": "Design Leaderboard", "difficulty": "easy", "file": "content/hld/bonus/01-leaderboard.html", "duration": 30, "patterns": ["Redis", "Sorted Sets"] },
+    { "id": "easy-02", "title": "Design Unique ID Generator", "difficulty": "easy", "file": "content/hld/bonus/02-id-generator.html", "duration": 25, "patterns": ["Snowflake", "UUID"] },
+    { "id": "easy-03", "title": "Design KV Store (Single Node)", "difficulty": "easy", "file": "content/hld/bonus/easy-03-kv-single.html", "duration": 25, "patterns": ["HashMap", "Persistence"] },
+    { "id": "easy-04", "title": "Design API Rate Limiter", "difficulty": "easy", "file": "content/hld/bonus/easy-04-rate-limiter.html", "duration": 30, "patterns": ["Token Bucket"] },
+    { "id": "easy-05", "title": "Design URL Shortener (Basic)", "difficulty": "easy", "file": "content/hld/bonus/easy-05-url-shortener.html", "duration": 25, "patterns": ["Hashing"] },
+    { "id": "medium-01", "title": "Design Typeahead Autocomplete", "difficulty": "medium", "file": "content/hld/bonus/03-typeahead.html", "duration": 40, "patterns": ["Trie", "Caching"] },
+    { "id": "medium-02", "title": "Design Web Crawler", "difficulty": "medium", "file": "content/hld/bonus/medium-02-web-crawler.html", "duration": 40, "patterns": ["BFS", "Politeness"] },
+    { "id": "medium-03", "title": "Design Proximity Service", "difficulty": "medium", "file": "content/hld/bonus/medium-03-proximity.html", "duration": 40, "patterns": ["Geospatial", "Quadtree"] },
+    { "id": "medium-04", "title": "Design Job Scheduler", "difficulty": "medium", "file": "content/hld/bonus/medium-04-job-scheduler.html", "duration": 40, "patterns": ["Distributed Cron"] },
+    { "id": "medium-05", "title": "Design Collaborative Editor", "difficulty": "medium", "file": "content/hld/bonus/medium-05-collab-editor.html", "duration": 45, "patterns": ["OT", "CRDT"] },
+    { "id": "medium-06", "title": "Design Stock Exchange", "difficulty": "medium", "file": "content/hld/bonus/medium-06-stock-exchange.html", "duration": 45, "patterns": ["Order Matching"] },
+    { "id": "medium-07", "title": "Design Hotel Reservation", "difficulty": "medium", "file": "content/hld/bonus/medium-07-hotel.html", "duration": 40, "patterns": ["Overbooking", "Dynamic Pricing"] },
+    { "id": "medium-08", "title": "Design Metrics Monitoring", "difficulty": "medium", "file": "content/hld/bonus/medium-08-metrics.html", "duration": 40, "patterns": ["Time-Series", "Alerting"] },
+    { "id": "hard-01", "title": "Design Google Maps", "difficulty": "hard", "file": "content/hld/bonus/04-google-maps.html", "duration": 55, "patterns": ["Geospatial", "Routing", "Tiles"] },
+    { "id": "hard-02", "title": "Design Distributed Message Queue", "difficulty": "hard", "file": "content/hld/bonus/hard-02-message-queue.html", "duration": 50, "patterns": ["Kafka", "Partitions"] },
+    { "id": "hard-03", "title": "Design Ad Click Aggregator", "difficulty": "hard", "file": "content/hld/bonus/hard-03-ad-aggregator.html", "duration": 50, "patterns": ["Real-time", "Fraud Detection"] },
+    { "id": "hard-04", "title": "Design S3 Object Storage", "difficulty": "hard", "file": "content/hld/bonus/hard-04-s3.html", "duration": 55, "patterns": ["Blob Storage", "Replication"] },
+    { "id": "hard-05", "title": "Design Live Comments System", "difficulty": "hard", "file": "content/hld/bonus/hard-05-live-comments.html", "duration": 45, "patterns": ["Real-time", "High Write"] }
+  ]
+}

@@ -1,0 +1,156 @@
+<h2>UML Relationships: Association, Aggregation, and Composition</h2>
+
+<p>Classes do not exist in isolation -- they have relationships. Understanding these relationships is critical for LLD interviews. There are six types, from weakest to strongest coupling.</p>
+
+<h3>1. Dependency (Uses Temporarily)</h3>
+
+<p>UML notation: dashed arrow (<code>- - - -&gt;</code>). The weakest relationship -- just a method parameter or local variable.</p>
+
+<pre><code class="language-python">class PaymentProcessor:
+    def charge(self, amount: float) -> bool:
+        print(f"Charged ${amount:.2f}")
+        return True
+
+
+class Order:
+    def __init__(self, order_id: str, total: float):
+        self.order_id = order_id
+        self.total = total
+
+    def checkout(self, processor: PaymentProcessor) -> bool:
+        """PaymentProcessor is a parameter -- dependency, not stored."""
+        return processor.charge(self.total)
+</code></pre>
+
+<p>The Order uses PaymentProcessor in a method but does not store it as a field.</p>
+
+<h3>2. Association (Has Reference To)</h3>
+
+<p>UML notation: solid arrow (<code>-----&gt;</code>). One class has a reference to another. Both can exist independently.</p>
+
+<pre><code class="language-python">from dataclasses import dataclass, field
+from typing import List
+
+@dataclass
+class Course:
+    code: str
+    name: str
+
+@dataclass
+class Student:
+    name: str
+    courses: List[Course] = field(default_factory=list)
+
+    def enroll(self, course: Course) -> None:
+        self.courses.append(course)
+</code></pre>
+
+<p>Deleting a Student does not delete the Courses. Both have independent lifecycles.</p>
+
+<h3>3. Aggregation (Weak Ownership)</h3>
+
+<p>UML notation: hollow diamond (<code>◇-----&gt;</code>). A "has-a" relationship where the contained object can exist without the container.</p>
+
+<pre><code class="language-python">@dataclass
+class Player:
+    name: str
+    position: str
+
+class Team:
+    def __init__(self, name: str):
+        self.name = name
+        self._players: List[Player] = []
+
+    def add_player(self, player: Player) -> None:
+        self._players.append(player)
+
+    def remove_player(self, player: Player) -> None:
+        self._players.remove(player)
+</code></pre>
+
+<p>A Player can exist without a Team (free agent). A Team has players but does not own their lifecycle.</p>
+
+<h3>4. Composition (Strong Ownership)</h3>
+
+<p>UML notation: filled diamond (<code>&#9670;-----&gt;</code>). The strongest "has-a" relationship -- the contained object's lifecycle is bound to the container. When the container is destroyed, so are its parts.</p>
+
+<pre><code class="language-python">class Room:
+    def __init__(self, name: str, area: float):
+        self.name = name
+        self.area = area
+
+class House:
+    def __init__(self, address: str):
+        self.address = address
+        # Rooms are CREATED inside House -- composition
+        self._rooms: List[Room] = [
+            Room("Living Room", 30.0),
+            Room("Kitchen", 15.0),
+            Room("Bedroom", 20.0),
+        ]
+</code></pre>
+
+<p>Rooms are created inside House and destroyed when House is destroyed. A Room cannot exist without its House.</p>
+
+<h3>5. Inheritance (Is-a)</h3>
+
+<p>UML notation: hollow triangle arrow (<code>-----▷</code>). A subclass extends the behavior of a parent class.</p>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+
+class Vehicle(ABC):
+    def __init__(self, make: str, year: int):
+        self.make = make
+        self.year = year
+
+    @abstractmethod
+    def fuel_type(self) -> str:
+        pass
+
+class Car(Vehicle):
+    def fuel_type(self) -> str:
+        return "gasoline"
+
+class ElectricCar(Vehicle):
+    def fuel_type(self) -> str:
+        return "electric"
+</code></pre>
+
+<h3>6. Realization (Implements Interface)</h3>
+
+<p>UML notation: dashed triangle arrow. A class implements an abstract interface.</p>
+
+<pre><code class="language-python">class Sortable(ABC):
+    @abstractmethod
+    def sort_key(self) -> str:
+        pass
+
+class Employee(Sortable):
+    def __init__(self, name: str):
+        self.name = name
+
+    def sort_key(self) -> str:
+        return self.name
+</code></pre>
+
+<h3>Multiplicity</h3>
+
+<p>UML shows how many objects participate in a relationship:</p>
+
+<ul>
+    <li><code>1</code> -- exactly one</li>
+    <li><code>0..1</code> -- zero or one (Optional)</li>
+    <li><code>0..*</code> or <code>*</code> -- zero or more (List)</li>
+    <li><code>1..*</code> -- one or more (non-empty List)</li>
+</ul>
+
+<h3>Quick Reference: Choosing the Right Relationship</h3>
+
+<ul>
+    <li>Object passed as parameter? <strong>Dependency</strong></li>
+    <li>Object stored as field, independent lifecycle? <strong>Association</strong></li>
+    <li>Object stored, can exist without parent? <strong>Aggregation</strong></li>
+    <li>Object created by parent, dies with parent? <strong>Composition</strong></li>
+    <li>Object is a specialized version? <strong>Inheritance</strong></li>
+    <li>Object fulfills a contract? <strong>Realization</strong></li>
+</ul>

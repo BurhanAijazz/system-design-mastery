@@ -1,0 +1,75 @@
+<h2>ACID vs BASE: Transactions and Consistency Models</h2>
+
+<p>Transactions determine how your system behaves under concurrent access and failure. The question isn't "ACID or BASE?" -- it's <strong>which parts of your system need ACID</strong> (payments, inventory) and which can tolerate BASE (like counts, recommendations)?</p>
+
+<h3>ACID Transactions -- The Gold Standard</h3>
+<ul>
+  <li><strong>Atomicity</strong>: All or nothing. A transaction either fully completes or fully rolls back</li>
+  <li><strong>Consistency</strong>: The database moves from one valid state to another. All constraints are satisfied</li>
+  <li><strong>Isolation</strong>: Concurrent transactions don't interfere with each other</li>
+  <li><strong>Durability</strong>: Once committed, data survives crashes and power failures</li>
+</ul>
+
+<pre><code class="language-python">class SimpleTransactionDB:
+    """Demonstrate ACID atomicity with a bank transfer."""
+
+    def __init__(self):
+        self.accounts = {"Alice": 1000, "Bob": 500}
+        self.wal = []  # Write-Ahead Log for durability
+
+    def transfer(self, from_acct, to_acct, amount):
+        """Atomic transfer: both succeed or both fail."""
+        # Begin transaction
+        snapshot = dict(self.accounts)
+        try:
+            if self.accounts[from_acct] < amount:
+                raise ValueError("Insufficient funds")
+            self.accounts[from_acct] -= amount  # Debit
+            self.accounts[to_acct] += amount    # Credit
+            self.wal.append(f"COMMIT: {from_acct}->{to_acct} ${amount}")
+        except Exception:
+            self.accounts = snapshot  # ROLLBACK
+            self.wal.append(f"ROLLBACK: {from_acct}->{to_acct} ${amount}")
+            raise
+</code></pre>
+
+<h3>Isolation Levels</h3>
+<p>Isolation levels trade consistency for performance. From strongest to weakest:</p>
+<ul>
+  <li><strong>Serializable</strong>: Full isolation. Transactions execute as if serial. Slowest</li>
+  <li><strong>Repeatable Read</strong>: No dirty or non-repeatable reads. Phantom reads possible</li>
+  <li><strong>Read Committed</strong>: No dirty reads. Most common default (PostgreSQL)</li>
+  <li><strong>Read Uncommitted</strong>: Can see uncommitted data. Fastest but risky</li>
+</ul>
+
+<h3>BASE Properties</h3>
+<p>BASE stands for <strong>Basically Available, Soft state, Eventually consistent</strong>. Used by NoSQL systems that prioritize availability over consistency.</p>
+<ul>
+  <li><strong>Basically Available</strong>: System always responds, even with stale data</li>
+  <li><strong>Soft state</strong>: Data may change over time without input (replication lag)</li>
+  <li><strong>Eventually consistent</strong>: Given enough time, all replicas converge</li>
+</ul>
+
+<h3>When to Use ACID vs BASE</h3>
+<ul>
+  <li><strong>ACID</strong>: Bank transfers, inventory management, booking systems, order processing</li>
+  <li><strong>BASE</strong>: Like counts, view counters, recommendations, analytics, activity feeds</li>
+</ul>
+
+<h3>Distributed Transactions (2PC)</h3>
+<p>Two-Phase Commit coordinates transactions across multiple databases. Phase 1: prepare (all vote yes/no). Phase 2: commit or abort based on votes.</p>
+<pre><code class="language-python"># 2PC conceptual flow
+# Phase 1: PREPARE
+coordinator.send_all("PREPARE transaction_id=123")
+votes = [participant.vote() for participant in participants]
+
+# Phase 2: COMMIT or ABORT
+if all(v == "YES" for v in votes):
+    coordinator.send_all("COMMIT transaction_id=123")
+else:
+    coordinator.send_all("ABORT transaction_id=123")
+# Problem: if coordinator crashes between phases, participants are stuck
+</code></pre>
+
+<h3>Why Microservices Avoid 2PC</h3>
+<p>2PC is slow, fragile, and creates tight coupling. Modern microservices use the <strong>Saga pattern</strong> instead: a sequence of local transactions with compensating actions on failure.</p>

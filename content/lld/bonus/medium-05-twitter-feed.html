@@ -1,0 +1,63 @@
+<h2>Design: Twitter Feed</h2>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Post a tweet, follow/unfollow users</li>
+  <li>Retrieve the 10 most recent tweets in a user's feed</li>
+  <li>Feed includes own tweets plus tweets from followed users</li>
+  <li>Apply <strong>Observer</strong> for follow graph, <strong>Strategy</strong> for feed ranking, merge K sorted lists</li>
+</ul>
+
+<h3>Approach</h3>
+<ul>
+  <li>Each user maintains a list of tweets sorted by timestamp (descending)</li>
+  <li>Follow relationships stored as adjacency sets (Observer-like subscription)</li>
+  <li>Feed generation: merge K sorted tweet lists using a <strong>min-heap</strong></li>
+  <li>Strategy pattern allows swapping chronological vs. engagement-based ranking</li>
+</ul>
+
+<h3>Key Code</h3>
+<pre><code class="language-python">import heapq
+from collections import defaultdict
+
+class Twitter:
+    def __init__(self):
+        self._ts = 0
+        self._tweets = defaultdict(list)   # userId -> [(ts, tweetId)]
+        self._follows = defaultdict(set)   # userId -> {followeeIds}
+
+    def post_tweet(self, user_id: int, tweet_id: int):
+        self._ts += 1
+        self._tweets[user_id].append((-self._ts, tweet_id))
+
+    def get_news_feed(self, user_id: int) -> list[int]:
+        sources = self._follows[user_id] | {user_id}
+        heap = []
+        for uid in sources:
+            tw = self._tweets[uid]
+            if tw:
+                idx = len(tw) - 1
+                heapq.heappush(heap, (tw[idx][0], tw[idx][1], uid, idx))
+        result = []
+        while heap and len(result) < 10:
+            ts, tid, uid, idx = heapq.heappop(heap)
+            result.append(tid)
+            if idx > 0:
+                nxt = self._tweets[uid][idx - 1]
+                heapq.heappush(heap, (nxt[0], nxt[1], uid, idx - 1))
+        return result
+
+    def follow(self, follower: int, followee: int):
+        self._follows[follower].add(followee)
+
+    def unfollow(self, follower: int, followee: int):
+        self._follows[follower].discard(followee)
+</code></pre>
+
+<h3>Takeaways</h3>
+<ul>
+  <li>Merge K sorted lists is the core algorithm for fan-out-on-read feeds</li>
+  <li>Observer pattern maps naturally to follow/unfollow subscriptions</li>
+  <li>Strategy pattern enables A/B testing different ranking algorithms</li>
+  <li>At scale, fan-out-on-write (pre-computed feeds) reduces read latency</li>
+</ul>

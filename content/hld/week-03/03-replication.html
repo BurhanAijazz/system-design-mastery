@@ -1,0 +1,75 @@
+<h2>Replication: Leader-Follower, Multi-Leader, Leaderless</h2>
+
+<p>Replication copies your data to multiple machines. It provides <strong>high availability</strong> (survive server failures), <strong>read scaling</strong> (distribute read load), and <strong>geographic proximity</strong> (serve users from nearby replicas).</p>
+
+<p>Every replication strategy is a trade-off between <strong>consistency</strong>, <strong>availability</strong>, and <strong>latency</strong>.</p>
+
+<h3>Why Replicate?</h3>
+<ul>
+  <li><strong>High Availability</strong>: If the primary dies, a replica takes over</li>
+  <li><strong>Read Scaling</strong>: 1 server handles 10K QPS; add 4 replicas for 50K QPS</li>
+  <li><strong>Geographic Proximity</strong>: EU users read from EU replica (20ms vs 200ms)</li>
+</ul>
+
+<h3>Single-Leader (Master-Slave) Replication</h3>
+<p>The most common strategy. One leader accepts writes and replicates to N followers.</p>
+
+<pre><code class="language-python">class SingleLeaderCluster:
+    """Simulate single-leader replication."""
+
+    def __init__(self, num_followers=3):
+        self.leader_data = {}
+        self.follower_data = [{} for _ in range(num_followers)]
+        self.replication_lag = 0
+
+    def write(self, key, value):
+        """Writes always go to the leader."""
+        self.leader_data[key] = value
+        # Async replication to followers (with lag)
+        for follower in self.follower_data:
+            follower[key] = value  # simplified: instant here
+
+    def read_from_leader(self, key):
+        """Strong consistency: always read latest."""
+        return self.leader_data.get(key)
+
+    def read_from_follower(self, key, follower_idx=0):
+        """Eventual consistency: may read stale data."""
+        return self.follower_data[follower_idx].get(key)
+</code></pre>
+
+<h3>Synchronous vs Asynchronous Replication</h3>
+<ul>
+  <li><strong>Synchronous</strong>: Leader waits for follower to confirm write. Strong consistency but slower writes</li>
+  <li><strong>Asynchronous</strong>: Leader returns success immediately. Fast writes but stale reads possible</li>
+  <li><strong>Semi-synchronous</strong>: Wait for 1 of N followers. Balance of durability and speed</li>
+</ul>
+
+<h3>Multi-Leader Replication</h3>
+<p>Multiple nodes accept writes, typically in multi-datacenter setups. Each datacenter has its own leader.</p>
+<ul>
+  <li><strong>Pro</strong>: Writes succeed even if one datacenter is unreachable</li>
+  <li><strong>Con</strong>: Write conflicts -- two leaders may modify the same data</li>
+  <li><strong>Conflict resolution</strong>: Last-writer-wins (LWW), custom merge logic, or CRDTs</li>
+</ul>
+
+<h3>Leaderless (Dynamo-Style) Replication</h3>
+<p>Any node accepts reads and writes. Uses quorum-based consistency.</p>
+
+<pre><code class="language-python"># Quorum formula: W + R > N
+# N = total replicas, W = write quorum, R = read quorum
+#
+# Example: N=3, W=2, R=2
+# Write succeeds when 2 of 3 nodes confirm
+# Read queries 2 of 3 nodes, guaranteed to see latest write
+
+N, W, R = 3, 2, 2
+assert W + R > N  # This guarantees overlap -> consistency
+</code></pre>
+
+<h3>Replication Lag Consequences</h3>
+<ul>
+  <li><strong>Read-after-write inconsistency</strong>: User writes data, immediately reads from stale replica</li>
+  <li><strong>Monotonic read violation</strong>: User sees newer data, refreshes, sees older data from different replica</li>
+  <li><strong>Solution</strong>: Read-your-own-writes guarantee -- route user to leader for recently written data</li>
+</ul>

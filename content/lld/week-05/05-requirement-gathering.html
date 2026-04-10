@@ -1,0 +1,176 @@
+<h2>Requirement Gathering and API Design</h2>
+
+<p>Before writing a single line of implementation, you need two things: clear requirements (what to build) and clean API design (how users interact with it). This lesson provides templates for common LLD problems and shows how to design public APIs before implementation.</p>
+
+<h3>Requirement Gathering Template</h3>
+
+<p>For any LLD interview question, fill in this template:</p>
+
+<pre><code>SYSTEM: [name of system]
+ACTORS: [who uses it?]
+
+FUNCTIONAL REQUIREMENTS:
+  1. [Actor] can [action] ...
+  2. [Actor] can [action] ...
+
+NON-FUNCTIONAL (if asked):
+  - Scale: [number of users / requests]
+  - Latency: [response time targets]
+  - Durability: [data persistence needs]
+
+OUT OF SCOPE:
+  - [things you are NOT building]
+
+ASSUMPTIONS:
+  - [things you are assuming]
+</code></pre>
+
+<h3>Example: Parking Lot Requirements</h3>
+
+<pre><code>SYSTEM: Parking Lot Management System
+ACTORS: Driver, Parking Attendant, Admin
+
+FUNCTIONAL REQUIREMENTS:
+  1. Driver can park a vehicle in an available spot
+  2. Driver can retrieve their vehicle using a ticket
+  3. System assigns the nearest suitable spot
+  4. System calculates fee based on duration
+  5. Different vehicle types: motorcycle, car, truck
+  6. Different spot sizes: small, medium, large
+  7. Admin can view occupancy status
+
+OUT OF SCOPE:
+  - Online reservation
+  - Multiple parking floors (single level)
+  - Payment gateway integration
+
+ASSUMPTIONS:
+  - One vehicle per spot
+  - Single entry/exit point
+  - Fee calculated per hour (rounded up)
+</code></pre>
+
+<h3>Example: Movie Ticket Booking Requirements</h3>
+
+<pre><code>SYSTEM: Movie Ticket Booking System
+ACTORS: Customer, Theater Admin, System
+
+FUNCTIONAL REQUIREMENTS:
+  1. Customer can search movies by name, city, or genre
+  2. Customer can view available shows for a movie
+  3. Customer can select seats from a seating chart
+  4. Customer can book tickets (hold -> confirm)
+  5. Customer can cancel a booking
+  6. Theater Admin can add movies, shows, and theaters
+  7. System prevents double-booking of seats
+  8. System holds seats temporarily during booking
+
+OUT OF SCOPE:
+  - Payment processing
+  - User reviews and ratings
+  - Notifications / emails
+</code></pre>
+
+<h3>API Design Principles</h3>
+
+<p>Design the public interface before writing implementation:</p>
+
+<ul>
+    <li><strong>Verb-based method names</strong> -- <code>park()</code>, <code>book()</code>, <code>search()</code></li>
+    <li><strong>Clear parameter types</strong> -- use enums, dataclasses, not raw strings</li>
+    <li><strong>Return meaningful types</strong> -- <code>Optional[Ticket]</code> not <code>bool</code></li>
+    <li><strong>Fail explicitly</strong> -- raise exceptions or return None for error cases</li>
+</ul>
+
+<h3>API Design: Parking Lot</h3>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+from typing import List, Optional, Dict
+from enum import Enum
+from datetime import datetime
+
+class VehicleType(Enum):
+    CAR = "car"
+    MOTORCYCLE = "motorcycle"
+    TRUCK = "truck"
+
+class SpotType(Enum):
+    SMALL = "small"
+    MEDIUM = "medium"
+    LARGE = "large"
+
+
+class ParkingLotAPI(ABC):
+    """Public API for the parking lot system."""
+
+    @abstractmethod
+    def park_vehicle(self, vehicle_type: VehicleType,
+                     license_plate: str) -> Optional["ParkingTicket"]:
+        """Park a vehicle. Returns ticket or None if lot is full."""
+        pass
+
+    @abstractmethod
+    def unpark_vehicle(self, ticket_id: str) -> float:
+        """Unpark using ticket. Returns fee amount."""
+        pass
+
+    @abstractmethod
+    def get_availability(self) -> Dict[SpotType, int]:
+        """Return count of available spots per type."""
+        pass
+
+    @abstractmethod
+    def get_occupancy_rate(self) -> float:
+        """Return percentage of spots occupied."""
+        pass
+</code></pre>
+
+<h3>API Design: Movie Booking</h3>
+
+<pre><code class="language-python">class BookingAPI(ABC):
+    @abstractmethod
+    def search_movies(self, query: str, city: str) -> List["Movie"]:
+        pass
+
+    @abstractmethod
+    def get_shows(self, movie_id: str, date: str) -> List["Show"]:
+        pass
+
+    @abstractmethod
+    def get_available_seats(self, show_id: str) -> List["Seat"]:
+        pass
+
+    @abstractmethod
+    def hold_seats(self, show_id: str,
+                   seat_ids: List[str]) -> Optional["BookingHold"]:
+        """Hold seats for 10 minutes while user completes payment."""
+        pass
+
+    @abstractmethod
+    def confirm_booking(self, hold_id: str) -> "Booking":
+        pass
+
+    @abstractmethod
+    def cancel_booking(self, booking_id: str) -> bool:
+        pass
+</code></pre>
+
+<h3>The Two-Phase Booking Pattern</h3>
+
+<p>Many booking systems use a two-phase approach to prevent double-booking:</p>
+
+<ol>
+    <li><strong>Hold</strong>: temporarily reserve the resource for a time window</li>
+    <li><strong>Confirm</strong>: finalize the reservation (usually after payment)</li>
+</ol>
+
+<p>If the hold expires without confirmation, the resource is released automatically. This prevents both lost sales and double-bookings.</p>
+
+<h3>Tips for Interview API Design</h3>
+
+<ul>
+    <li>Start with 3-5 core methods, not 20</li>
+    <li>Use abstract base classes to define contracts</li>
+    <li>Prefer return types over side effects</li>
+    <li>Think about what the caller needs, not what the system stores internally</li>
+</ul>

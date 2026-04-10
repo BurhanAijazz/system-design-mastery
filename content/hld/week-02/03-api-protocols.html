@@ -1,0 +1,321 @@
+<h2>API Protocols: REST vs GraphQL vs gRPC</h2>
+
+<p>
+  Choosing the right API protocol is a fundamental architecture decision. Each protocol
+  has different strengths and trade-offs around performance, flexibility, developer
+  experience, and tooling. This lesson compares the three most common protocols used
+  in modern distributed systems.
+</p>
+
+<h3>REST (Representational State Transfer)</h3>
+
+<p>
+  REST is the most widely used API style. It uses HTTP methods to operate on
+  resources identified by URLs. It is simple, well-understood, and has excellent
+  tooling support.
+</p>
+
+<pre><code class="language-python"># REST API design for a bookstore
+
+# GET /api/books              - List all books
+# GET /api/books/42           - Get book with ID 42
+# POST /api/books             - Create a new book
+# PUT /api/books/42           - Update book 42 (full replace)
+# PATCH /api/books/42         - Partial update of book 42
+# DELETE /api/books/42        - Delete book 42
+# GET /api/books/42/reviews   - Get reviews for book 42
+
+# Example REST endpoint implementation (Flask-like pseudocode)
+
+from dataclasses import dataclass
+from typing import Optional
+
+
+@dataclass
+class Book:
+    id: int
+    title: str
+    author: str
+    isbn: str
+    price: float
+    pages: int
+    publisher: str
+    year: int
+    cover_url: str
+    description: str
+
+
+class BookAPI:
+    """REST API for books."""
+
+    def get_book(self, book_id: int) -> dict:
+        """GET /api/books/{id}
+        Returns ALL fields of the book.
+        Client cannot choose which fields to receive."""
+        book = self._repo.find(book_id)
+        return {
+            "id": book.id,
+            "title": book.title,
+            "author": book.author,
+            "isbn": book.isbn,
+            "price": book.price,
+            "pages": book.pages,
+            "publisher": book.publisher,
+            "year": book.year,
+            "cover_url": book.cover_url,
+            "description": book.description,
+        }
+
+    def get_book_with_reviews(self, book_id: int) -> dict:
+        """GET /api/books/{id}?include=reviews
+        Problem: over-fetching (get all book fields even if you only need title)
+        Problem: under-fetching (need 2 requests for book + reviews)"""
+        book = self.get_book(book_id)
+        reviews = self._review_repo.find_by_book(book_id)
+        book["reviews"] = [r.__dict__ for r in reviews]
+        return book
+</code></pre>
+
+<h3>GraphQL</h3>
+
+<p>
+  GraphQL lets clients specify exactly what data they need. Instead of multiple
+  endpoints, there is a single endpoint with a query language. The client controls
+  the shape of the response.
+</p>
+
+<pre><code class="language-python"># GraphQL schema for the same bookstore
+#
+# type Book {
+#   id: ID!
+#   title: String!
+#   author: Author!
+#   isbn: String!
+#   price: Float!
+#   pages: Int
+#   publisher: String
+#   year: Int
+#   coverUrl: String
+#   description: String
+#   reviews: [Review!]!
+# }
+#
+# type Author {
+#   id: ID!
+#   name: String!
+#   books: [Book!]!
+# }
+#
+# type Review {
+#   id: ID!
+#   rating: Int!
+#   comment: String
+#   reviewer: String!
+# }
+#
+# type Query {
+#   book(id: ID!): Book
+#   books(limit: Int, offset: Int): [Book!]!
+#   author(id: ID!): Author
+# }
+
+# Client query - get exactly what you need:
+GRAPHQL_QUERY_MOBILE = """
+query {
+  book(id: 42) {
+    title
+    author { name }
+    price
+    coverUrl
+  }
+}
+"""
+# Response contains ONLY requested fields - no over-fetching
+
+# Client query - get book with reviews in ONE request:
+GRAPHQL_QUERY_DETAIL = """
+query {
+  book(id: 42) {
+    title
+    author { name }
+    price
+    description
+    reviews {
+      rating
+      comment
+      reviewer
+    }
+  }
+}
+"""
+# No under-fetching - one query gets everything needed
+
+
+# Python GraphQL resolver (using graphene-like pseudo-code)
+
+class BookResolver:
+    def resolve_book(self, info, id: int) -> dict:
+        book = self._repo.find(id)
+        return book
+
+    def resolve_reviews(self, book, info) -> list:
+        # Only called if client requests reviews field
+        return self._review_repo.find_by_book(book.id)
+
+    def resolve_author(self, book, info) -> dict:
+        # Only called if client requests author field
+        return self._author_repo.find(book.author_id)
+</code></pre>
+
+<h3>gRPC (Google Remote Procedure Call)</h3>
+
+<p>
+  gRPC uses Protocol Buffers (protobuf) for serialization and HTTP/2 for transport.
+  It is significantly faster than REST and GraphQL for service-to-service communication
+  due to binary encoding and multiplexed connections.
+</p>
+
+<pre><code class="language-python"># Protocol Buffer definition (book.proto)
+#
+# syntax = "proto3";
+#
+# service BookService {
+#   rpc GetBook (GetBookRequest) returns (Book);
+#   rpc ListBooks (ListBooksRequest) returns (ListBooksResponse);
+#   rpc CreateBook (CreateBookRequest) returns (Book);
+#   rpc StreamReviews (GetBookRequest) returns (stream Review);  // server streaming
+# }
+#
+# message Book {
+#   int32 id = 1;
+#   string title = 2;
+#   string author = 3;
+#   string isbn = 4;
+#   float price = 5;
+#   int32 pages = 6;
+# }
+#
+# message GetBookRequest {
+#   int32 id = 1;
+# }
+#
+# message ListBooksRequest {
+#   int32 limit = 1;
+#   int32 offset = 2;
+# }
+
+# Python gRPC client
+import grpc
+
+class BookGRPCClient:
+    def __init__(self, host: str, port: int):
+        self._channel = grpc.insecure_channel(f"{host}:{port}")
+        # self._stub = BookServiceStub(self._channel)
+
+    def get_book(self, book_id: int):
+        """Strongly typed, binary encoded, fast."""
+        # request = GetBookRequest(id=book_id)
+        # response = self._stub.GetBook(request)
+        # return response  # Strongly typed Book object
+        pass
+
+    def stream_reviews(self, book_id: int):
+        """Server-side streaming - reviews arrive as they are fetched."""
+        # request = GetBookRequest(id=book_id)
+        # for review in self._stub.StreamReviews(request):
+        #     yield review  # Each review arrives as it's ready
+        pass
+</code></pre>
+
+<h3>Head-to-Head Comparison</h3>
+
+<pre><code class="language-python"># Feature comparison:
+#
+# Feature           | REST            | GraphQL         | gRPC
+# ------------------|-----------------|-----------------|------------------
+# Protocol          | HTTP/1.1        | HTTP/1.1        | HTTP/2
+# Data format       | JSON (text)     | JSON (text)     | Protobuf (binary)
+# Schema            | OpenAPI (opt)   | SDL (required)  | .proto (required)
+# Caching           | HTTP caching    | Complex         | No HTTP caching
+# Over-fetching     | Common          | Solved          | N/A (typed)
+# Under-fetching    | Common          | Solved          | N/A (typed)
+# Streaming         | SSE/WebSocket   | Subscriptions   | Native (4 types)
+# Browser support   | Excellent       | Good            | Limited (grpc-web)
+# Learning curve    | Low             | Medium          | High
+# Tooling           | Excellent       | Good            | Good
+# Performance       | Good            | Good            | Excellent
+# Best for          | Public APIs     | Flexible UIs    | Microservices
+</code></pre>
+
+<h3>Performance Comparison</h3>
+
+<pre><code class="language-python"># Typical performance characteristics:
+
+performance = {
+    "rest": {
+        "serialization": "JSON: ~30ms for 1MB payload",
+        "payload_size": "Large (verbose key-value text)",
+        "latency": "Higher (HTTP/1.1 overhead, text parsing)",
+        "throughput": "~10,000 req/sec per server",
+        "example_payload_bytes": 500,  # for a book object
+    },
+    "graphql": {
+        "serialization": "JSON: ~30ms for 1MB payload",
+        "payload_size": "Medium (client controls fields)",
+        "latency": "Similar to REST (still JSON over HTTP)",
+        "throughput": "~8,000 req/sec (query parsing overhead)",
+        "example_payload_bytes": 200,  # client picks only needed fields
+    },
+    "grpc": {
+        "serialization": "Protobuf: ~3ms for 1MB payload (10x faster)",
+        "payload_size": "Small (binary, no field names)",
+        "latency": "Low (HTTP/2 multiplexing, binary)",
+        "throughput": "~30,000 req/sec per server",
+        "example_payload_bytes": 120,  # binary encoded
+    },
+}
+</code></pre>
+
+<h3>When to Use Each Protocol</h3>
+
+<pre><code class="language-python"># Decision guide:
+
+use_rest_when = [
+    "Building a public-facing API consumed by third-party developers",
+    "The API is resource-oriented (CRUD operations)",
+    "HTTP caching (CDN, browser) is important",
+    "You need maximum compatibility (any language, any client)",
+    "Team is new to API design (lowest learning curve)",
+]
+
+use_graphql_when = [
+    "Multiple client types need different data shapes (mobile vs web vs TV)",
+    "The frontend team wants control over data fetching",
+    "You have deeply nested, interconnected data (graph-like)",
+    "Over-fetching or under-fetching is a measurable performance problem",
+    "Rapid frontend iteration is more important than backend simplicity",
+]
+
+use_grpc_when = [
+    "Service-to-service communication in a microservices architecture",
+    "Low latency is critical (p99 < 10ms)",
+    "You need streaming (real-time data, large file transfers)",
+    "Strong typing and code generation are valued",
+    "Bandwidth efficiency matters (mobile, IoT, high-throughput)",
+]
+
+# Common hybrid approach (used by many large companies):
+# External API:     REST or GraphQL (for clients)
+# Internal services: gRPC (for service-to-service)
+# Real-time:        WebSockets or gRPC streaming
+</code></pre>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>REST is the safe default for public APIs. Widely understood, excellent tooling, HTTP caching.</li>
+  <li>GraphQL solves over/under-fetching but adds query parsing complexity and makes caching harder.</li>
+  <li>gRPC is the best choice for internal service-to-service communication. Binary encoding + HTTP/2 = low latency.</li>
+  <li>Many production systems use a hybrid: GraphQL or REST for client-facing APIs, gRPC internally.</li>
+  <li>In system design interviews, justify your protocol choice based on the specific requirements.</li>
+</ul>

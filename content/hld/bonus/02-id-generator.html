@@ -1,0 +1,53 @@
+<h2>Design: Unique ID Generator</h2>
+<p>Design a distributed unique ID generation system.</p>
+
+<h3>Approaches</h3>
+<ul>
+  <li><strong>UUID:</strong> 128-bit, no coordination needed, but not sortable</li>
+  <li><strong>Snowflake ID:</strong> 64-bit, time-ordered, used by Twitter</li>
+  <li><strong>Database auto-increment:</strong> Simple but doesn't scale horizontally</li>
+</ul>
+
+<h3>Snowflake Implementation</h3>
+<pre><code class="language-python">import time
+
+class SnowflakeGenerator:
+    EPOCH = 1609459200000  # Jan 1, 2021
+
+    def __init__(self, machine_id, datacenter_id):
+        self.machine_id = machine_id & 0x1F      # 5 bits
+        self.datacenter_id = datacenter_id & 0x1F # 5 bits
+        self.sequence = 0
+        self.last_timestamp = -1
+
+    def generate(self):
+        timestamp = int(time.time() * 1000) - self.EPOCH
+        if timestamp == self.last_timestamp:
+            self.sequence = (self.sequence + 1) & 0xFFF  # 12 bits
+            if self.sequence == 0:
+                timestamp = self._wait_next_millis()
+        else:
+            self.sequence = 0
+
+        self.last_timestamp = timestamp
+
+        return (
+            (timestamp << 22) |
+            (self.datacenter_id << 17) |
+            (self.machine_id << 12) |
+            self.sequence
+        )
+
+    def _wait_next_millis(self):
+        ts = int(time.time() * 1000) - self.EPOCH
+        while ts <= self.last_timestamp:
+            ts = int(time.time() * 1000) - self.EPOCH
+        return ts
+</code></pre>
+
+<h3>Key Takeaways</h3>
+<ul>
+  <li>Snowflake: 41 bits timestamp + 5 bits datacenter + 5 bits machine + 12 bits sequence</li>
+  <li>~4096 IDs per millisecond per machine</li>
+  <li>Time-ordered for easy sorting and partitioning</li>
+</ul>

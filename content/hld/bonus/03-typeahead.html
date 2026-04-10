@@ -1,0 +1,39 @@
+<h2>Design: Typeahead Autocomplete</h2>
+<p>Design an autocomplete system that suggests search queries as users type.</p>
+
+<h3>Core Data Structure: Trie</h3>
+<pre><code class="language-python">class TrieNode:
+    def __init__(self):
+        self.children = {}
+        self.top_suggestions = []  # Pre-computed top-K
+
+class AutocompleteService:
+    def __init__(self):
+        self.root = TrieNode()
+
+    def build(self, queries_with_freq):
+        """Build trie from (query, frequency) pairs"""
+        for query, freq in queries_with_freq:
+            node = self.root
+            for char in query.lower():
+                if char not in node.children:
+                    node.children[char] = TrieNode()
+                node = node.children[char]
+
+    def suggest(self, prefix, k=5):
+        """Get top-K suggestions for prefix"""
+        node = self.root
+        for char in prefix.lower():
+            if char not in node.children:
+                return []
+            node = node.children[char]
+        return node.top_suggestions[:k]
+</code></pre>
+
+<h3>At Scale</h3>
+<ul>
+  <li>Pre-compute top-K at each trie node to avoid runtime sorting</li>
+  <li>Shard trie by first character across servers</li>
+  <li>Cache popular prefixes at CDN/browser level</li>
+  <li>Update trie offline with MapReduce on query logs</li>
+</ul>

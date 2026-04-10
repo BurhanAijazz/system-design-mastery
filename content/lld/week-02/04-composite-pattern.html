@@ -1,0 +1,252 @@
+<h2>Composite Pattern</h2>
+
+<p>
+  The Composite pattern lets you compose objects into tree structures and then work
+  with these structures as if they were individual objects. It allows clients to treat
+  individual objects and compositions of objects uniformly through a shared interface.
+</p>
+
+<h3>When to Use the Composite Pattern</h3>
+
+<ul>
+  <li>You need to represent part-whole hierarchies (trees).</li>
+  <li>Clients should treat individual objects and groups of objects the same way.</li>
+  <li>Operations need to be applied recursively over a tree structure.</li>
+</ul>
+
+<h3>Classic Example: File System</h3>
+
+<p>
+  A file system is a natural tree: files are leaves, directories are composites
+  that contain both files and other directories. Operations like "get size" or
+  "search" should work identically on a single file or an entire directory tree.
+</p>
+
+<h3>The Component Interface</h3>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+from datetime import datetime
+
+
+class FileSystemNode(ABC):
+    """Component: the common interface for files and directories."""
+
+    def __init__(self, name: str):
+        self.name = name
+        self.created_at = datetime.now()
+
+    @abstractmethod
+    def get_size(self) -> int:
+        """Return size in bytes."""
+        pass
+
+    @abstractmethod
+    def display(self, indent: int = 0) -> str:
+        """Return a string representation of the tree."""
+        pass
+
+    @abstractmethod
+    def search(self, query: str) -> list["FileSystemNode"]:
+        """Find nodes matching the query."""
+        pass
+
+    @abstractmethod
+    def count_files(self) -> int:
+        """Count total number of files (leaves)."""
+        pass
+</code></pre>
+
+<h3>The Leaf: File</h3>
+
+<pre><code class="language-python">class File(FileSystemNode):
+    """Leaf node: represents an individual file."""
+
+    def __init__(self, name: str, size: int, extension: str = ""):
+        super().__init__(name)
+        self._size = size
+        self.extension = extension
+
+    def get_size(self) -> int:
+        return self._size
+
+    def display(self, indent: int = 0) -> str:
+        prefix = "  " * indent
+        size_kb = self._size / 1024
+        return f"{prefix}|- {self.name} ({size_kb:.1f} KB)"
+
+    def search(self, query: str) -> list[FileSystemNode]:
+        if query.lower() in self.name.lower():
+            return [self]
+        return []
+
+    def count_files(self) -> int:
+        return 1
+</code></pre>
+
+<h3>The Composite: Directory</h3>
+
+<pre><code class="language-python">class Directory(FileSystemNode):
+    """Composite node: contains files and/or other directories."""
+
+    def __init__(self, name: str):
+        super().__init__(name)
+        self._children: list[FileSystemNode] = []
+
+    def add(self, node: FileSystemNode) -> "Directory":
+        """Add a child node. Returns self for chaining."""
+        self._children.append(node)
+        return self
+
+    def remove(self, name: str) -> None:
+        self._children = [c for c in self._children if c.name != name]
+
+    def get_child(self, name: str) -> FileSystemNode | None:
+        for child in self._children:
+            if child.name == name:
+                return child
+        return None
+
+    def get_size(self) -> int:
+        """Recursively calculate total size of all contents."""
+        return sum(child.get_size() for child in self._children)
+
+    def display(self, indent: int = 0) -> str:
+        prefix = "  " * indent
+        size_kb = self.get_size() / 1024
+        lines = [f"{prefix}|+ {self.name}/ ({size_kb:.1f} KB, {self.count_files()} files)"]
+        for child in self._children:
+            lines.append(child.display(indent + 1))
+        return "\n".join(lines)
+
+    def search(self, query: str) -> list[FileSystemNode]:
+        """Recursively search all children."""
+        results = []
+        if query.lower() in self.name.lower():
+            results.append(self)
+        for child in self._children:
+            results.extend(child.search(query))
+        return results
+
+    def count_files(self) -> int:
+        """Recursively count all files in the tree."""
+        return sum(child.count_files() for child in self._children)
+</code></pre>
+
+<h3>Building and Using the Tree</h3>
+
+<pre><code class="language-python"># Build a realistic file tree
+root = Directory("project")
+
+# Source directory
+src = Directory("src")
+src.add(File("main.py", 2048, ".py"))
+src.add(File("config.py", 512, ".py"))
+src.add(File("utils.py", 1024, ".py"))
+
+# Models subdirectory
+models = Directory("models")
+models.add(File("user.py", 1536, ".py"))
+models.add(File("order.py", 2560, ".py"))
+models.add(File("product.py", 1792, ".py"))
+src.add(models)
+
+# Tests directory
+tests = Directory("tests")
+tests.add(File("test_main.py", 3072, ".py"))
+tests.add(File("test_models.py", 4096, ".py"))
+tests.add(File("conftest.py", 768, ".py"))
+
+# Docs directory
+docs = Directory("docs")
+docs.add(File("README.md", 4096, ".md"))
+docs.add(File("API.md", 8192, ".md"))
+
+# Assemble the tree
+root.add(src)
+root.add(tests)
+root.add(docs)
+root.add(File("pyproject.toml", 256, ".toml"))
+root.add(File(".gitignore", 128, ".txt"))
+
+# Display the entire tree
+print(root.display())
+</code></pre>
+
+<p>Output:</p>
+
+<pre><code class="language-python"># |+ project/ (29.4 KB, 12 files)
+#   |+ src/ (9.3 KB, 6 files)
+#     |- main.py (2.0 KB)
+#     |- config.py (0.5 KB)
+#     |- utils.py (1.0 KB)
+#     |+ models/ (5.8 KB, 3 files)
+#       |- user.py (1.5 KB)
+#       |- order.py (2.5 KB)
+#       |- product.py (1.8 KB)
+#   |+ tests/ (7.8 KB, 3 files)
+#     |- test_main.py (3.0 KB)
+#     |- test_models.py (4.0 KB)
+#     |- conftest.py (0.8 KB)
+#   |+ docs/ (12.0 KB, 2 files)
+#     |- README.md (4.0 KB)
+#     |- API.md (8.0 KB)
+#   |- pyproject.toml (0.3 KB)
+#   |- .gitignore (0.1 KB)
+</code></pre>
+
+<h3>Uniform Operations Across the Tree</h3>
+
+<pre><code class="language-python"># Size works identically on a file or directory
+print(f"Root size: {root.get_size()} bytes")       # Entire tree
+print(f"Src size: {src.get_size()} bytes")          # Just src/
+print(f"Single file: {root.get_child('pyproject.toml').get_size()} bytes")
+
+# Search works recursively
+results = root.search("test")
+for node in results:
+    print(f"Found: {node.name}")
+# Found: tests
+# Found: test_main.py
+# Found: test_models.py
+
+# Count files works at any level
+print(f"Total files: {root.count_files()}")    # 12
+print(f"Files in src: {src.count_files()}")     # 6
+print(f"Files in models: {models.count_files()}")  # 3
+</code></pre>
+
+<h3>Adding New Operations</h3>
+
+<p>
+  You can add new operations to the component interface without changing client code:
+</p>
+
+<pre><code class="language-python">def find_large_files(node: FileSystemNode, threshold_bytes: int) -> list[File]:
+    """Find all files larger than the threshold."""
+    if isinstance(node, File):
+        return [node] if node.get_size() > threshold_bytes else []
+    elif isinstance(node, Directory):
+        results = []
+        for child in node._children:
+            results.extend(find_large_files(child, threshold_bytes))
+        return results
+    return []
+
+
+large_files = find_large_files(root, 4000)
+for f in large_files:
+    print(f"{f.name}: {f.get_size()} bytes")
+# API.md: 8192 bytes
+# test_models.py: 4096 bytes
+# README.md: 4096 bytes
+</code></pre>
+
+<h3>Key Takeaways</h3>
+
+<ul>
+  <li>Composite lets you treat individual objects and groups uniformly.</li>
+  <li>Operations on composites naturally recurse through the tree structure.</li>
+  <li>The pattern is ideal for hierarchical data: file systems, UI widget trees, organization charts, menu systems.</li>
+  <li>Adding a child (file) to a composite (directory) should not require the client to know which type it is.</li>
+  <li>Be cautious with operations that only make sense for composites (like <code>add</code>) &mdash; keep them off the component interface or handle them gracefully.</li>
+</ul>

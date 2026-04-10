@@ -1,0 +1,175 @@
+<h2>Combining Behavioral Patterns</h2>
+
+<p>Real systems rarely use a single pattern. This lesson shows how multiple behavioral patterns compose in a Task Management System, preparing you for the transition from "knowing patterns" to "solving full LLD problems."</p>
+
+<h3>System Overview: Task Manager</h3>
+
+<p>A task management system uses five behavioral patterns working together:</p>
+
+<ul>
+    <li><strong>State</strong> -- task lifecycle (ToDo, InProgress, Done, Blocked)</li>
+    <li><strong>Command</strong> -- task actions with undo (assign, change priority, add comment)</li>
+    <li><strong>Chain of Responsibility</strong> -- task assignment by priority</li>
+    <li><strong>Iterator</strong> -- traverse task backlog with multiple strategies</li>
+    <li><strong>Observer</strong> -- notify subscribers on state changes</li>
+</ul>
+
+<h3>Data Model</h3>
+
+<pre><code class="language-python">from enum import Enum
+from dataclasses import dataclass, field
+from typing import List, Optional
+from datetime import datetime
+
+class Priority(Enum):
+    LOW = 1
+    MEDIUM = 2
+    HIGH = 3
+    CRITICAL = 4
+
+
+@dataclass
+class Task:
+    id: str
+    title: str
+    priority: Priority = Priority.MEDIUM
+    assigned_to: Optional[str] = None
+    state_name: str = "ToDo"
+    comments: List[str] = field(default_factory=list)
+</code></pre>
+
+<h3>Pattern 1: State -- Task Lifecycle</h3>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+
+class TaskState(ABC):
+    @abstractmethod
+    def start(self, task: Task) -> str: pass
+    @abstractmethod
+    def complete(self, task: Task) -> str: pass
+    @abstractmethod
+    def block(self, task: Task, reason: str) -> str: pass
+    @abstractmethod
+    def reopen(self, task: Task) -> str: pass
+
+
+class ToDoState(TaskState):
+    def start(self, task):
+        task.state_name = "InProgress"
+        return f"'{task.title}' started."
+    def complete(self, task):
+        return "Cannot complete -- not started yet."
+    def block(self, task, reason):
+        task.state_name = "Blocked"
+        return f"'{task.title}' blocked: {reason}"
+    def reopen(self, task):
+        return "Already in ToDo."
+
+
+class InProgressState(TaskState):
+    def start(self, task):
+        return "Already in progress."
+    def complete(self, task):
+        task.state_name = "Done"
+        return f"'{task.title}' completed!"
+    def block(self, task, reason):
+        task.state_name = "Blocked"
+        return f"'{task.title}' blocked: {reason}"
+    def reopen(self, task):
+        return "Already in progress."
+</code></pre>
+
+<h3>Pattern 2: Command -- Task Actions with Undo</h3>
+
+<pre><code class="language-python">class TaskCommand(ABC):
+    @abstractmethod
+    def execute(self) -> str: pass
+    @abstractmethod
+    def undo(self) -> str: pass
+
+
+class AssignCommand(TaskCommand):
+    def __init__(self, task: Task, assignee: str):
+        self._task = task
+        self._assignee = assignee
+        self._previous = task.assigned_to
+
+    def execute(self) -> str:
+        self._task.assigned_to = self._assignee
+        return f"Assigned '{self._task.title}' to {self._assignee}"
+
+    def undo(self) -> str:
+        self._task.assigned_to = self._previous
+        return f"Unassigned '{self._task.title}' from {self._assignee}"
+
+
+class ChangePriorityCommand(TaskCommand):
+    def __init__(self, task: Task, new_priority: Priority):
+        self._task = task
+        self._new = new_priority
+        self._old = task.priority
+
+    def execute(self) -> str:
+        self._task.priority = self._new
+        return f"Priority of '{self._task.title}': {self._old.name} -> {self._new.name}"
+
+    def undo(self) -> str:
+        self._task.priority = self._old
+        return f"Priority of '{self._task.title}': {self._new.name} -> {self._old.name}"
+</code></pre>
+
+<h3>Pattern 3: Chain of Responsibility -- Auto-Assignment</h3>
+
+<pre><code class="language-python">class AssignmentHandler(ABC):
+    def __init__(self):
+        self._next: Optional["AssignmentHandler"] = None
+
+    def set_next(self, handler: "AssignmentHandler") -> "AssignmentHandler":
+        self._next = handler
+        return handler
+
+    def assign(self, task: Task) -> str:
+        if self.can_handle(task):
+            return self.do_assign(task)
+        elif self._next:
+            return self._next.assign(task)
+        return f"No handler for task '{task.title}'"
+
+    @abstractmethod
+    def can_handle(self, task: Task) -> bool: pass
+    @abstractmethod
+    def do_assign(self, task: Task) -> str: pass
+
+
+class JuniorDevHandler(AssignmentHandler):
+    def can_handle(self, task):
+        return task.priority == Priority.LOW
+    def do_assign(self, task):
+        task.assigned_to = "Junior Dev"
+        return f"'{task.title}' assigned to Junior Dev"
+
+
+class SeniorDevHandler(AssignmentHandler):
+    def can_handle(self, task):
+        return task.priority in (Priority.MEDIUM, Priority.HIGH)
+    def do_assign(self, task):
+        task.assigned_to = "Senior Dev"
+        return f"'{task.title}' assigned to Senior Dev"
+</code></pre>
+
+<h3>How Patterns Interact</h3>
+
+<p>In a real system, these patterns work together in a natural flow:</p>
+
+<ol>
+    <li>A new task is created with a priority (data model)</li>
+    <li>The <strong>Chain of Responsibility</strong> auto-assigns the task based on priority</li>
+    <li>The assignment is wrapped in a <strong>Command</strong> for undo support</li>
+    <li>The task's lifecycle is managed by the <strong>State</strong> pattern</li>
+    <li>State transitions trigger <strong>Observer</strong> notifications</li>
+    <li>An <strong>Iterator</strong> lets managers view tasks by priority, assignee, or state</li>
+</ol>
+
+<h3>Key Takeaway</h3>
+
+<p>Patterns are building blocks, not standalone solutions. A well-designed system combines multiple patterns, each handling a specific concern. The art of LLD is recognizing which patterns to apply and how they compose.</p>

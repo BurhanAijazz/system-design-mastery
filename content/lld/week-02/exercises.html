@@ -1,0 +1,337 @@
+<h2>Week 2 Exercises: Structural Design Patterns</h2>
+
+<p>
+  These exercises test your ability to identify when and how to apply the Adapter,
+  Facade, Proxy, Composite, and Flyweight patterns. Attempt each exercise before
+  revealing the solution.
+</p>
+
+<h3>Exercise 1: Adapter for Legacy Logging</h3>
+
+<p>
+  Your application uses a modern <code>Logger</code> interface, but you must integrate
+  with a legacy logging library that has an incompatible API. Write an adapter that
+  bridges the two.
+</p>
+
+<pre><code class="language-python"># Your modern interface
+from abc import ABC, abstractmethod
+
+class Logger(ABC):
+    @abstractmethod
+    def info(self, message: str) -> None:
+        pass
+
+    @abstractmethod
+    def error(self, message: str, exception: Exception | None = None) -> None:
+        pass
+
+    @abstractmethod
+    def debug(self, message: str) -> None:
+        pass
+
+
+# The legacy library you CANNOT modify
+class LegacyFileLogger:
+    def __init__(self, filepath: str):
+        self.filepath = filepath
+
+    def write_log(self, level_code: int, text: str, extra_data: dict | None = None):
+        """level_code: 1=DEBUG, 2=INFO, 3=WARN, 4=ERROR"""
+        print(f"[LEGACY] [{level_code}] {text} | extra={extra_data}")
+
+
+# TODO: Write a LegacyLoggerAdapter that implements Logger
+# and delegates to LegacyFileLogger
+</code></pre>
+
+<div class="reveal-answer" style="margin-top: 1rem;">
+  <button onclick="this.nextElementSibling.style.display='block'; this.style.display='none';"
+          style="padding: 8px 16px; cursor: pointer; background: #2563eb; color: white; border: none; border-radius: 4px;">
+    Reveal Solution
+  </button>
+  <div style="display: none;">
+    <h4>Solution</h4>
+    <pre><code class="language-python">class LegacyLoggerAdapter(Logger):
+    """Adapts LegacyFileLogger to the modern Logger interface."""
+
+    LEVEL_MAP = {"debug": 1, "info": 2, "error": 4}
+
+    def __init__(self, legacy_logger: LegacyFileLogger):
+        self._legacy = legacy_logger
+
+    def info(self, message: str) -> None:
+        self._legacy.write_log(self.LEVEL_MAP["info"], message)
+
+    def error(self, message: str, exception: Exception | None = None) -> None:
+        extra = None
+        if exception:
+            extra = {"exception_type": type(exception).__name__, "detail": str(exception)}
+        self._legacy.write_log(self.LEVEL_MAP["error"], message, extra)
+
+    def debug(self, message: str) -> None:
+        self._legacy.write_log(self.LEVEL_MAP["debug"], message)
+
+
+# Usage
+legacy = LegacyFileLogger("/var/log/app.log")
+logger: Logger = LegacyLoggerAdapter(legacy)
+
+logger.info("Application started")
+logger.error("Database connection failed", ConnectionError("timeout"))
+logger.debug("Query executed in 42ms")
+</code></pre>
+    <p>
+      The adapter maps <code>info()</code>, <code>error()</code>, and <code>debug()</code>
+      to the legacy <code>write_log()</code> method, translating the level names to numeric
+      codes and packaging exception details into the <code>extra_data</code> dict.
+    </p>
+  </div>
+</div>
+
+<h3>Exercise 2: Composite for Organization Chart</h3>
+
+<p>
+  Model a company organization where each person can be either an individual contributor
+  or a manager who has direct reports. Implement a method to calculate the total salary
+  cost of any node (person + all reports recursively).
+</p>
+
+<pre><code class="language-python"># TODO: Create an OrgNode interface with:
+#   - name, title, salary properties
+#   - get_total_cost() -> float (salary of this person + all reports)
+#   - display(indent) -> str
+#
+# Create Employee (leaf) and Manager (composite) classes.
+#
+# Build this org:
+#   CEO (salary: 300,000)
+#   +-- VP Engineering (200,000)
+#   |   +-- Senior Dev (150,000)
+#   |   +-- Senior Dev (150,000)
+#   |   +-- Tech Lead (170,000)
+#   |       +-- Dev (120,000)
+#   |       +-- Dev (120,000)
+#   +-- VP Marketing (200,000)
+#       +-- Marketing Manager (130,000)
+#           +-- Content Writer (80,000)
+#           +-- SEO Specialist (90,000)
+#
+# Print the total cost under the CEO.
+</code></pre>
+
+<div class="reveal-answer" style="margin-top: 1rem;">
+  <button onclick="this.nextElementSibling.style.display='block'; this.style.display='none';"
+          style="padding: 8px 16px; cursor: pointer; background: #2563eb; color: white; border: none; border-radius: 4px;">
+    Reveal Solution
+  </button>
+  <div style="display: none;">
+    <h4>Solution</h4>
+    <pre><code class="language-python">from abc import ABC, abstractmethod
+
+
+class OrgNode(ABC):
+    def __init__(self, name: str, title: str, salary: float):
+        self.name = name
+        self.title = title
+        self.salary = salary
+
+    @abstractmethod
+    def get_total_cost(self) -> float:
+        pass
+
+    @abstractmethod
+    def display(self, indent: int = 0) -> str:
+        pass
+
+    @abstractmethod
+    def headcount(self) -> int:
+        pass
+
+
+class Employee(OrgNode):
+    def get_total_cost(self) -> float:
+        return self.salary
+
+    def display(self, indent: int = 0) -> str:
+        return f"{'  ' * indent}|- {self.name} ({self.title}) ${self.salary:,.0f}"
+
+    def headcount(self) -> int:
+        return 1
+
+
+class Manager(OrgNode):
+    def __init__(self, name: str, title: str, salary: float):
+        super().__init__(name, title, salary)
+        self._reports: list[OrgNode] = []
+
+    def add_report(self, node: OrgNode) -> "Manager":
+        self._reports.append(node)
+        return self
+
+    def get_total_cost(self) -> float:
+        return self.salary + sum(r.get_total_cost() for r in self._reports)
+
+    def display(self, indent: int = 0) -> str:
+        lines = [f"{'  ' * indent}|+ {self.name} ({self.title}) ${self.salary:,.0f}"]
+        for report in self._reports:
+            lines.append(report.display(indent + 1))
+        return "\n".join(lines)
+
+    def headcount(self) -> int:
+        return 1 + sum(r.headcount() for r in self._reports)
+
+
+# Build the org
+tech_lead = Manager("Carol", "Tech Lead", 170_000)
+tech_lead.add_report(Employee("Dave", "Developer", 120_000))
+tech_lead.add_report(Employee("Eve", "Developer", 120_000))
+
+vp_eng = Manager("Bob", "VP Engineering", 200_000)
+vp_eng.add_report(Employee("Frank", "Senior Dev", 150_000))
+vp_eng.add_report(Employee("Grace", "Senior Dev", 150_000))
+vp_eng.add_report(tech_lead)
+
+mkt_mgr = Manager("Heidi", "Marketing Manager", 130_000)
+mkt_mgr.add_report(Employee("Ivan", "Content Writer", 80_000))
+mkt_mgr.add_report(Employee("Judy", "SEO Specialist", 90_000))
+
+vp_mkt = Manager("Karl", "VP Marketing", 200_000)
+vp_mkt.add_report(mkt_mgr)
+
+ceo = Manager("Alice", "CEO", 300_000)
+ceo.add_report(vp_eng)
+ceo.add_report(vp_mkt)
+
+print(ceo.display())
+print(f"\nTotal org cost: ${ceo.get_total_cost():,.0f}")
+print(f"Total headcount: {ceo.headcount()}")
+# Total org cost: $1,710,000
+# Total headcount: 11
+</code></pre>
+  </div>
+</div>
+
+<h3>Exercise 3: Caching Proxy for an API Client</h3>
+
+<p>
+  Write a caching proxy for the <code>WeatherService</code> interface below. The proxy
+  should cache results for a configurable TTL and return cached data on repeated requests
+  for the same city. Invalidate stale entries.
+</p>
+
+<pre><code class="language-python">from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+
+@dataclass
+class WeatherData:
+    city: str
+    temperature_celsius: float
+    humidity: float
+    description: str
+
+
+class WeatherService(ABC):
+    @abstractmethod
+    def get_weather(self, city: str) -> WeatherData:
+        pass
+
+
+class RealWeatherService(WeatherService):
+    """Simulates a slow API call."""
+    def get_weather(self, city: str) -> WeatherData:
+        import time
+        time.sleep(2)  # Simulate network latency
+        import random
+        return WeatherData(
+            city=city,
+            temperature_celsius=round(random.uniform(-10, 40), 1),
+            humidity=round(random.uniform(20, 95), 1),
+            description=random.choice(["Sunny", "Cloudy", "Rainy", "Snowy"]),
+        )
+
+
+# TODO: Write CachingWeatherProxy(WeatherService) that:
+# 1. Caches results by city name
+# 2. Returns cached data if within TTL
+# 3. Fetches fresh data if cache is stale or missing
+# 4. Provides a cache_stats() method returning hits and misses
+</code></pre>
+
+<div class="reveal-answer" style="margin-top: 1rem;">
+  <button onclick="this.nextElementSibling.style.display='block'; this.style.display='none';"
+          style="padding: 8px 16px; cursor: pointer; background: #2563eb; color: white; border: none; border-radius: 4px;">
+    Reveal Solution
+  </button>
+  <div style="display: none;">
+    <h4>Solution</h4>
+    <pre><code class="language-python">from datetime import datetime, timedelta
+
+
+class CachingWeatherProxy(WeatherService):
+    def __init__(self, real_service: WeatherService, ttl_seconds: int = 300):
+        self._real = real_service
+        self._ttl = timedelta(seconds=ttl_seconds)
+        self._cache: dict[str, tuple[WeatherData, datetime]] = {}
+        self._hits = 0
+        self._misses = 0
+
+    def get_weather(self, city: str) -> WeatherData:
+        normalized = city.strip().lower()
+
+        if normalized in self._cache:
+            data, cached_at = self._cache[normalized]
+            if datetime.now() - cached_at < self._ttl:
+                self._hits += 1
+                return data
+            else:
+                del self._cache[normalized]
+
+        self._misses += 1
+        data = self._real.get_weather(city)
+        self._cache[normalized] = (data, datetime.now())
+        return data
+
+    def cache_stats(self) -> dict:
+        total = self._hits + self._misses
+        return {
+            "hits": self._hits,
+            "misses": self._misses,
+            "hit_rate": f"{(self._hits / total * 100) if total else 0:.1f}%",
+            "cached_cities": len(self._cache),
+        }
+
+    def invalidate(self, city: str) -> None:
+        self._cache.pop(city.strip().lower(), None)
+
+    def clear_cache(self) -> None:
+        self._cache.clear()
+
+
+# Usage
+real = RealWeatherService()
+proxy = CachingWeatherProxy(real, ttl_seconds=60)
+
+# First call: cache miss (slow)
+w1 = proxy.get_weather("London")
+print(f"London: {w1.temperature_celsius}C, {w1.description}")
+
+# Second call: cache hit (instant)
+w2 = proxy.get_weather("London")
+print(f"London (cached): {w2.temperature_celsius}C")
+
+print(proxy.cache_stats())
+# {'hits': 1, 'misses': 1, 'hit_rate': '50.0%', 'cached_cities': 1}
+</code></pre>
+  </div>
+</div>
+
+<h3>Bonus Challenge</h3>
+
+<p>
+  Combine the Adapter and Facade patterns: create a <code>NotificationFacade</code>
+  that provides a single <code>notify(user, message)</code> method but internally
+  delegates to adapted email, SMS, and push notification services, each with a
+  different third-party API.
+</p>
